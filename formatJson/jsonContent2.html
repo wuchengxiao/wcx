@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>多标签JSON格式化工具</title>
+        <script src="./formatter_2.3.4/json-formatter.umd.min.js"></script>
+        <style>
+            /* 保留原有的布局样式 */
+            body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 0;
+                background-color: #f5f5f5;
+            }
+
+            .container {
+                display: flex;
+                flex-direction: column;
+                height: 100vh;
+            }
+
+            .tabs {
+                display: flex;
+                background-color: #333;
+                padding: 0;
+                margin: 0;
+                overflow-x: visible;
+                /* 修改为visible防止遮罩 */
+                position: relative;
+                z-index: 1;
+            }
+
+            .tab {
+                padding: 10px 20px;
+                color: white;
+                cursor: pointer;
+                background-color: #555;
+                border-right: 1px solid #777;
+                white-space: nowrap;
+            }
+
+            .tab.active {
+                background-color: #0078d7;
+            }
+
+            .tab:hover {
+                background-color: #666;
+            }
+
+            .add-tab {
+                padding: 10px;
+                color: white;
+                cursor: pointer;
+                background-color: #333;
+                flex-shrink: 0;
+            }
+
+            .editor-container {
+                display: flex;
+                flex: 1;
+                overflow: hidden;
+            }
+
+            .panel {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+                position: relative;
+                min-width: 100px;
+            }
+
+            .panel-header {
+                padding: 8px;
+                background-color: #e0e0e0;
+                font-weight: bold;
+            }
+
+            .editor {
+                flex: 1;
+                border: 1px solid #ccc;
+                font-family: Consolas, monospace;
+                font-size: 14px;
+                padding: 10px;
+                overflow: auto;
+                background-color: white;
+            }
+
+            #input {
+                width: 100%;
+                height: 100%;
+                border: none;
+                resize: none;
+                outline: none;
+                tab-size: 2;
+            }
+
+            .resize-handle {
+                width: 10px;
+                background-color: #ddd;
+                cursor: col-resize;
+                flex-shrink: 0;
+            }
+
+            .toolbar {
+                display: flex;
+                padding: 5px;
+                background-color: #e0e0e0;
+                gap: 5px;
+                flex-wrap: wrap;
+            }
+
+            button {
+                padding: 5px 10px;
+                cursor: pointer;
+                background-color: #f0f0f0;
+                border: 1px solid #ccc;
+                border-radius: 3px;
+                white-space: nowrap;
+            }
+
+            button:hover {
+                background-color: #e0e0e0;
+            }
+
+            .search-box {
+                margin-left: auto;
+                padding: 5px;
+                display: flex;
+                gap: 5px;
+            }
+
+            /* 优化JSON视图样式 */
+            .json-formatter-row {
+                font-family: Consolas, monospace !important;
+                line-height: 1.4 !important;
+            }
+
+            .json-formatter-key {
+                color: #881391 !important;
+            }
+
+            .json-formatter-string {
+                color: #C41A16 !important;
+            }
+
+            .json-formatter-number {
+                color: #1C00CF !important;
+            }
+
+            .json-formatter-boolean {
+                color: #0D22AA !important;
+            }
+
+            .json-formatter-null {
+                color: #777 !important;
+            }
+
+            .json-formatter-toggle {
+                background: #e0e0e0 !important;
+                border-radius: 3px !important;
+            }
+
+            .tab-container {
+                display: flex;
+                align-items: center;
+                position: relative;
+            }
+
+            .tab-menu {
+                position: absolute;
+                right: 0;
+                top: 100%;
+                background: white;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+                z-index: 100;
+            }
+
+            .tab-menu button {
+                display: block;
+                width: 100%;
+                text-align: left;
+                padding: 8px 15px;
+                background: none;
+                border: none;
+                cursor: pointer;
+            }
+
+            .tab-menu button:hover {
+                background: #f0f0f0;
+            }
+
+            /* 新增菜单样式 */
+            .tab-menu-container {
+                position: relative;
+                display: inline-block;
+            }
+
+            .tab-menu {
+                position: absolute;
+                right: 0;
+                top: 100%;
+                background: white;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+                z-index: 100;
+                display: none;
+                min-width: 120px;
+            }
+
+            .tab-menu button {
+                display: block;
+                width: 100%;
+                text-align: left;
+                padding: 8px 15px;
+                background: none;
+                border: none;
+                cursor: pointer;
+                white-space: nowrap;
+            }
+
+            .tab-menu button:hover {
+                background: #f0f0f0;
+            }
+
+            .tab-actions {
+                margin-left: 5px;
+                cursor: pointer;
+                padding: 0 5px;
+                color: #ccc;
+            }
+
+            .tab:hover .tab-actions {
+                color: white;
+            }
+
+            .tab-actions {
+                margin-left: 5px;
+                cursor: pointer;
+                padding: 0 5px;
+                visibility: hidden;
+            }
+
+            .tab:hover .tab-actions {
+                visibility: visible;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="tabs" id="tabs">
+                <div class="tab active" data-tab="0">JSON 1</div>
+                <div class="add-tab" id="addTab">+</div>
+            </div>
+            <div class="editor-container" id="editorContainer">
+                <div class="panel">
+                    <div class="panel-header">原始JSON</div>
+                    <div class="editor">
+                        <textarea id="input" spellcheck="false">{"a":1,"b":[{"c":2,"d":3},{"c":4,"d":34}],"e":45}</textarea>
+                    </div>
+                </div>
+                <div class="resize-handle" id="resizeHandle"></div>
+                <div class="panel">
+                    <div class="panel-header">格式化结果</div>
+                    <div class="toolbar">
+                        <button id="formatBtn">格式化</button>
+                        <button id="minifyBtn">压缩</button>
+                        <button id="copyBtn">复制</button>
+                        <button id="expandAllBtn">展开全部</button>
+                        <button id="collapseAllBtn">折叠全部</button>
+                        <button id="toggleTheme">切换主题</button>
+                    </div>
+                    <div class="editor" id="output"></div>
+                </div>
+            </div>
+        </div>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const tabsContainer = document.getElementById('tabs');
+                const addTabBtn = document.getElementById('addTab');
+                const editorContainer = document.getElementById('editorContainer');
+                const input = document.getElementById('input');
+                const output = document.getElementById('output');
+                const formatBtn = document.getElementById('formatBtn');
+                const minifyBtn = document.getElementById('minifyBtn');
+                const copyBtn = document.getElementById('copyBtn');
+                const expandAllBtn = document.getElementById('expandAllBtn');
+                const collapseAllBtn = document.getElementById('collapseAllBtn');
+                const toggleTheme = document.getElementById('toggleTheme');
+                const resizeHandle = document.getElementById('resizeHandle');
+
+                let tabs = [{
+                    id: 0,
+                    name: 'JSON 1',
+                    input: input.value,
+                    output: '',
+                    jsonData: null,
+                    formatter: null
+                }];
+                let activeTabId = 0;
+                let isDarkTheme = false;
+
+                // 初始化格式化
+                formatJson();
+
+                // 添加标签页
+                addTabBtn.addEventListener('click', function() {
+                    const newId = Date.now();
+                    const tabName = `JSON ${tabs.length + 1}`;
+
+                    tabs.push({
+                        id: newId,
+                        name: tabName,
+                        input: '',
+                        output: '',
+                        jsonData: null,
+                        formatter: null
+                    });
+
+                    const tabElement = document.createElement('div');
+                    tabElement.className = 'tab';
+                    tabElement.textContent = tabName;
+                    tabElement.dataset.tab = newId;
+
+                    tabsContainer.insertBefore(tabElement, addTabBtn);
+                    switchTab(newId);
+
+                    // 初始化新标签页
+                    const tab = tabs.find(tab => tab.id === newId);
+                    if (tab && tab.jsonData) {
+                        renderFormatter(tab);
+                    }
+                });
+
+                // 切换标签页
+                tabsContainer.addEventListener('click', function(e) {
+                    if (e.target.classList.contains('tab')) {
+                        const tabId = parseInt(e.target.dataset.tab);
+                        switchTab(tabId);
+                    }
+                });
+
+                function switchTab(tabId) {
+                    // 保存当前标签页状态
+                    const currentTab = tabs.find(tab => tab.id === activeTabId);
+                    if (currentTab) {
+                        currentTab.input = input.value;
+                    }
+
+                    // 切换到新标签页
+                    activeTabId = tabId;
+                    updateActiveTab();
+
+                    // 更新标签页样式
+                    document.querySelectorAll('.tab').forEach(tab => {
+                        tab.classList.toggle('active', parseInt(tab.dataset.tab) === tabId);
+                    }
+                    );
+                }
+
+                function updateActiveTab() {
+                    const tab = tabs.find(tab => tab.id === activeTabId);
+                    if (tab) {
+                        input.value = tab.input;
+                        output.innerHTML = tab.output || '';
+
+                        // 重新渲染格式化视图
+                        if (tab.formatter) {
+                            output.innerHTML = '';
+                            output.appendChild(tab.formatter.render());
+                        }
+                    }
+                }
+
+                // 格式化JSON
+                formatBtn.addEventListener('click', formatJson);
+
+                function formatJson() {
+                    try {
+                        const json = JSON.parse(input.value);
+                        const tab = tabs.find(tab => tab.id === activeTabId);
+
+                        if (tab) {
+                            tab.jsonData = json;
+                            tab.input = input.value;
+                            renderFormatter(tab);
+                        }
+                    } catch (e) {
+                        output.innerHTML = `<div style="color:red;padding:10px">JSON格式错误: ${e.message}</div>`;
+
+                        const tab = tabs.find(tab => tab.id === activeTabId);
+                        if (tab) {
+                            tab.output = output.innerHTML;
+                        }
+                    }
+                }
+
+                // 使用json-formatter渲染
+                function renderFormatter(tab) {
+                    output.innerHTML = '';
+
+                    const formatter = new JSONFormatter(tab.jsonData,2,{
+                        hoverPreviewEnabled: true,
+                        hoverPreviewArrayCount: 100,
+                        hoverPreviewFieldCount: 5,
+                        theme: isDarkTheme ? 'dark' : 'light',
+                        animateOpen: true,
+                        animateClose: true
+                    });
+
+                    tab.formatter = formatter;
+                    tab.output = '';
+                    output.appendChild(formatter.render());
+                }
+
+                // 压缩JSON
+                minifyBtn.addEventListener('click', function() {
+                    try {
+                        const json = JSON.parse(input.value);
+                        input.value = JSON.stringify(json);
+
+                        const tab = tabs.find(tab => tab.id === activeTabId);
+                        if (tab) {
+                            tab.input = input.value;
+                        }
+                    } catch (e) {
+                        output.innerHTML = `<div style="color:red;padding:10px">JSON格式错误: ${e.message}</div>`;
+                    }
+                });
+
+                // 新增功能实现
+                function setupTabContextMenu(tabElement, tabId) {
+                    const container = document.createElement('div');
+                    container.className = 'tab-menu-container';
+
+                    const menu = document.createElement('div');
+                    menu.className = 'tab-menu';
+
+                    const closeBtn = document.createElement('button');
+                    closeBtn.textContent = '关闭';
+                    closeBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        closeTab(tabId);
+                    }
+                    ;
+
+                    const closeLeftBtn = document.createElement('button');
+                    closeLeftBtn.textContent = '关闭左侧';
+                    closeLeftBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        closeTabs('left', tabId);
+                    }
+                    ;
+
+                    const closeRightBtn = document.createElement('button');
+                    closeRightBtn.textContent = '关闭右侧';
+                    closeRightBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        closeTabs('right', tabId);
+                    }
+                    ;
+
+                    menu.appendChild(closeBtn);
+                    menu.appendChild(closeLeftBtn);
+                    menu.appendChild(closeRightBtn);
+
+                    const actions = document.createElement('span');
+                    actions.className = 'tab-actions';
+                    actions.textContent = '⋯';
+                    actions.onclick = (e) => {
+                        e.stopPropagation();
+                        hideAllMenus();
+                        menu.style.display = 'block';
+                    }
+                    ;
+
+                    // 重组DOM结构
+                    const tabContent = tabElement.innerHTML;
+                    tabElement.innerHTML = '';
+                    tabElement.appendChild(container);
+                    container.innerHTML = tabContent;
+                    container.appendChild(actions);
+                    container.appendChild(menu);
+
+                    // 点击其他地方隐藏菜单
+                    document.addEventListener('click', (e) => {
+                        if (!container.contains(e.target)) {
+                            menu.style.display = 'none';
+                        }
+                    }
+                    );
+                }
+
+                function hideAllMenus() {
+                    document.querySelectorAll('.tab-menu').forEach(menu => {
+                        menu.style.display = 'none';
+                    }
+                    );
+                }
+
+                function closeTab(tabId) {
+                    if (tabs.length <= 1)
+                        return;
+
+                    const tabIndex = tabs.findIndex(tab => tab.id === tabId);
+                    if (tabIndex === -1)
+                        return;
+
+                    // 切换活动标签
+                    let newActiveId = activeTabId;
+                    if (activeTabId === tabId) {
+                        newActiveId = tabIndex > 0 ? tabs[tabIndex - 1].id : tabs[tabIndex + 1].id;
+                    }
+
+                    // 移除标签
+                    tabs = tabs.filter(tab => tab.id !== tabId);
+                    document.querySelector(`.tab[data-tab="${tabId}"]`).remove();
+
+                    // 更新活动标签
+                    if (newActiveId !== activeTabId) {
+                        switchTab(newActiveId);
+                    } else {
+                        updateActiveTab();
+                    }
+                }
+
+                function closeTabs(direction, refTabId) {
+                    const refIndex = tabs.findIndex(tab => tab.id === refTabId);
+                    if (refIndex === -1)
+                        return;
+
+                    let tabsToClose = [];
+                    if (direction === 'left') {
+                        tabsToClose = tabs.slice(0, refIndex).map(tab => tab.id);
+                    } else if (direction === 'right') {
+                        tabsToClose = tabs.slice(refIndex + 1).map(tab => tab.id);
+                    }
+
+                    // 保留至少一个标签
+                    if (tabsToClose.length >= tabs.length) {
+                        tabsToClose = tabsToClose.slice(0, -1);
+                    }
+
+                    tabsToClose.forEach(closeTab);
+                }
+
+                // 修改复制功能
+                copyBtn.addEventListener('click', async function() {
+                    try {
+                        const tab = tabs.find(tab => tab.id === activeTabId);
+                        if (!tab?.jsonData)
+                            return;
+
+                        // 获取格式化后的JSON字符串
+                        const formattedJson = JSON.stringify(tab.jsonData, null, 2);
+
+                        // 使用现代剪贴板API
+                        await navigator.clipboard.writeText(formattedJson);
+                        alert('已复制格式化JSON到剪贴板');
+                    } catch (err) {
+                        console.error('复制失败:', err);
+                        // 降级方案
+                        const textarea = document.createElement('textarea');
+                        textarea.value = JSON.stringify(tabs.find(tab => tab.id === activeTabId)?.jsonData || {}, null, 2);
+                        document.body.appendChild(textarea);
+                        textarea.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(textarea);
+                        alert('已复制格式化JSON到剪贴板');
+                    }
+                });
+
+                function getFormattedText(formatter) {
+                    // 递归获取格式化文本
+                    let result = '';
+                    const walk = (node, indent='') => {
+                        if (node.classList.contains('json-formatter-row')) {
+                            const key = node.querySelector('.json-formatter-key');
+                            const value = node.querySelector('.json-formatter-value');
+
+                            if (key)
+                                result += indent + key.textContent + ': ';
+                            if (value) {
+                                const valueType = value.getAttribute('data-type');
+                                if (valueType === 'object' || valueType === 'array') {
+                                    result += valueType === 'object' ? '{' : '[';
+                                    result += node.classList.contains('open') ? '\n' : '';
+                                } else {
+                                    result += value.textContent;
+                                }
+                            }
+
+                            if (node.classList.contains('open')) {
+                                const children = node.querySelectorAll('.json-formatter-row');
+                                children.forEach( (child, i) => {
+                                    walk(child, indent + '  ');
+                                    if (i < children.length - 1)
+                                        result += ',';
+                                    result += '\n';
+                                }
+                                );
+
+                                if (children.length > 0)
+                                    result += indent;
+                                const type = node.querySelector('.json-formatter-value')?.getAttribute('data-type');
+                                result += type === 'object' ? '}' : ']';
+                            }
+                        }
+                    }
+                    ;
+
+                    walk(formatter.render());
+                    return result;
+                }
+
+                // 初始化时为每个标签添加菜单
+                document.querySelectorAll('.tab').forEach(tab => {
+                    const tabId = parseInt(tab.dataset.tab);
+                    if (!isNaN(tabId)) {
+                        setupTabContextMenu(tab, tabId);
+                    }
+                }
+                );
+
+                // 新增标签时也添加菜单
+                addTabBtn.addEventListener('click', function() {
+                    setTimeout( () => {
+                        const newTab = document.querySelector(`.tab[data-tab="${activeTabId}"]`);
+                        if (newTab) {
+                            setupTabContextMenu(newTab, activeTabId);
+                        }
+                    }
+                    , 0);
+                });
+
+                // 展开全部
+                expandAllBtn.addEventListener('click', function() {
+                    const tab = tabs.find(tab => tab.id === activeTabId);
+                    if (tab?.formatter) {
+                        tab.formatter.openAtDepth(Infinity);
+                    }
+                });
+
+                // 折叠全部
+                collapseAllBtn.addEventListener('click', function() {
+                    const tab = tabs.find(tab => tab.id === activeTabId);
+                    if (tab?.formatter) {
+                        tab.formatter.openAtDepth(0);
+                    }
+                });
+
+                // 切换主题
+                toggleTheme.addEventListener('click', function() {
+                    isDarkTheme = !isDarkTheme;
+                    const tab = tabs.find(tab => tab.id === activeTabId);
+                    if (tab?.formatter) {
+                        renderFormatter(tab);
+                    }
+                });
+
+                // 调整面板宽度
+                let isResizing = false;
+                resizeHandle.addEventListener('mousedown', function(e) {
+                    isResizing = true;
+                    document.body.style.cursor = 'col-resize';
+                    e.preventDefault();
+
+                    const startX = e.clientX;
+                    const leftWidth = parseFloat(getComputedStyle(editorContainer.children[0]).flexBasis);
+
+                    function moveHandler(e) {
+                        if (!isResizing)
+                            return;
+                        const dx = e.clientX - startX;
+                        const newLeftWidth = leftWidth + dx;
+
+                        editorContainer.children[0].style.flex = `0 0 ${Math.max(100, newLeftWidth)}px`;
+                    }
+
+                    function upHandler() {
+                        isResizing = false;
+                        document.body.style.cursor = '';
+                        document.removeEventListener('mousemove', moveHandler);
+                        document.removeEventListener('mouseup', upHandler);
+                    }
+
+                    document.addEventListener('mousemove', moveHandler);
+                    document.addEventListener('mouseup', upHandler);
+                });
+            });
+        </script>
+    </body>
+</html>
