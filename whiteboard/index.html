@@ -12,17 +12,16 @@
         <button id="rect">矩形</button>
         <button id="circle">圆形</button>
         <button id="arrow">箭头</button>
-        <button class="mode-btn active" data-mode="select" onclick="setMode('select')">选择</button>
-        <button class="mode-btn" data-mode="move" onclick="setMode('move')">移动</button>
+        <button id="text">文字</button>
         <button id="delete">删除</button>
-        <input type="color" id="color" value="#000000">
-        <input type="range" id="size" min="1" max="20" value="3">
-        
         <button id="clear">清空</button>
+        <input type="color" id="color" value="#000000">
+        <input type="number" id="size" value="2" min="1" max="50">
+        <button class="mode-btn active" data-mode="select" onclick="setMode('select')">选择</button>
+        <button class="mode-btn" data-mode="move" onclick="setMode('move')">平移</button>
     </div>
     <div class="canvas-container">
         <canvas id="canvas"></canvas>
-        <!-- 选区视觉反馈元素 -->
         <div id="selectionFeedback" class="selection-feedback"></div>
     </div>
     <script src="script.js"></script>
