@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API调试工具 - 类似Postman的Web版API测试平台</title>
+    <script src="https://cdn.tailwindcss.com/3.3.3"></script>
+    <link rel="stylesheet" href="./css/all.min.css">
+    <script src="chart.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f7fa;
+            color: #2d3748;
+            overflow-x: hidden;
+        }
+        
+        .sidebar {
+            transition: transform 0.3s ease;
+            z-index: 100;
+        }
+        
+        .sidebar.collapsed {
+            transform: translateX(-100%);
+        }
+        
+        .glassmorphism {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+        
+        .code-editor {
+            font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            min-height: 200px;
+            transition: all 0.2s ease;
+        }
+        
+        .code-editor:focus {
+            outline: none;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+        
+        .btn-primary {
+            background-color: #4f46e5;
+            color: white;
+            transition: all 0.2s ease;
+        }
+        
+        .btn-primary:hover {
+            background-color: #4338ca;
+            transform: translateY(-1px);
+        }
+        
+        .btn-secondary {
+            background-color: #f3f4f6;
+            color: #4b5563;
+            transition: all 0.2s ease;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #e5e7eb;
+        }
+        
+        .http-method {
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 4px;
+            text-align: center;
+            min-width: 80px;
+        }
+        
+        .method-get { background-color: #10b981; color: white; }
+        .method-post { background-color: #3b82f6; color: white; }
+        .method-put { background-color: #f59e0b; color: white; }
+        .method-delete { background-color: #ef4444; color: white; }
+        
+        .tab-active {
+            border-bottom: 2px solid #4f46e5;
+            color: #4f46e5;
+            font-weight: 500;
+        }
+        
+        .history-item {
+            transition: all 0.2s ease;
+        }
+        
+        .history-item:hover {
+            background-color: #f1f5f9;
+            transform: translateX(4px);
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1;
+            border-radius: 2px;
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar-track {
+            background-color: #f1f5f9;
+        }
+        
+        .status-code {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .status-2xx { background-color: #dcfce7; color: #166534; }
+        .status-3xx { background-color: #dbeafe; color: #1e40af; }
+        .status-4xx { background-color: #fef3c7; color: #92400e; }
+        .status-5xx { background-color: #fee2e2; color: #991b1b; }
+        
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                height: 100vh;
+                width: 80%;
+                max-width: 300px;
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .content-wrapper {
+                padding-top: 72px;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <!-- 顶部导航栏 -->
+    <header class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+                <button id="toggleSidebar" class="md:hidden text-gray-500 hover:text-gray-700 p-2">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 text-transparent bg-clip-text flex items-center">
+                    <i class="fas fa-code mr-2"></i>API调试工具
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-3">
+                <button id="saveRequest" class="btn-secondary px-4 py-2 rounded-md flex items-center">
+                    <i class="fas fa-save mr-2"></i>保存
+                </button>
+                <button id="loadRequest" class="btn-secondary px-4 py-2 rounded-md flex items-center">
+                    <i class="fas fa-folder-open mr-2"></i>加载
+                </button>
+                <button id="sendRequest" class="btn-primary px-6 py-2 rounded-md flex items-center shadow-md">
+                    <i class="fas fa-paper-plane mr-2"></i>发送请求
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+        <!-- 历史记录侧边栏 -->
+        <aside id="historySidebar" class="sidebar bg-white shadow-md w-80 flex-shrink-0 hidden md:block">
+            <div class="p-4 border-b">
+                <h2 class="text-lg font-semibold flex items-center">
+                    <i class="fas fa-history mr-2 text-indigo-500"></i>历史记录
+                </h2>
+            </div>
+            <div id="historyList" class="overflow-y-auto scrollbar-thin h-[calc(100vh-130px)] p-2">
+                <!-- 历史记录将通过JavaScript动态生成 -->
+                <div class="text-center text-gray-500 py-8">
+                    <i class="fas fa-info-circle text-2xl mb-2"></i>
+                    <p>暂无历史记录</p>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 主内容区 -->
+        <main class="flex-1 overflow-y-auto main-content">
+            <div class="content-wrapper p-4 md:p-6 max-w-7xl mx-auto">
+                <!-- 请求配置区 -->
+                <section class="glassmorphism p-4 md:p-6 mb-6">
+                    <div class="flex flex-col md:flex-row md:items-center gap-4 mb-4">
+                        <div class="flex items-center gap-2">
+                            <select id="httpMethod" class="http-method method-get border-0 focus:ring-2 focus:ring-indigo-500">
+                                <option value="GET" class="method-get">GET</option>
+                                <option value="POST" class="method-post">POST</option>
+                                <option value="PUT" class="method-put">PUT</option>
+                                <option value="DELETE" class="method-delete">DELETE</option>
+                            </select>
+                        </div>
+                        <div class="flex-1">
+                            <input 
+                                type="text" 
+                                id="requestUrl" 
+                                placeholder="https://api.example.com/endpoint" 
+                                class="w-full px-4 py-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                value="https://jsonplaceholder.typicode.com/posts/1"
+                            >
+                        </div>
+                    </div>
+
+                    <!-- 请求配置标签页 -->
+                    <div class="border-b border-gray-200 mb-4">
+                        <nav class="flex -mb-px space-x-8">
+                            <button id="tabHeaders" class="tab-active py-4 px-1 border-b-2 border-transparent font-medium text-sm">
+                                Headers
+                            </button>
+                            <button id="tabBody" class="py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                                Body
+                            </button>
+                        </nav>
+                    </div>
+
+                    <!-- Headers 表格 -->
+                    <div id="headersContent" class="mb-4">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Key
+                                        </th>
+                                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Value
+                                        </th>
+                                        <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            操作
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody id="headersTable" class="bg-white divide-y divide-gray-200">
+                                    <tr class="header-row">
+                                        <td class="px-4 py-3 whitespace-nowrap">
+                                            <input type="text" placeholder="Key" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" value="Content-Type">
+                                        </td>
+                                        <td class="px-4 py-3 whitespace-nowrap">
+                                            <input type="text" placeholder="Value" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" value="application/json">
+                                        </td>
+                                        <td class="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                                            <button class="add-header-btn text-green-600 hover:text-green-900">
+                                                <i class="fas fa-plus-circle"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Body 输入区 -->
+                    <div id="bodyContent" class="hidden">
+                        <div class="flex mb-2">
+                            <button id="bodyJson" class="tab-active px-3 py-1 text-sm font-medium">JSON</button>
+                            <button id="bodyXml" class="px-3 py-1 text-sm font-medium text-gray-500">XML</button>
+                            <button id="bodyForm" class="px-3 py-1 text-sm font-medium text-gray-500">Form Data</button>
+                        </div>
+                        <textarea 
+                            id="requestBody" 
+                            class="code-editor w-full px-4 py-3 rounded-md text-sm scrollbar-thin"
+                            placeholder="输入请求体内容..."
+                        >{
+  "title": "foo",
+  "body": "bar",
+  "userId": 1
+}</textarea>
+                    </div>
+                </section>
+
+                <!-- 响应展示区 -->
+                <section class="glassmorphism p-4 md:p-6">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between mb-4 pb-4 border-b border-gray-200">
+                        <div class="flex items-center gap-3 mb-2 md:mb-0">
+                            <div id="responseStatus" class="status-code status-2xx">200 OK</div>
+                            <div id="responseTime" class="text-sm text-gray-500">
+                                <i class="fas fa-clock mr-1"></i> 响应时间: -- ms
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button id="copyResponse" class="btn-secondary px-3 py-1 rounded-md text-sm flex items-center">
+                                <i class="fas fa-copy mr-1"></i> 复制
+                            </button>
+                            <button id="formatResponse" class="btn-secondary px-3 py-1 rounded-md text-sm flex items-center">
+                                <i class="fas fa-code mr-1"></i> 格式化
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 响应内容标签页 -->
+                    <div class="border-b border-gray-200 mb-4">
+                        <nav class="flex -mb-px space-x-8">
+                            <button id="tabBodyResponse" class="tab-active py-2 px-1 border-b-2 border-transparent font-medium text-sm">
+                                Body
+                            </button>
+                            <button id="tabHeadersResponse" class="py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                                Headers
+                            </button>
+                        </nav>
+                    </div>
+
+                    <!-- 响应体展示 -->
+                    <div id="bodyResponseContent">
+                        <pre id="responseBody" class="code-editor w-full p-4 rounded-md text-sm overflow-x-auto scrollbar-thin">
+{
+  "userId": 1,
+  "id": 1,
+  "title": "sunt aut facere repellat provident occaecati excepturi optio reprehenderit",
+  "body": "quia et suscipit\nsuscipit recusandae consequuntur expedita et cum\nreprehenderit molestiae ut ut quas totam\nnostrum rerum est autem sunt rem eveniet architecto"
+}</pre>
+                    </div>
+
+                    <!-- 响应头展示 -->
+                    <div id="headersResponseContent" class="hidden">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Key
+                                        </th>
+                                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Value
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody id="responseHeadersTable" class="bg-white divide-y divide-gray-200">
+                                    <!-- 响应头将通过JavaScript动态生成 -->
+                                    <tr>
+                                        <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">content-type</td>
+                                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">application/json; charset=utf-8</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">x-powered-by</td>
+                                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">Express</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 侧边栏切换
+            const toggleSidebarBtn = document.getElementById('toggleSidebar');
+            const historySidebar = document.getElementById('historySidebar');
+            
+            toggleSidebarBtn.addEventListener('click', function() {
+                historySidebar.classList.toggle('collapsed');
+                historySidebar.classList.toggle('hidden');
+            });
+            
+            // 点击主内容区关闭侧边栏（移动端）
+            document.querySelector('.main-content').addEventListener('click', function() {
+                if (window.innerWidth <= 768 && !historySidebar.classList.contains('hidden')) {
+                    historySidebar.classList.add('collapsed');
+                    setTimeout(() => {
+                        historySidebar.classList.add('hidden');
+                    }, 300);
+                }
+            });
+            
+            // 标签页切换
+            const tabHeaders = document.getElementById('tabHeaders');
+            const tabBody = document.getElementById('tabBody');
+            const headersContent = document.getElementById('headersContent');
+            const bodyContent = document.getElementById('bodyContent');
+            
+            tabHeaders.addEventListener('click', function() {
+                tabHeaders.classList.add('tab-active');
+                tabHeaders.classList.remove('text-gray-500');
+                tabBody.classList.remove('tab-active');
+                tabBody.classList.add('text-gray-500');
+                headersContent.classList.remove('hidden');
+                bodyContent.classList.add('hidden');
+            });
+            
+            tabBody.addEventListener('click', function() {
+                tabBody.classList.add('tab-active');
+                tabBody.classList.remove('text-gray-500');
+                tabHeaders.classList.remove('tab-active');
+                tabHeaders.classList.add('text-gray-500');
+                bodyContent.classList.remove('hidden');
+                headersContent.classList.add('hidden');
+            });
+            
+            // Body 格式切换
+            const bodyJson = document.getElementById('bodyJson');
+            const bodyXml = document.getElementById('bodyXml');
+            const bodyForm = document.getElementById('bodyForm');
+            
+            bodyJson.addEventListener('click', function() {
+                setActiveBodyTab(bodyJson);
+            });
+            
+            bodyXml.addEventListener('click', function() {
+                setActiveBodyTab(bodyXml);
+            });
+            
+            bodyForm.addEventListener('click', function() {
+                setActiveBodyTab(bodyForm);
+            });
+            
+            function setActiveBodyTab(activeTab) {
+                [bodyJson, bodyXml, bodyForm].forEach(tab => {
+                    tab.classList.remove('tab-active');
+                    tab.classList.add('text-gray-500');
+                });
+                activeTab.classList.add('tab-active');
+                activeTab.classList.remove('text-gray-500');
+            }
+            
+            // 响应标签页切换
+            const tabBodyResponse = document.getElementById('tabBodyResponse');
+            const tabHeadersResponse = document.getElementById('tabHeadersResponse');
+            const bodyResponseContent = document.getElementById('bodyResponseContent');
+            const headersResponseContent = document.getElementById('headersResponseContent');
+            
+            tabBodyResponse.addEventListener('click', function() {
+                tabBodyResponse.classList.add('tab-active');
+                tabBodyResponse.classList.remove('text-gray-500');
+                tabHeadersResponse.classList.remove('tab-active');
+                tabHeadersResponse.classList.add('text-gray-500');
+                bodyResponseContent.classList.remove('hidden');
+                headersResponseContent.classList.add('hidden');
+            });
+            
+            tabHeadersResponse.addEventListener('click', function() {
+                tabHeadersResponse.classList.add('tab-active');
+                tabHeadersResponse.classList.remove('text-gray-500');
+                tabBodyResponse.classList.remove('tab-active');
+                tabBodyResponse.classList.add('text-gray-500');
+                headersResponseContent.classList.remove('hidden');
+                bodyResponseContent.classList.add('hidden');
+            });
+            
+            // 添加Header行
+            const headersTable = document.getElementById('headersTable');
+            
+            headersTable.addEventListener('click', function(e) {
+                if (e.target.closest('.add-header-btn')) {
+                    const newRow = document.createElement('tr');
+                    newRow.className = 'header-row';
+                    newRow.innerHTML = `
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <input type="text" placeholder="Key" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <input type="text" placeholder="Value" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                            <button class="remove-header-btn text-red-600 hover:text-red-900">
+                                <i class="fas fa-minus-circle"></i>
+                            </button>
+                        </td>
+                    `;
+                    headersTable.appendChild(newRow);
+                } else if (e.target.closest('.remove-header-btn')) {
+                    const row = e.target.closest('.header-row');
+                    if (headersTable.querySelectorAll('.header-row').length > 1) {
+                        row.remove();
+                    }
+                }
+            });
+            
+            // HTTP方法下拉菜单样式切换
+            const httpMethod = document.getElementById('httpMethod');
+            const methodClasses = {
+                'GET': 'method-get',
+                'POST': 'method-post',
+                'PUT': 'method-put',
+                'DELETE': 'method-delete'
+            };
+            
+            httpMethod.addEventListener('change', function() {
+                // 移除所有方法类
+                Object.values(methodClasses).forEach(className => {
+                    httpMethod.classList.remove(className);
+                });
+                // 添加当前方法类
+                httpMethod.classList.add(methodClasses[this.value]);
+            });
+            
+            // 发送请求
+            const sendRequestBtn = document.getElementById('sendRequest');
+            const requestUrl = document.getElementById('requestUrl');
+            const requestBody = document.getElementById('requestBody');
+            const responseBody = document.getElementById('responseBody');
+            const responseStatus = document.getElementById('responseStatus');
+            const responseTime = document.getElementById('responseTime');
+            const responseHeadersTable = document.getElementById('responseHeadersTable');
+            
+            sendRequestBtn.addEventListener('click', async function() {
+                const url = requestUrl.value.trim();
+                if (!url) {
+                    alert('请输入请求URL');
+                    return;
+                }
+                
+                const method = httpMethod.value;
+                const headers = getHeaders();
+                const body = method === 'GET' || method === 'DELETE' ? null : requestBody.value.trim();
+                
+                // 记录开始时间
+                const startTime = performance.now();
+                
+                try {
+                    // 显示加载状态
+                    responseBody.textContent = '正在发送请求...';
+                    responseStatus.textContent = '加载中';
+                    responseStatus.className = 'status-code';
+                    
+                    const response = await fetch(url, {
+                        method: method,
+                        headers: headers,
+                        body: body ? body : undefined
+                    });
+                    
+                    // 计算响应时间
+                    const endTime = performance.now();
+                    const time = Math.round(endTime - startTime);
+                    responseTime.innerHTML = `<i class="fas fa-clock mr-1"></i> 响应时间: ${time} ms`;
+                    
+                    // 更新状态码
+                    updateStatusCode(response.status);
+                    
+                    // 获取响应头
+                    updateResponseHeaders(response.headers);
+                    
+                    // 获取响应体
+                    let responseText = '';
+                    try {
+                        responseText = await response.text();
+                        // 尝试格式化JSON
+                        try {
+                            const parsedJson = JSON.parse(responseText);
+                            responseBody.textContent = JSON.stringify(parsedJson, null, 2);
+                        } catch (e) {
+                            // 不是JSON，直接显示
+                            responseBody.textContent = responseText;
+                        }
+                    } catch (e) {
+                        responseBody.textContent = '无法解析响应体';
+                    }
+                    
+                    // 保存到历史记录
+                    saveToHistory(url, method, time, response.status);
+                    
+                } catch (error) {
+                    responseBody.textContent = `请求失败: ${error.message}`;
+                    responseStatus.textContent = '错误';
+                    responseStatus.className = 'status-code status-5xx';
+                }
+            });
+            
+            // 获取Headers
+            function getHeaders() {
+                const headers = {};
+                const rows = headersTable.querySelectorAll('.header-row');
+                
+                rows.forEach(row => {
+                    const keyInput = row.querySelector('td:first-child input');
+                    const valueInput = row.querySelector('td:nth-child(2) input');
+                    
+                    const key = keyInput.value.trim();
+                    const value = valueInput.value.trim();
+                    
+                    if (key) {
+                        headers[key] = value;
+                    }
+                });
+                
+                return headers;
+            }
+            
+            // 更新状态码显示
+            function updateStatusCode(status) {
+                responseStatus.textContent = `${status} ${getStatusText(status)}`;
+                
+                // 设置状态码样式
+                responseStatus.className = 'status-code';
+                if (status >= 200 && status < 300) {
+                    responseStatus.classList.add('status-2xx');
+                } else if (status >= 300 && status < 400) {
+                    responseStatus.classList.add('status-3xx');
+                } else if (status >= 400 && status < 500) {
+                    responseStatus.classList.add('status-4xx');
+                } else {
+                    responseStatus.classList.add('status-5xx');
+                }
+            }
+            
+            // 获取状态码文本描述
+            function getStatusText(status) {
+                const statusTexts = {
+                    200: 'OK',
+                    201: 'Created',
+                    204: 'No Content',
+                    400: 'Bad Request',
+                    401: 'Unauthorized',
+                    403: 'Forbidden',
+                    404: 'Not Found',
+                    500: 'Internal Server Error',
+                    502: 'Bad Gateway',
+                    503: 'Service Unavailable'
+                };
+                return statusTexts[status] || '';
+            }
+            
+            // 更新响应头显示
+            function updateResponseHeaders(headers) {
+                responseHeadersTable.innerHTML = '';
+                
+                headers.forEach((value, key) => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${key}</td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${value}</td>
+                    `;
+                    responseHeadersTable.appendChild(row);
+                });
+            }
+            
+            // 保存到历史记录
+            function saveToHistory(url, method, time, status) {
+                const historyList = document.getElementById('historyList');
+                const timestamp = new Date().toLocaleString();
+                
+                // 创建历史记录项
+                const historyItem = document.createElement('div');
+                historyItem.className = 'history-item p-3 mb-2 rounded-md border border-gray-200';
+                historyItem.innerHTML = `
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="http-method ${methodClasses[method]} text-xs py-1 px-2">${method}</span>
+                        <span class="status-code ${getStatusClass(status)} text-xs">${status}</span>
+                    </div>
+                    <div class="text-sm font-medium truncate mb-1">${url}</div>
+                    <div class="text-xs text-gray-500 flex items-center justify-between">
+                        <span>${timestamp}</span>
+                        <span><i class="fas fa-clock mr-1"></i>${time}ms</span>
+                    </div>
+                `;
+                
+                // 添加点击事件，加载历史请求
+                historyItem.addEventListener('click', function() {
+                    httpMethod.value = method;
+                    httpMethod.dispatchEvent(new Event('change'));
+                    requestUrl.value = url;
+                    
+                    // 切换到主内容区（移动端）
+                    if (window.innerWidth <= 768) {
+                        historySidebar.classList.add('collapsed');
+                        setTimeout(() => {
+                            historySidebar.classList.add('hidden');
+                        }, 300);
+                    }
+                });
+                
+                // 添加到历史记录列表开头
+                if (historyList.querySelector('.text-center')) {
+                    historyList.innerHTML = '';
+                }
+                historyList.insertBefore(historyItem, historyList.firstChild);
+                
+                // 限制历史记录数量
+                const maxHistoryItems = 20;
+                const items = historyList.querySelectorAll('.history-item');
+                if (items.length > maxHistoryItems) {
+                    historyList.removeChild(items[items.length - 1]);
+                }
+                
+                // 保存到本地存储
+                saveHistoryToLocalStorage();
+            }
+            
+            // 获取状态码对应的CSS类
+            function getStatusClass(status) {
+                if (status >= 200 && status < 300) {
+                    return 'status-2xx';
+                } else if (status >= 300 && status < 400) {
+                    return 'status-3xx';
+                } else if (status >= 400 && status < 500) {
+                    return 'status-4xx';
+                } else {
+                    return 'status-5xx';
+                }
+            }
+            
+            // 保存历史记录到本地存储
+            function saveHistoryToLocalStorage() {
+                const historyItems = [];
+                const items = document.querySelectorAll('.history-item');
+                
+                items.forEach(item => {
+                    const method = item.querySelector('.http-method').textContent;
+                    const url = item.querySelector('.text-sm.font-medium').textContent;
+                    const status = parseInt(item.querySelector('.status-code').textContent);
+                    
+                    historyItems.push({
+                        method,
+                        url,
+                        status
+                    });
+                });
+                
+                localStorage.setItem('apiHistory', JSON.stringify(historyItems));
+            }
+            
+            // 从本地存储加载历史记录
+            function loadHistoryFromLocalStorage() {
+                const historyList = document.getElementById('historyList');
+                const savedHistory = localStorage.getItem('apiHistory');
+                
+                if (savedHistory) {
+                    try {
+                        const historyItems = JSON.parse(savedHistory);
+                        
+                        if (historyItems.length > 0) {
+                            historyList.innerHTML = '';
+                            
+                            historyItems.forEach(item => {
+                                const historyItem = document.createElement('div');
+                                historyItem.className = 'history-item p-3 mb-2 rounded-md border border-gray-200';
+                                historyItem.innerHTML = `
+                                    <div class="flex items-center justify-between mb-1">
+                                        <span class="http-method ${methodClasses[item.method]} text-xs py-1 px-2">${item.method}</span>
+                                        <span class="status-code ${getStatusClass(item.status)} text-xs">${item.status}</span>
+                                    </div>
+                                    <div class="text-sm font-medium truncate mb-1">${item.url}</div>
+                                    <div class="text-xs text-gray-500">
+                                        <span>已保存</span>
+                                    </div>
+                                `;
+                                
+                                // 添加点击事件
+                                historyItem.addEventListener('click', function() {
+                                    httpMethod.value = item.method;
+                                    httpMethod.dispatchEvent(new Event('change'));
+                                    requestUrl.value = item.url;
+                                    
+                                    // 切换到主内容区（移动端）
+                                    if (window.innerWidth <= 768) {
+                                        historySidebar.classList.add('collapsed');
+                                        setTimeout(() => {
+                                            historySidebar.classList.add('hidden');
+                                        }, 300);
+                                    }
+                                });
+                                
+                                historyList.appendChild(historyItem);
+                            });
+                        }
+                    } catch (e) {
+                        console.error('加载历史记录失败:', e);
+                    }
+                }
+            }
+            
+            // 复制响应内容
+            const copyResponseBtn = document.getElementById('copyResponse');
+            
+            copyResponseBtn.addEventListener('click', function() {
+                const textToCopy = responseBody.textContent;
+                
+                navigator.clipboard.writeText(textToCopy)
+                    .then(() => {
+                        const originalText = copyResponseBtn.innerHTML;
+                        copyResponseBtn.innerHTML = '<i class="fas fa-check mr-1"></i> 已复制';
+                        
+                        setTimeout(() => {
+                            copyResponseBtn.innerHTML = originalText;
+                        }, 2000);
+                    })
+                    .catch(err => {
+                        console.error('复制失败:', err);
+                    });
+            });
+            
+            // 格式化响应内容
+            const formatResponseBtn = document.getElementById('formatResponse');
+            
+            formatResponseBtn.addEventListener('click', function() {
+                const responseText = responseBody.textContent;
+                
+                try {
+                    const parsedJson = JSON.parse(responseText);
+                    responseBody.textContent = JSON.stringify(parsedJson, null, 2);
+                } catch (e) {
+                    alert('无法格式化响应内容，可能不是有效的JSON');
+                }
+            });
+            
+            // 保存请求配置
+            const saveRequestBtn = document.getElementById('saveRequest');
+            
+            saveRequestBtn.addEventListener('click', function() {
+                const requestConfig = {
+                    method: httpMethod.value,
+                    url: requestUrl.value,
+                    headers: getHeaders(),
+                    body: requestBody.value
+                };
+                
+                const configStr = JSON.stringify(requestConfig, null, 2);
+                const blob = new Blob([configStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `api-request-${new Date().toISOString().slice(0, 10)}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+            
+            // 加载请求配置
+            const loadRequestBtn = document.getElementById('loadRequest');
+            
+            loadRequestBtn.addEventListener('click', function() {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.json';
+                
+                input.addEventListener('change', function(e) {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        
+                        reader.onload = function(event) {
+                            try {
+                                const requestConfig = JSON.parse(event.target.result);
+                                
+                                if (requestConfig.method) {
+                                    httpMethod.value = requestConfig.method;
+                                    httpMethod.dispatchEvent(new Event('change'));
+                                }
+                                
+                                if (requestConfig.url) {
+                                    requestUrl.value = requestConfig.url;
+                                }
+                                
+                                if (requestConfig.headers) {
+                                    // 清空现有headers
+                                    headersTable.innerHTML = '';
+                                    
+                                    // 添加新headers
+                                    Object.entries(requestConfig.headers).forEach(([key, value], index) => {
+                                        const newRow = document.createElement('tr');
+                                        newRow.className = 'header-row';
+                                        newRow.innerHTML = `
+                                            <td class="px-4 py-3 whitespace-nowrap">
+                                                <input type="text" placeholder="Key" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" value="${key}">
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap">
+                                                <input type="text" placeholder="Value" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" value="${value}">
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                                                <button class="${index === 0 ? 'add-header-btn text-green-600' : 'remove-header-btn text-red-600'} hover:text-red-900">
+                                                    <i class="fas ${index === 0 ? 'fa-plus-circle' : 'fa-minus-circle'}"></i>
+                                                </button>
+                                            </td>
+                                        `;
+                                        headersTable.appendChild(newRow);
+                                    });
+                                }
+                                
+                                if (requestConfig.body) {
+                                    requestBody.value = requestConfig.body;
+                                }
+                                
+                            } catch (e) {
+                                alert('无法解析配置文件');
+                            }
+                        };
+                        
+                        reader.readAsText(file);
+                    }
+                });
+                
+                input.click();
+            });
+            
+            // 初始化加载历史记录
+            loadHistoryFromLocalStorage();
+            
+            // 模拟发送请求（页面加载时）
+            // 这里不自动发送请求，用户可以点击发送按钮
+        });
+    </script>
+</body>
+</html>
