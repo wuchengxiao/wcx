@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>垃圾分类小游戏</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- 开始页面 -->
+    <div id="startPage" class="page active">
+        <div class="container">
+            <h1 class="title">垃圾分类小游戏</h1>
+            <div class="instructions">
+                <p>游戏规则：</p>
+                <ul>
+                    <li>游戏将随机显示10个常见垃圾</li>
+                    <li>每个垃圾显示15秒，拖动到正确的垃圾桶得分</li>
+                    <li>正确分类：+10分</li>
+                    <li>错误分类：不得分</li>
+                    <li>前20名可以填写姓名进入排行榜</li>
+                </ul>
+            </div>
+            <div class="button-group">
+                <button id="startBtn" class="start-btn">开始挑战</button>
+                <button id="startRankingBtn" class="ranking-btn">排行榜</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 游戏页面 -->
+    <div id="gamePage" class="page">
+        <div class="game-header">
+            <div class="score-display">得分：<span id="score">0</span></div>
+            <div class="round-display">第 <span id="round">1</span>/10 轮</div>
+            <div class="timer-display">倒计时：<span id="timer">15</span>秒</div>
+        </div>
+        
+        <div id="garbageArea" class="garbage-area">
+            <!-- 垃圾将在这里动态生成 -->
+        </div>
+        
+        <div class="trash-can-area">
+            <div id="kitchenTrash" class="trash-can kitchen">
+                <div class="trash-label">厨余垃圾</div>
+            </div>
+            <div id="recycleTrash" class="trash-can recycle">
+                <div class="trash-label">可回收垃圾</div>
+            </div>
+            <div id="otherTrash" class="trash-can other">
+                <div class="trash-label">其他垃圾</div>
+            </div>
+            <div id="harmfulTrash" class="trash-can harmful">
+                <div class="trash-label">有害垃圾</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 结束页面 -->
+    <div id="endPage" class="page">
+        <div class="container">
+            <h2>游戏结束！</h2>
+            <div class="final-score">
+                <p>你的得分：<span id="finalScore">0</span></p>
+                <div id="stars" class="stars"></div>
+            </div>
+            
+            <div id="nameInputSection" class="name-input-section">
+                <p>恭喜！你进入了前20名</p>
+                <input type="text" id="playerName" placeholder="请输入你的姓名" maxlength="10">
+                <button id="saveBtn" class="save-btn">保存成绩</button>
+            </div>
+            
+            <div class="end-buttons">
+                <button id="restartBtn" class="restart-btn">重新挑战</button>
+                <button id="rankingBtn" class="ranking-btn">排行榜</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 排行榜模态框 -->
+    <div id="rankingModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>排行榜</h3>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="rankings" class="rankings-list">
+                    <!-- 排行榜将在这里动态生成 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="closeRankingBtn" class="close-btn">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
