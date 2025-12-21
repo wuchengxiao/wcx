@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小怪兽吃食物</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <!-- 标题部分 -->
+        <div class="game-header">
+            <h1>小怪兽吃食物</h1>
+        </div>
+        
+        <!-- 游戏展示区 -->
+        <div class="game-main">
+            <div class="game-area">
+                <!-- 左边怪兽 -->
+                <div class="monster-container left">
+                    <div class="monster">
+                        <div class="monster-eye left"></div>
+                        <div class="monster-eye right"></div>
+                        <div class="monster-mouth"></div>
+                    </div>
+                </div>
+                
+                <!-- 中间城堡 -->
+                <div class="castle">
+                    <div class="castle-door"></div>
+                </div>
+                
+                <!-- 右边怪兽 -->
+                <div class="monster-container right">
+                    <div class="monster">
+                        <div class="monster-eye left"></div>
+                        <div class="monster-eye right"></div>
+                        <div class="monster-mouth"></div>
+                    </div>
+                </div>
+                
+                <!-- 地面 -->
+                <div class="ground"></div>
+                
+                <!-- 食物 -->
+                <div class="food left-food">🍎</div>
+                <div class="food right-food">🍌</div>
+                
+                <!-- 胜利特效 -->
+                <div class="victory-effect"></div>
+            </div>
+        </div>
+        
+        <!-- 操作区域 -->
+        <div class="game-footer">
+            <!-- 开始游戏按钮 -->
+            <div class="start-container" id="startContainer">
+                <button id="startBtn" class="start-btn">开始游戏</button>
+            </div>
+            
+            <!-- 游戏进行时的界面 -->
+            <div class="game-controls" id="gameControls" style="display: none;">
+                <!-- 左边题目区 -->
+                <div class="question-area left">
+                    <div class="question" id="leftQuestion"></div>
+                    <div class="options">
+                        <button class="option" data-player="left" data-option="0">选项1</button>
+                        <button class="option" data-player="left" data-option="1">选项2</button>
+                        <button class="option" data-player="left" data-option="2">选项3</button>
+                    </div>
+                </div>
+                
+                <!-- 分数区 -->
+                <div class="score-area">
+                    <div class="score">
+                        <div class="player-name">左边怪兽</div>
+                        <div class="stars-container" id="leftScore">
+                            <div class="star"></div>
+                            <div class="star"></div>
+                            <div class="star"></div>
+                            <div class="star"></div>
+                            <div class="star"></div>
+                        </div>
+                    </div>
+                    <div class="score">
+                        <div class="player-name">右边怪兽</div>
+                        <div class="stars-container" id="rightScore">
+                            <div class="star"></div>
+                            <div class="star"></div>
+                            <div class="star"></div>
+                            <div class="star"></div>
+                            <div class="star"></div>
+                        </div>
+                    </div>
+                    <button id="restartBtn" class="restart-btn" style="display: none;">重新开始</button>
+                </div>
+                
+                <!-- 右边题目区 -->
+                <div class="question-area right">
+                    <div class="question" id="rightQuestion"></div>
+                    <div class="options">
+                        <button class="option" data-player="right" data-option="0">选项1</button>
+                        <button class="option" data-player="right" data-option="1">选项2</button>
+                        <button class="option" data-player="right" data-option="2">选项3</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
