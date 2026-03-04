@@ -186,37 +186,79 @@ let isSending = false;
 let hasInitChat = false;
 
 function appendMessage(role, content, sources) {
-    const container = _util.id('chatMessages');
+    const container = _util.id('msg-container');
     if (!container) {
         return null;
     }
+    
     const messageEl = document.createElement('div');
-    messageEl.className = `chat-message ${role}`;
+    messageEl.className = `message ${role === 'user' ? 'sent' : 'received'}`;
+
+    const avatar = document.createElement('img');
+    avatar.className = 'msg-avatar';
+    avatar.src = role === 'user' 
+        ? 'https://picsum.photos/seed/me/100/100' 
+        : 'https://picsum.photos/seed/ai/100/100';
+    avatar.alt = role === 'user' ? 'Me' : 'AI';
 
     const bubble = document.createElement('div');
-    bubble.className = 'chat-bubble';
+    bubble.className = 'msg-bubble';
     bubble.textContent = content;
 
+    messageEl.appendChild(avatar);
     messageEl.appendChild(bubble);
     
     if (sources && sources.length > 0) {
         const sourcesDiv = document.createElement('div');
         sourcesDiv.className = 'search-sources';
-        sourcesDiv.innerHTML = '搜索来源：';
+
+        const summary = document.createElement('div');
+        summary.className = 'search-sources-summary';
+
+        const label = document.createElement('span');
+        label.className = 'search-sources-label';
+        label.textContent = '搜索来源：';
+
+        const linksLine = document.createElement('div');
+        linksLine.className = 'search-sources-links';
+
         sources.forEach(function(src, idx) {
             if (idx > 0) {
-                sourcesDiv.appendChild(document.createTextNode(' | '));
+                linksLine.appendChild(document.createTextNode(' | '));
             }
             const link = document.createElement('a');
             link.href = src.link;
             link.target = '_blank';
+            link.rel = 'noopener noreferrer';
             link.textContent = src.title || src.media || ('来源' + (idx + 1));
-            sourcesDiv.appendChild(link);
+            linksLine.appendChild(link);
         });
+
+        summary.appendChild(label);
+        summary.appendChild(linksLine);
+
+        if (sources.length > 1) {
+            const toggleBtn = document.createElement('button');
+            toggleBtn.type = 'button';
+            toggleBtn.className = 'search-sources-toggle';
+            toggleBtn.textContent = '...';
+            toggleBtn.addEventListener('click', function() {
+                const expanded = linksLine.classList.toggle('expanded');
+                toggleBtn.textContent = expanded ? '收起' : '...';
+            });
+            summary.appendChild(toggleBtn);
+        }
+
+        sourcesDiv.appendChild(summary);
         messageEl.appendChild(sourcesDiv);
     }
     
-    container.appendChild(messageEl);
+    const typing = _util.id('typing');
+    if (typing) {
+        container.insertBefore(messageEl, typing);
+    } else {
+        container.appendChild(messageEl);
+    }
     container.scrollTop = container.scrollHeight;
     return bubble;
 }
@@ -226,7 +268,7 @@ function updateMessageBubble(bubble, content) {
         return;
     }
     bubble.textContent = content;
-    const container = _util.id('chatMessages');
+    const container = _util.id('msg-container');
     if (container) {
         container.scrollTop = container.scrollHeight;
     }
@@ -234,8 +276,8 @@ function updateMessageBubble(bubble, content) {
 
 function setSendingState(sending) {
     isSending = sending;
-    const sendBtn = _util.id('sendBtn');
-    const input = _util.id('userInput');
+    const sendBtn = _util.id('send-btn');
+    const input = _util.id('msg-input');
     if (sendBtn) {
         sendBtn.disabled = sending;
     }
@@ -265,7 +307,7 @@ async function sendMessage() {
     if (isSending) {
         return;
     }
-    const input = _util.id('userInput');
+    const input = _util.id('msg-input');
     if (!input) {
         return;
     }
@@ -341,8 +383,9 @@ function initChatUI() {
     }
     hasInitChat = true;
 
-    const sendBtn = _util.id('sendBtn');
-    const input = _util.id('userInput');
+    // 新UI中的发送按钮和输入框
+    const sendBtn = _util.id('send-btn');
+    const input = _util.id('msg-input');
     const enableWebSearch = _util.id('enableWebSearch');
     const searchEngine = _util.id('searchEngine');
     
@@ -357,12 +400,22 @@ function initChatUI() {
             }
         });
     }
-    
+
+    // 联网搜索选项事件
     if (enableWebSearch && searchEngine) {
         enableWebSearch.addEventListener('change', function() {
             searchEngine.style.display = this.checked ? 'block' : 'none';
         });
     }
+
+    // --- 整合layout.js的事件 ---
+    // 窗口大小改变时重置状态
+    window.addEventListener('resize', () => {
+        const container = _util.id('app-container');
+        if(window.innerWidth > 768) {
+            container.classList.remove('chat-active');
+        }
+    });
 
     if (conversation && conversation.length) {
         conversation.forEach(function(msg) {
@@ -381,6 +434,24 @@ async function runTest() {
     _util.hide('login');
 
     //开始聊天
-    _util.show('chat-content');
+    _util.show('app-container');
     initChatUI();
+}
+
+// --- 从layout.js整合的布局事件函数 ---
+function selectChat(el) {
+    const container = _util.id('app-container');
+    // 移动端：添加类名，触发 CSS transform 滑动
+    if(window.innerWidth <= 768) {
+        container.classList.add('chat-active');
+    }
+    
+    // 桌面端：仅高亮样式
+    document.querySelectorAll('.contact-item').forEach(i => i.classList.remove('active'));
+    el.classList.add('active');
+}
+
+function goBack() {
+    const container = _util.id('app-container');
+    container.classList.remove('chat-active');
 }

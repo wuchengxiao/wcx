@@ -6,5 +6,5 @@ var model='glm-4.7';
 // 使用示例
 const messages = [{
     role: 'user',
-    content: '你好，请介绍一下自己'
+    content: '你好'
 }];

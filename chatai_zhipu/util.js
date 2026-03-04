@@ -3,10 +3,10 @@ var _util = {
         return document.getElementById(id);
     },
     hide: function(id){
-        return document.getElementById(id).style="display:none;";
+        document.getElementById(id).style.display = "none";
     },
     show: function(id){
-        return document.getElementById(id).style="display:block;";
+        document.getElementById(id).style.display = "block";
     },
     text: function(id, text){
         document.getElementById(id).innerText = text;
