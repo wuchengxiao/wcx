@@ -2,479 +2,69 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>响应式聊天室</title>
-    <style>
-        /* --- CSS 变量 --- */
-        :root {
-            --primary-color: #007bff;
-            --primary-hover: #0056b3;
-            --bg-body: #dcdcdc;
-            --bg-white: #ffffff;
-            --bg-sidebar: #f8f9fa;
-            --text-main: #333;
-            --text-secondary: #888;
-            --border-color: #e0e0e0;
-            --radius-bubble: 16px;
-            --header-height: 56px;
-            --max-width: 1200px;
-        }
-
-        * {box-sizing: border-box;margin: 0;padding: 0;outline: none;-webkit-tap-highlight-color: #c9c5c503;}
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-body);
-            height: 100vh;
-            width: 100vw;
-            overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        /* --- 主容器 --- */
-        .app-container {
-            width: 100%;
-            height: 100%;
-            max-width: var(--max-width);
-            background-color: var(--bg-white);
-            display: flex;
-            position: relative;
-            overflow: hidden;
-            box-shadow: 0 0 20px rgba(0,0,0,0.1);
-        }
-
-        /* ============================
-           桌面端布局逻辑 (默认)
-           ============================ */
-        
-        /* 侧边栏 */
-        .sidebar {
-            width: 320px;
-            height: 100%;
-            background-color: var(--bg-white);
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            flex-shrink: 0;
-            transition: transform 0.3s ease;
-            z-index: 10;
-        }
-
-        /* 聊天区域 */
-        .chat-area {
-            flex: 1;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            background-color: #efe7dd; 
-            background-image: url("https://picsum.photos/seed/bg_pattern/800/600?blur=10");
-            background-size: cover;
-            position: relative;
-            z-index: 20;
-            transition: transform 0.3s ease;
-        }
-        
-        /* 遮罩层，使文字更清晰 */
-        .chat-overlay {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(255, 255, 255, 0.92);
-            z-index: 0;
-            pointer-events: none;
-        }
-
-        /* --- 侧边栏组件 --- */
-        .sidebar-header {
-            height: var(--header-height);
-            padding: 0 16px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border-bottom: 1px solid var(--border-color);
-            background: #f0f0f0;
-        }
-        
-        .user-avatar {
-            width: 40px; height: 40px; border-radius: 50%; object-fit: cover;
-        }
-
-        .search-bar { padding: 10px; border-bottom: 1px solid var(--border-color); }
-        .search-input {
-            width: 100%; padding: 8px 12px; border-radius: 20px; border: 1px solid #ddd;
-            background: #f5f5f5; font-size: 14px;
-        }
-
-        .contact-list { flex: 1; overflow-y: auto; }
-        
-        .contact-item {
-            display: flex; padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #f5f5f5;
-            transition: background 0.2s; align-items: center;
-        }
-        .contact-item:hover { background-color: #f5f5f5; }
-        .contact-item.active { background-color: #ebebeb; }
-
-        .contact-info { margin-left: 12px; flex: 1; overflow: hidden; }
-        .contact-top { display: flex; justify-content: space-between; margin-bottom: 4px; }
-        .contact-name { font-weight: 600; font-size: 15px; color: var(--text-main); }
-        .contact-time { font-size: 11px; color: var(--text-secondary); }
-        .contact-preview { font-size: 13px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-        /* --- 聊天区域组件 --- */
-        .chat-header {
-            height: var(--header-height);
-            padding: 0 16px;
-            display: flex;
-            align-items: center;
-            border-bottom: 1px solid var(--border-color);
-            background: var(--bg-white);
-            z-index: 50; /* 高于遮罩 */
-            position: relative;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        }
-
-        /* 移动端返回按钮 (默认隐藏) */
-        .back-btn {
-            display: none; 
-            margin-right: 10px;
-            background: none; border: none; cursor: pointer; color: var(--primary-color);
-        }
-
-        .chat-title-group { display: flex; flex-direction: column; margin-left: 10px; }
-        .chat-name { font-weight: 600; font-size: 16px; }
-        .chat-status { font-size: 11px; color: var(--text-secondary); }
-
-        .messages-container {
-            flex: 1;
-            padding: 16px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            z-index: 1;
-            scroll-behavior: smooth;
-            background-color: #eaeaea;
-        }
-
-        .message {display: flex;align-items: flex-start;max-width: 80%;animation: fadeIn 0.2s ease;flex-wrap: wrap;}
-        .message.received { align-self: flex-start; }
-        .message.sent { align-self: flex-end; flex-direction: row-reverse; }
-
-        .msg-avatar { width: 32px; height: 32px; border-radius: 50%; margin: 0 8px; flex-shrink: 0; }
-        
-        .msg-bubble {
-            padding: 10px 14px;
-            border-radius: var(--radius-bubble);
-            font-size: 15px;
-            line-height: 1.4;
-            position: relative;
-            word-wrap: break-word;
-            max-width: calc(100% - 48px);
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-        }
-        .received .msg-bubble {background-color: #fff;border-top-left-radius: 2px;}
-        .sent .msg-bubble {background-color: #95ec69;color: #000;border-top-right-radius: 2px;}
-
-        .input-area {
-            background-color: #f7f7f7;
-            padding: 8px 12px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            z-index: 50;
-            position: relative;
-            border-top: 1px solid var(--border-color);
-        }
-
-        .input-wrapper {
-            flex: 1;
-            background: #fff;
-            border-radius: 20px;
-            padding: 8px 12px;
-            display: flex;
-        }
-        #msg-input {
-            width: 100%; border: none; background: transparent; font-size: 15px;
-            max-height: 100px; resize: none;
-        }
-
-        .send-btn {
-            width: 36px; height: 36px; border-radius: 50%; border: none; background: var(--primary-color);
-            color: #fff; display: flex; justify-content: center; align-items: center; cursor: pointer;
-            transition: opacity 0.2s;
-        }
-
-        .icon-btn { background: none; border: none; cursor: pointer; padding: 4px; color: #666; transition: opacity 0.2s; }
-        .icon-btn:hover { opacity: 0.7; }
-
-        .search-sources {
-            width: calc(100% - 48px);
-            margin: 6px 0 0 48px;
-            font-size: 12px;
-            color: #6b7280;
-        }
-        .search-sources-summary {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            min-width: 0;
-        }
-        .search-sources-label {
-            white-space: nowrap;
-            flex-shrink: 0;
-        }
-        .search-sources-links {
-            min-width: 0;
-            flex: 1;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .search-sources-links.expanded {
-            white-space: normal;
-            overflow: visible;
-        }
-        .search-sources a {
-            color: #1f6feb;
-            text-decoration: none;
-        }
-        .search-sources a:hover {
-            text-decoration: underline;
-        }
-        .search-sources-toggle {
-            border: none;
-            background: transparent;
-            color: #1f6feb;
-            cursor: pointer;
-            padding: 0;
-            font-size: 12px;
-            line-height: 1;
-            white-space: nowrap;
-        }
-
-        /* 正在输入 */
-        .typing-indicator { display: none; padding: 8px 12px; background: #fff; border-radius: 12px; margin-left: 48px; width: fit-content; margin-bottom: 8px;}
-        .dot { width: 6px; height: 6px; background: #ccc; border-radius: 50%; display: inline-block; margin: 0 2px; animation: bounce 1.4s infinite ease-in-out both; }
-        .dot:nth-child(1) { animation-delay: -0.32s; }
-        .dot:nth-child(2) { animation-delay: -0.16s; }
-        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
-
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-        /* ============================
-           移动端适配逻辑 (核心修改)
-           ============================ */
-        @media (max-width: 768px) {
-            body { background-color: #fff; align-items: flex-start; }
-            .app-container { max-width: none; box-shadow: none; overflow: hidden; }
-
-            /* 统一设置侧边栏和聊天区为绝对定位，全屏 */
-            .sidebar, .chat-area {
-                width: 100%;
-                height: 100%;
-                position: absolute;
-                top: 0;
-                left: 0;
-                background: #fff;
-            }
-
-            /* 默认状态：侧边栏显示，聊天区移出屏幕右侧 */
-            .sidebar { z-index: 10; }
-            .chat-area { z-index: 20; transform: translateX(100%); }
-
-            /* 激活状态：当容器有 .chat-active 类时 */
-            .app-container.chat-active .chat-area {
-                transform: translateX(0);
-            }
-            
-            /* 可选：激活时，侧边栏稍微后退一点产生视差，或者直接隐藏 */
-            .app-container.chat-active .sidebar {
-                transform: translateX(-20%);
-                opacity: 0;
-            }
-
-            /* 显示返回按钮 */
-            .back-btn { display: flex; align-items: center; }
-            
-            /* 调整联系人列表样式 */
-            .contact-item { padding: 15px; }
-            .contact-preview { max-width: 220px; }
-        }
-
-        /* 针对超小屏幕微调 */
-        @media (max-width: 360px) {
-            .sidebar-header, .chat-header { padding: 0 10px; }
-            .msg-bubble { font-size: 14px; }
-        }
-
-        /* 隐藏滚动条 */
-        ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 3px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-
-        /* --- login 登录框样式 --- */
-        #login {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            max-width: 520px;
-            background: #fff;
-            padding: 16px 20px;
-            border-radius: 12px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
-            z-index: 1000;
-        }
-
-        .form-group {
-            margin-bottom: 12px;
-        }
-
-        #login button {
-            padding: 8px 18px;
-            border: none;
-            border-radius: 8px;
-            background: #1f6feb;
-            color: #fff;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
-        #login button:hover {
-            background: #0d47a1;
-        }
-
-        #loginMsg {
-            color: red;
-            margin-top: 8px;
-        }
-
-        /* 隐藏app-container当登录未完成 */
-        .app-container {
-            display: none;
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
+    <title>功能模块中心 - 在线工具集合</title> 
+    <meta name="description" content="功能模块中心，提供在线文档阅读、在线Word阅读、拼音练习、JSON格式化，Markdown编辑器等工具。更多功能即将上线！">
+    <meta name="keywords" content="在线工具, 文档阅读, Word阅读, 拼音练习, JSON格式化, Markdown编辑器">
+    <link rel="stylesheet" href="./index.css" />
 </head>
 <body>
-    <!-- 登录框（保留原有逻辑） -->
-    <div id="login">
-        <div class="form-group">
-            <label for="token">token:</label>
-            <input type="text" id="token" value="21-F1-51-31-01-41">
+    <div class="header">
+        <h1>功能模块中心</h1>
+        <p>选择您需要的功能开始使用</p>
+    </div>
+
+    <div class="modules-container">
+        <div class="module-card" onclick="location.href='./chatai_zhipu/index.html'">
+            <div class="module-icon">💬</div>
+            <div class="module-title">语言聊天大模型</div>
         </div>
-        <button onclick="runTest()">开始</button>
-        <div id="loginMsg"></div>
+        <div class="module-card" onclick="location.href='https://wuchengxiao.github.io/hfile/'">
+            <div class="module-icon">📄</div>
+            <div class="module-title">在线文档阅读</div>
+        </div>
+
+        <div class="module-card" onclick="location.href='https://wuchengxiao.github.io/hword/'">
+            <div class="module-icon">📝</div>
+            <div class="module-title">在线Word阅读</div>
+        </div>
+
+        <div class="module-card" onclick="location.href='https://wuchengxiao.github.io/chineseword/'">
+            <div class="module-icon">🔤</div>
+            <div class="module-title">拼音练习</div>
+        </div>
+
+        <div class="module-card" onclick="location.href='./formatJson/jsonContent2.html'">
+            <div class="module-icon">{} </div>
+            <div class="module-title">JSON格式化</div>
+        </div>
+
+        <div class="module-card" onclick="location.href='./markdown-editor/index.html'">
+            <div class="module-icon">📝</div>
+            <div class="module-title">Markdown编辑器</div>
+        </div>
+
+        <div class="module-card" onclick="location.href='./whiteboard/index.html'">
+            <div class="module-icon">📐</div>
+            <div class="module-title">在线白板</div>
+        </div>
+
+        <div class="module-card" onclick="location.href='./postman/apitest_index.html'">
+            <div class="module-icon">🔧</api></div>
+            <div class="module-title">api测试</div>
+        </div>
+
+        <div class="module-card" onclick="location.href='./garbage_sorting_game/index.html'">
+            <div class="module-icon">♻️</div>
+            <div class="module-title">垃圾分类小游戏</div>
+        </div>
+
+        <!-- 预留位置给未来扩展的模块 -->
+        <div class="module-card coming-soon">
+            <div class="module-icon">✨</div>
+            <div class="module-title">更多功能即将上线</div>
+        </div>
     </div>
-
-    <!-- 聊天应用主容器 -->
-    <div class="app-container" id="app-container">
-      <!-- 左侧：联系人列表 (在移动端是首页) -->
-      <aside class="sidebar">
-          <header class="sidebar-header">
-              <img src="https://picsum.photos/seed/me/100/100" class="user-avatar" alt="My Avatar">
-              <div style="display:flex; gap:10px;">
-                  <button class="icon-btn" title="New Chat"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>
-              </div>
-          </header>
-          
-          <div class="search-bar">
-              <input type="text" class="search-input" placeholder="搜索">
-          </div>
-
-          <div class="contact-list">
-              <div class="contact-item active" onclick="selectChat(this)">
-                  <img src="https://picsum.photos/seed/ai/100/100" class="user-avatar" alt="AI">
-                  <div class="contact-info">
-                      <div class="contact-top">
-                          <span class="contact-name">AI 智能助手</span>
-                          <span class="contact-time">10:00</span>
-                      </div>
-                      <div class="contact-preview" id="preview-msg">你好，有什么可以帮你的吗？</div>
-                  </div>
-              </div>
-              
-              <div class="contact-item" onclick="selectChat(this)">
-                  <img src="https://picsum.photos/seed/f1/100/100" class="user-avatar" alt="User">
-                  <div class="contact-info">
-                      <div class="contact-top">
-                          <span class="contact-name">产品经理</span>
-                          <span class="contact-time">昨天</span>
-                      </div>
-                      <div class="contact-preview">需求文档确认了吗？</div>
-                  </div>
-              </div>
-
-              <div class="contact-item" onclick="selectChat(this)">
-                  <img src="https://picsum.photos/seed/f2/100/100" class="user-avatar" alt="User">
-                  <div class="contact-info">
-                      <div class="contact-top">
-                          <span class="contact-name">设计交流群</span>
-                          <span class="contact-time">星期一</span>
-                      </div>
-                      <div class="contact-preview">新的UI稿看起来不错</div>
-                  </div>
-              </div>
-          </div>
-      </aside>
-
-      <!-- 右侧：聊天区域 (在移动端是二级页) -->
-      <main class="chat-area">
-          <div class="chat-overlay"></div>
-          
-          <header class="chat-header">
-              <!-- 移动端返回按钮 -->
-              <button class="back-btn" onclick="goBack()">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-              </button>
-              
-              <div class="chat-title-group">
-                  <span class="chat-name">AI 智能助手</span>
-                  <span class="chat-status">在线</span>
-              </div>
-          </header>
-
-          <div class="messages-container" id="msg-container">
-              <div class="message received">
-                  <img src="https://picsum.photos/seed/ai/100/100" class="msg-avatar">
-                  <div class="msg-bubble">你好！这是响应式聊天窗口演示。试着缩小浏览器窗口，体验移动端切换效果。</div>
-              </div>
-              
-              <div class="typing-indicator" id="typing">
-                  <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-              </div>
-          </div>
-
-          <footer class="input-area">
-              <div style="display: flex; flex-direction: column; gap: 8px; flex: 1;">
-                  <div style="display: flex; gap: 12px; align-items: center;">
-                      <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap;">
-                          <input type="checkbox" id="enableWebSearch" style="cursor: pointer;">
-                          <span style="font-size: 14px; color: #374151;">联网搜索</span>
-                      </label>
-                      <select id="searchEngine" style="padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; display: none;">
-                          <option value="search_std">智谱基础版</option>
-                          <option value="search_pro">智谱高阶版</option>
-                          <option value="search_pro_sogou">搜狗</option>
-                          <option value="search_pro_quark">夸克</option>
-                      </select>
-                  </div>
-                  <div style="display: flex; gap: 12px; align-items: flex-end;">
-                      <button class="icon-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
-                      <div class="input-wrapper">
-                          <input type="text" id="msg-input" placeholder="发消息..." autocomplete="off">
-                      </div>
-                  </div>
-              </div>
-              <button class="send-btn" id="send-btn">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-              </button>
-          </footer>
-      </main>
-    </div>
-    <script src="layout.js"></script>
-    <script src="util.js"></script>
-    <script src="constants.js"></script>
-    <script src="index.js"></script>
 </body>
+
 </html>
