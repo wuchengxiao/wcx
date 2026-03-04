@@ -447,20 +447,22 @@
 
           <footer class="input-area">
               <div style="display: flex; flex-direction: column; gap: 8px; flex: 1;">
-                  <div style="display: flex; gap: 12px; align-items: center;">
-                      <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap;">
-                          <input type="checkbox" id="enableWebSearch" style="cursor: pointer;">
-                          <span style="font-size: 14px; color: #374151;">联网搜索</span>
-                      </label>
-                      <select id="searchEngine" style="padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; display: none;">
-                          <option value="search_std">智谱基础版</option>
-                          <option value="search_pro">智谱高阶版</option>
-                          <option value="search_pro_sogou">搜狗</option>
-                          <option value="search_pro_quark">夸克</option>
-                      </select>
+                  <div id="toolsRow" style="display: none; flex-direction: column; gap: 8px;">
+                      <div style="display: flex; gap: 12px; align-items: center;">
+                          <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap;">
+                              <input type="checkbox" id="enableWebSearch" style="cursor: pointer;">
+                              <span style="font-size: 14px; color: #374151;">联网搜索</span>
+                          </label>
+                          <select id="searchEngine" style="padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; display: none;">
+                              <option value="search_std">智谱基础版</option>
+                              <option value="search_pro">智谱高阶版</option>
+                              <option value="search_pro_sogou">搜狗</option>
+                              <option value="search_pro_quark">夸克</option>
+                          </select>
+                      </div>
                   </div>
                   <div style="display: flex; gap: 12px; align-items: flex-end;">
-                      <button class="icon-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+                      <button id="toggleToolsBtn" class="icon-btn" title="工具"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
                       <div class="input-wrapper">
                           <input type="text" id="msg-input" placeholder="发消息..." autocomplete="off">
                       </div>

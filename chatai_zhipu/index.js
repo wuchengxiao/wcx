@@ -408,6 +408,17 @@ function initChatUI() {
         });
     }
 
+    // 工具行切换事件
+    const toggleToolsBtn = _util.id('toggleToolsBtn');
+    const toolsRow = _util.id('toolsRow');
+    if (toggleToolsBtn && toolsRow) {
+        toggleToolsBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const isHidden = toolsRow.style.display === 'none';
+            toolsRow.style.display = isHidden ? 'flex' : 'none';
+        });
+    }
+
     // --- 整合layout.js的事件 ---
     // 窗口大小改变时重置状态
     window.addEventListener('resize', () => {
