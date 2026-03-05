@@ -132,7 +132,7 @@
     .message {
       display: flex;
       align-items: flex-start;
-      max-width: 80%;
+      max-width: 90%;
       animation: fadeIn 0.2s ease;
       flex-wrap: wrap;
       position: relative;
@@ -180,20 +180,23 @@
     }
 
     .message-buttons {
-      display: flex;
+      display: none;
       gap: 6px;
       margin-top: 8px;
       padding: 6px 10px;
       background-color: rgba(0, 0, 0, 0.05);
       border-radius: 6px;
-      opacity: 0;
       transition: opacity 0.3s ease;
       width: 100%;
       flex-basis: 100%;
     }
 
     .message:hover .message-buttons {
-      opacity: 1;
+      display: flex;
+    }
+
+    .message.show-actions .message-buttons {
+      display: flex;
     }
 
     .message.received .message-buttons {
@@ -573,7 +576,7 @@
   <div id="login">
     <div class="form-group">
       <label for="token">token:</label>
-      <input type="text" id="token" placeholder="21-F1-51-31-01-41">
+      <input type="text" id="token" placeholder="31-a1-51-31-01-41">
     </div>
     <button onclick="runTest()">开始</button>
     <div id="loginMsg"></div>

@@ -13,46 +13,49 @@ function getBrowserParameters() {
     };
 }
 
-async function callAPIStream(messages, model, url, token, onDelta) {
-    var body = {
-        method: 'POST',
-        headers: {
-            'Authorization': 'Bearer ' + token,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            model: model,
-            messages: messages,
-            temperature: 1.0,
-            stream: true
-        })
-    };
-    const response = await fetch(url, body);
+// 消息内容映射（用于删除时通过关键值定位）
+const messageContentStore = new Map();
+let messageIdCounter = 0;
 
-    if (!response.ok) {
-        throw new Error(`API 调用失败: ${response.status}`);
-    }
+function generateMessageId() {
+    messageIdCounter += 1;
+    return `msg_${Date.now()}_${messageIdCounter}`;
+}
 
-    if (!response.body) {
-        const jsonResult = await response.json();
-        return jsonResult;
-    }
-
+async function streamRequest(url, option, onDelta) {
+    const response = await fetch(url, option);
     const reader = response.body.getReader();
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
 
-    function handleSSELine(rawLine) {
-        const line = rawLine.trim();
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+            if (buffer.trim()) {
+                readFromStream(buffer, onDelta);
+            }
+            break;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        buffer = readFromStream(buffer, onDelta);
+    }
+}
+
+function readFromStream(buffer, onDelta) {
+    const lines = buffer.split(/\r?\n/);
+    const rest = lines.pop() || '';
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
         if (!line.startsWith('data:')) {
-            return false;
+            continue;
         }
         const payload = line.slice(5).trim();
         if (payload === '[DONE]') {
-            return true;
+            return '';
         }
         if (!payload) {
-            return false;
+            continue;
         }
         try {
             const parsed = JSON.parse(payload);
@@ -61,7 +64,7 @@ async function callAPIStream(messages, model, url, token, onDelta) {
                 parsed.choices &&
                 parsed.choices[0] &&
                 parsed.choices[0].delta &&
-                parsed.choices[0].delta.content
+                parsed.choices[0].delta.reasoning_content
             ) || (
                 parsed &&
                 parsed.choices &&
@@ -75,31 +78,26 @@ async function callAPIStream(messages, model, url, token, onDelta) {
         } catch (e) {
             // ignore malformed chunk
         }
-        return false;
     }
 
-    while (true) {
-        const { value, done } = await reader.read();
-        if (done) {
-            const last = buffer.trim();
-            if (last && handleSSELine(last)) {
-                return null;
-            }
-            break;
-        }
+    return rest;
+}
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split(/\r?\n/);
-        buffer = lines.pop() || '';
-
-        for (let i = 0; i < lines.length; i++) {
-            if (handleSSELine(lines[i])) {
-                return null;
-            }
-        }
-    }
-
-    return null;
+async function callAPIStream(messages, model, url, token, onDelta) {
+    var option = {
+        method: 'POST',
+        headers: {
+            'Authorization': 'Bearer ' + token,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            model: model,
+            messages: messages,
+            temperature: 1.0,
+            stream: true
+        })
+    };
+    streamRequest(url, option, onDelta);
 }
 
 async function callWebSearchAPI(query, searchEngine, token) {
@@ -136,7 +134,9 @@ function appendMessage(role, content, sources) {
     
     const messageEl = document.createElement('div');
     messageEl.className = `message ${role === 'user' ? 'sent' : 'received'}`;
-    messageEl.dataset.originalContent = content;
+    const messageId = generateMessageId();
+    messageEl.dataset.messageId = messageId;
+    messageContentStore.set(messageId, content || '');
 
     const avatar = document.createElement('img');
     avatar.className = 'msg-avatar';
@@ -219,6 +219,20 @@ function appendMessage(role, content, sources) {
     // 添加按钮容器到消息元素
     messageEl.appendChild(buttonsContainer);
 
+    // 点击消息时显示/隐藏按钮（与 hover 效果一致）
+    messageEl.addEventListener('click', function (event) {
+        if (event.target.closest('.message-buttons')) {
+            return;
+        }
+        document.querySelectorAll('.message.show-actions').forEach(function (el) {
+            if (el !== messageEl) {
+                el.classList.remove('show-actions');
+            }
+        });
+        messageEl.classList.toggle('show-actions');
+        event.stopPropagation();
+    });
+
     if (sources && sources.length > 0) {
         const sourcesDiv = document.createElement('div');
         sourcesDiv.className = 'search-sources';
@@ -266,11 +280,15 @@ function appendMessage(role, content, sources) {
 
 function deleteMessage(messageEl, role, content) {
     if (confirm('确定要删除这条消息吗？')) {
-        const originalContent = messageEl.dataset.originalContent || content;
+        const messageId = messageEl.dataset.messageId;
+        const originalContent = messageContentStore.get(messageId) || content;
         messageEl.remove();
         const index = conversation.findIndex(msg => msg.role === role && msg.content === originalContent);
         if (index !== -1) {
             conversation.splice(index, 1);
+        }
+        if (messageId) {
+            messageContentStore.delete(messageId);
         }
     }
 }
@@ -389,8 +407,11 @@ function finishStreaming(bubble) {
 }
 
 function addCopyButtonsToCodeBlocks(element) {
-    const codeBlocks = element.querySelectorAll('pre:not(:has(.copy-code-btn))');
+    const codeBlocks = element.querySelectorAll('pre');
     codeBlocks.forEach(pre => {
+        if (pre.querySelector('.copy-code-btn')) {
+            return;
+        }
         const copyBtn = document.createElement('button');
         copyBtn.className = 'copy-code-btn';
         copyBtn.textContent = '复制';
@@ -498,26 +519,32 @@ async function sendMessage() {
 
         if (!assistantText && result) {
             assistantText = extractAssistantReply(result) || '';
-            updateMessageBubble(assistantBubble, assistantText || '未获取到有效回复。');
+            updateMessageBubble(assistantBubble, assistantText || '正在思考中。。。');
         } else if (!assistantText) {
-            updateMessageBubble(assistantBubble, '未获取到有效回复。');
+            updateMessageBubble(assistantBubble, '正在思考中。。。');
         }
 
         finishStreaming(assistantBubble);
 
         const messageEl = assistantBubble.parentElement;
         if (messageEl) {
-            messageEl.dataset.originalContent = assistantText || '未获取到有效回复。';
+            const messageId = messageEl.dataset.messageId;
+            if (messageId) {
+                messageContentStore.set(messageId, assistantText || '');
+            }
         }
 
-        conversation.push({ role: 'assistant', content: assistantText || '未获取到有效回复。' });
+        conversation.push({ role: 'assistant', content: assistantText || '' });
     } catch (e) {
         const errorMessage = '请求失败，请稍后再试。';
         updateMessageBubble(assistantBubble, errorMessage);
         finishStreaming(assistantBubble);
         const messageEl = assistantBubble.parentElement;
         if (messageEl) {
-            messageEl.dataset.originalContent = errorMessage;
+            const messageId = messageEl.dataset.messageId;
+            if (messageId) {
+                messageContentStore.set(messageId, errorMessage);
+            }
         }
         console.error('聊天错误:', e);
     } finally {
@@ -546,6 +573,15 @@ function initChatUI() {
             }
         });
     }
+
+    // 点击消息区域外时，收起所有已展开的消息按钮
+    document.addEventListener('click', function (event) {
+        if (!event.target.closest('.message')) {
+            document.querySelectorAll('.message.show-actions').forEach(function (el) {
+                el.classList.remove('show-actions');
+            });
+        }
+    });
 
     // 初始化布局相关事件（在 layout.js 中定义）
     if (typeof initLayoutEvents === 'function') {
