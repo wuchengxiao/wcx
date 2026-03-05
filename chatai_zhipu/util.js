@@ -1,14 +1,14 @@
 var _util = {
-    id: function (id) {
+    id: function(id) {
         return document.getElementById(id);
     },
-    hide: function (id) {
+    hide: function(id){
         document.getElementById(id).style.display = "none";
     },
-    show: function (id) {
+    show: function(id){
         document.getElementById(id).style.display = "block";
     },
-    text: function (id, text) {
+    text: function(id, text){
         document.getElementById(id).innerText = text;
     }
 }

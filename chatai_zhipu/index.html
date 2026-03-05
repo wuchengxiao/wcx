@@ -2,783 +2,648 @@
 <html lang="zh-CN">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>响应式聊天室</title>
-    <style>
-        /* --- CSS 变量 --- */
-        :root {
-            --primary-color: #007bff;
-            --primary-hover: #0056b3;
-            --bg-body: #dcdcdc;
-            --bg-white: #ffffff;
-            --bg-sidebar: #f8f9fa;
-            --text-main: #333;
-            --text-secondary: #888;
-            --border-color: #e0e0e0;
-            --radius-bubble: 16px;
-            --header-height: 56px;
-            --max-width: 1200px;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            outline: none;
-            -webkit-tap-highlight-color: #c9c5c503;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-body);
-            height: 100vh;
-            width: 100vw;
-            overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        /* --- 主容器 --- */
-        .app-container {
-            width: 100%;
-            height: 100%;
-            max-width: var(--max-width);
-            background-color: var(--bg-white);
-            position: relative;
-            overflow: hidden;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
-        }
-
-        /* ============================
-           桌面端布局逻辑 (默认)
-           ============================ */
-
-        /* 侧边栏 */
-        .sidebar {
-            width: 320px;
-            height: 100%;
-            background-color: var(--bg-white);
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            flex-shrink: 0;
-            transition: transform 0.3s ease;
-            z-index: 10;
-        }
-
-        /* 聊天区域 */
-        .chat-area {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            background-color: #efe7dd;
-            background-image: url("https://picsum.photos/seed/bg_pattern/800/600?blur=10");
-            background-size: cover;
-            position: relative;
-            z-index: 20;
-        }
-
-        /* 遮罩层，使文字更清晰 */
-        .chat-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(255, 255, 255, 0.92);
-            z-index: 0;
-            pointer-events: none;
-        }
-
-        /* --- 侧边栏组件 --- */
-        .sidebar-header {
-            height: var(--header-height);
-            padding: 0 16px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border-bottom: 1px solid var(--border-color);
-            background: #f0f0f0;
-        }
-
-        .user-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            object-fit: cover;
-        }
-
-        .search-bar {
-            padding: 10px;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .search-input {
-            width: 100%;
-            padding: 8px 12px;
-            border-radius: 20px;
-            border: 1px solid #ddd;
-            background: #f5f5f5;
-            font-size: 14px;
-        }
-
-        .contact-list {
-            flex: 1;
-            overflow-y: auto;
-        }
-
-        .contact-item {
-            display: flex;
-            padding: 12px 16px;
-            cursor: pointer;
-            border-bottom: 1px solid #f5f5f5;
-            transition: background 0.2s;
-            align-items: center;
-        }
-
-        .contact-item:hover {
-            background-color: #f5f5f5;
-        }
-
-        .contact-item.active {
-            background-color: #ebebeb;
-        }
-
-        .contact-info {
-            margin-left: 12px;
-            flex: 1;
-            overflow: hidden;
-        }
-
-        .contact-top {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 4px;
-        }
-
-        .contact-name {
-            font-weight: 600;
-            font-size: 15px;
-            color: var(--text-main);
-        }
-
-        .contact-time {
-            font-size: 11px;
-            color: var(--text-secondary);
-        }
-
-        .contact-preview {
-            font-size: 13px;
-            color: var(--text-secondary);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        /* --- 聊天区域组件 --- */
-        .chat-header {
-            height: var(--header-height);
-            padding: 0 16px;
-            display: flex;
-            align-items: center;
-            border-bottom: 1px solid var(--border-color);
-            background: var(--bg-white);
-            z-index: 50;
-            /* 高于遮罩 */
-            position: relative;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-        }
-
-        /* 移动端返回按钮 (默认隐藏) */
-        .back-btn {
-            display: none;
-            margin-right: 10px;
-            background: none;
-            border: none;
-            cursor: pointer;
-            color: var(--primary-color);
-        }
-
-        .chat-title-group {
-            display: flex;
-            flex-direction: column;
-            margin-left: 10px;
-        }
-
-        .chat-name {
-            font-weight: 600;
-            font-size: 16px;
-        }
-
-        .chat-status {
-            font-size: 11px;
-            color: var(--text-secondary);
-        }
-
-        .messages-container {
-            flex: 1;
-            padding: 16px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            z-index: 1;
-            scroll-behavior: smooth;
-            background-color: #eaeaea;
-        }
-
-        .message {
-            display: flex;
-            align-items: flex-start;
-            max-width: 80%;
-            animation: fadeIn 0.2s ease;
-            flex-wrap: wrap;
-            position: relative;
-        }
-
-
-
-        .message-buttons {
-            display: flex;
-            gap: 6px;
-            margin-top: 8px;
-            padding: 6px 10px;
-            background-color: rgba(0, 0, 0, 0.05);
-            border-radius: 6px;
-            justify-content: flex-end;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-
-        .message:hover .message-buttons {
-            opacity: 1;
-        }
-
-        .message.sent .message-buttons {
-            justify-content: flex-start;
-        }
-
-        .icon-btn {
-            background-color: white;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            cursor: pointer;
-            padding: 6px 10px;
-            color: #666;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 32px;
-            min-height: 32px;
-        }
-
-        .icon-btn:hover {
-            background-color: #f0f0f0;
-            border-color: #bbb;
-            color: #333;
-            transform: translateY(-1px);
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-
-        .icon-btn:active {
-            transform: translateY(0);
-            box-shadow: none;
-        }
-
-        .message.received {
-            align-self: flex-start;
-        }
-
-        .message.sent {
-            align-self: flex-end;
-            flex-direction: row-reverse;
-        }
-
-        .msg-avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            margin: 0 8px;
-            flex-shrink: 0;
-        }
-
-        .msg-bubble {
-            padding: 10px 14px;
-            border-radius: var(--radius-bubble);
-            font-size: 15px;
-            line-height: 1.4;
-            position: relative;
-            word-wrap: break-word;
-            max-width: calc(100% - 48px);
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-            overflow: hidden;
-        }
-
-        /* 限制图片等元素不要超出对话框 */
-        .msg-bubble img {
-            max-width: 100%;
-            height: auto;
-            display: block;
-            margin: 8px 0;
-        }
-
-        .msg-bubble video {
-            max-width: 100%;
-            height: auto;
-            display: block;
-            margin: 8px 0;
-        }
-
-        .msg-bubble iframe {
-            max-width: 100%;
-            height: auto;
-            display: block;
-            margin: 8px 0;
-        }
-
-        /* Markdown 样式 */
-        .msg-bubble h1,
-        .msg-bubble h2,
-        .msg-bubble h3,
-        .msg-bubble h4,
-        .msg-bubble h5,
-        .msg-bubble h6 {
-            margin-top: 16px;
-            margin-bottom: 8px;
-            font-weight: 600;
-        }
-
-        .msg-bubble h1 {
-            font-size: 24px;
-        }
-
-        .msg-bubble h2 {
-            font-size: 20px;
-        }
-
-        .msg-bubble h3 {
-            font-size: 18px;
-        }
-
-        .msg-bubble h4 {
-            font-size: 16px;
-        }
-
-        .msg-bubble h5 {
-            font-size: 14px;
-        }
-
-        .msg-bubble h6 {
-            font-size: 12px;
-        }
-
-        .msg-bubble p {
-            margin-bottom: 8px;
-        }
-
-        .msg-bubble ul,
-        .msg-bubble ol {
-            margin-left: 20px;
-            margin-bottom: 8px;
-        }
-
-        .msg-bubble li {
-            margin-bottom: 4px;
-        }
-
-        .msg-bubble code {
-            background-color: #f1f1f1;
-            padding: 2px 4px;
-            border-radius: 3px;
-            font-family: monospace;
-            font-size: 14px;
-        }
-
-        .msg-bubble pre {
-            background-color: #f1f1f1;
-            padding: 10px;
-            border-radius: 4px;
-            overflow-x: auto;
-            margin-bottom: 8px;
-            position: relative;
-        }
-
-        .msg-bubble pre .copy-code-btn {
-            position: absolute;
-            top: 5px;
-            right: 5px;
-            background-color: rgba(255, 255, 255, 0.8);
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            padding: 2px 6px;
-            font-size: 12px;
-            cursor: pointer;
-            color: #666;
-            transition: all 0.2s;
-        }
-
-        .msg-bubble pre .copy-code-btn:hover {
-            background-color: #fff;
-            color: #333;
-        }
-
-        .msg-bubble pre .copy-code-btn.copied {
-            background-color: #4caf50;
-            color: white;
-            border-color: #4caf50;
-        }
-
-        .msg-bubble pre code {
-            background-color: transparent;
-            padding: 0;
-        }
-
-        .msg-bubble blockquote {
-            border-left: 4px solid #ddd;
-            padding-left: 10px;
-            margin-left: 0;
-            color: #666;
-            margin-bottom: 8px;
-        }
-
-        .msg-bubble a {
-            color: #007bff;
-            text-decoration: none;
-        }
-
-        .msg-bubble a:hover {
-            text-decoration: underline;
-        }
-
-        .received .msg-bubble {
-            background-color: #fff;
-            border-top-left-radius: 2px;
-        }
-
-        .sent .msg-bubble {
-            background-color: #95ec69;
-            color: #000;
-            border-top-right-radius: 2px;
-        }
-
-        .input-area {
-            background-color: #f7f7f7;
-            padding: 8px 12px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            z-index: 50;
-            position: relative;
-            border-top: 1px solid var(--border-color);
-        }
-
-        .input-wrapper {
-            flex: 1;
-            background: #fff;
-            border-radius: 20px;
-            padding: 8px 12px;
-            display: flex;
-        }
-
-        #msg-input {
-            width: 100%;
-            border: none;
-            background: transparent;
-            font-size: 15px;
-            max-height: 100px;
-            resize: none;
-        }
-
-        .send-btn {
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            border: none;
-            background: var(--primary-color);
-            color: #fff;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-            transition: opacity 0.2s;
-        }
-
-        .icon-btn {
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 4px;
-            color: #666;
-            transition: opacity 0.2s;
-        }
-
-        .icon-btn:hover {
-            opacity: 0.7;
-        }
-
-        .search-sources {
-            width: calc(100% - 48px);
-            margin: 6px 0 0 48px;
-            font-size: 12px;
-            color: #6b7280;
-        }
-        .search-sources-label {
-            white-space: nowrap;
-            margin-bottom: 4px;
-        }
-        .search-sources-links-container {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-        .search-source-item {
-            display: flex;
-            align-items: flex-start;
-            gap: 4px;
-        }
-        .search-source-number {
-            flex-shrink: 0;
-            color: #6b7280;
-        }
-        .search-sources a {
-            color: #1f6feb;
-            text-decoration: none;
-            word-break: break-all;
-        }
-        .search-sources a:hover {
-            text-decoration: underline;
-        }
-
-        /* 正在输入 */
-        .typing-indicator {
-            display: none;
-            padding: 8px 12px;
-            background: #fff;
-            border-radius: 12px;
-            margin-left: 48px;
-            width: fit-content;
-            margin-bottom: 8px;
-        }
-        .typing-indicator.show {
-            display: flex !important;
-            align-items: center;
-            gap: 8px;
-        }
-        .typing-text {
-            font-size: 13px;
-            color: #666;
-        }
-
-        .dot {
-            width: 6px;
-            height: 6px;
-            background: #ccc;
-            border-radius: 50%;
-            display: inline-block;
-            margin: 0 2px;
-            animation: bounce 1.4s infinite ease-in-out both;
-        }
-
-        .dot:nth-child(1) {
-            animation-delay: -0.32s;
-        }
-
-        .dot:nth-child(2) {
-            animation-delay: -0.16s;
-        }
-
-        @keyframes bounce {
-
-            0%,
-            80%,
-            100% {
-                transform: scale(0);
-            }
-
-            40% {
-                transform: scale(1);
-            }
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        /* ============================           移动端适配逻辑           ============================ */
-        @media (max-width: 768px) {
-            body {
-                background-color: #fff;
-                align-items: flex-start;
-            }
-
-            .app-container {
-                max-width: none;
-                box-shadow: none;
-                overflow: hidden;
-            }
-        }
-
-        /* 针对超小屏幕微调 */
-        @media (max-width: 360px) {
-
-            .sidebar-header,
-            .chat-header {
-                padding: 0 10px;
-            }
-
-            .msg-bubble {
-                font-size: 14px;
-            }
-        }
-
-        /* 隐藏滚动条 */
-        ::-webkit-scrollbar {
-            width: 5px;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 3px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        /* --- login 登录框样式 --- */
-        #login {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            max-width: 520px;
-            background: #fff;
-            padding: 16px 20px;
-            border-radius: 12px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
-            z-index: 1000;
-        }
-
-        .form-group {
-            margin-bottom: 12px;
-        }
-
-        #login button {
-            padding: 8px 18px;
-            border: none;
-            border-radius: 8px;
-            background: #1f6feb;
-            color: #fff;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
-        #login button:hover {
-            background: #0d47a1;
-        }
-
-        #loginMsg {
-            color: red;
-            margin-top: 8px;
-        }
-
-        /* 隐藏app-container当登录未完成 */
-        .app-container {
-            display: none;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>响应式聊天室</title>
+  <style>
+    :root {
+      --primary-color: #007bff;
+      --bg-body: #dcdcdc;
+      --bg-white: #ffffff;
+      --text-main: #333;
+      --text-secondary: #888;
+      --border-color: #e0e0e0;
+      --radius-bubble: 16px;
+      --header-height: 56px;
+      --max-width: 1200px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      outline: none;
+      -webkit-tap-highlight-color: #c9c5c503;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-body);
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .app-container {
+      width: 100%;
+      height: 100%;
+      max-width: var(--max-width);
+      background-color: var(--bg-white);
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+      display: none;
+    }
+
+    .sidebar {
+      display: none;
+    }
+
+    .chat-area {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      background-color: #efe7dd;
+      background-image: url("https://picsum.photos/seed/bg_pattern/800/600?blur=10");
+      background-size: cover;
+      position: relative;
+      z-index: 20;
+    }
+
+    .chat-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(255, 255, 255, 0.92);
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .chat-header {
+      height: var(--header-height);
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+      background: var(--bg-white);
+      z-index: 50;
+      position: relative;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .chat-title-group {
+      display: flex;
+      flex-direction: column;
+      margin-left: 10px;
+    }
+
+    .chat-name {
+      font-weight: 600;
+      font-size: 16px;
+    }
+
+    .chat-status {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .logout-btn {
+      margin-left: auto;
+      padding: 6px 12px;
+      background: #f0f0f0;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      color: var(--text-main);
+      transition: all 0.2s;
+    }
+
+    .logout-btn:hover {
+      background: #e0e0e0;
+      color: #d32f2f;
+    }
+
+    .messages-container {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 1;
+      scroll-behavior: smooth;
+      background-color: #eaeaea;
+    }
+
+    .message {
+      display: flex;
+      align-items: flex-start;
+      max-width: 80%;
+      animation: fadeIn 0.2s ease;
+      flex-wrap: wrap;
+      position: relative;
+    }
+
+    .message.received {
+      align-self: flex-start;
+    }
+
+    .message.sent {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+
+    .msg-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      margin: 0 8px;
+      flex-shrink: 0;
+    }
+
+    .msg-bubble {
+      padding: 10px 14px;
+      border-radius: var(--radius-bubble);
+      font-size: 15px;
+      line-height: 1.4;
+      position: relative;
+      max-width: calc(100% - 48px);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+      overflow: hidden;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .received .msg-bubble {
+      background-color: #fff;
+      border-top-left-radius: 2px;
+    }
+
+    .sent .msg-bubble {
+      background-color: #95ec69;
+      color: #000;
+      border-top-right-radius: 2px;
+    }
+
+    .message-buttons {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+      padding: 6px 10px;
+      background-color: rgba(0, 0, 0, 0.05);
+      border-radius: 6px;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      width: 100%;
+      flex-basis: 100%;
+    }
+
+    .message:hover .message-buttons {
+      opacity: 1;
+    }
+
+    .message.received .message-buttons {
+      margin-left: 48px;
+      justify-content: flex-start;
+    }
+
+    .message.sent .message-buttons {
+      margin-right: 48px;
+      justify-content: flex-end;
+    }
+
+    .icon-btn {
+      background-color: #fff;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      cursor: pointer;
+      padding: 6px 10px;
+      color: #666;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 32px;
+      min-height: 32px;
+    }
+
+    .icon-btn:hover {
+      background-color: #f0f0f0;
+      border-color: #bbb;
+      color: #333;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .icon-btn:active {
+      transform: translateY(0);
+      box-shadow: none;
+    }
+
+    .input-area {
+      background-color: #f7f7f7;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      z-index: 50;
+      position: relative;
+      border-top: 1px solid var(--border-color);
+    }
+
+    .input-wrapper {
+      flex: 1;
+      background: #fff;
+      border-radius: 20px;
+      padding: 8px 12px;
+      display: flex;
+    }
+
+    #msg-input {
+      width: 100%;
+      border: none;
+      background: transparent;
+      font-size: 15px;
+      max-height: 100px;
+      resize: none;
+    }
+
+    .send-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: none;
+      background: var(--primary-color);
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .search-sources {
+      width: calc(100% - 48px);
+      margin: 6px 0 0 48px;
+      font-size: 12px;
+      color: #6b7280;
+    }
+
+    .search-sources-label {
+      margin-bottom: 4px;
+      white-space: nowrap;
+    }
+
+    .search-sources-links-container {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .search-source-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 4px;
+    }
+
+    .search-source-number {
+      flex-shrink: 0;
+      color: #6b7280;
+    }
+
+    .search-sources a {
+      color: #1f6feb;
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .search-sources a:hover {
+      text-decoration: underline;
+    }
+
+    .typing-indicator {
+      display: none;
+      padding: 8px 12px;
+      background: #fff;
+      border-radius: 12px;
+      margin-left: 48px;
+      width: fit-content;
+      margin-bottom: 8px;
+    }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      background: #ccc;
+      border-radius: 50%;
+      display: inline-block;
+      margin: 0 2px;
+      animation: bounce 1.4s infinite ease-in-out both;
+    }
+
+    .dot:nth-child(1) {
+      animation-delay: -0.32s;
+    }
+
+    .dot:nth-child(2) {
+      animation-delay: -0.16s;
+    }
+
+    /* Markdown 样式 + 防溢出 */
+    .msg-bubble * {
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+
+    .msg-bubble img,
+    .msg-bubble video,
+    .msg-bubble iframe,
+    .msg-bubble svg {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin: 8px 0;
+    }
+
+    .msg-bubble h1,
+    .msg-bubble h2,
+    .msg-bubble h3,
+    .msg-bubble h4,
+    .msg-bubble h5,
+    .msg-bubble h6 {
+      margin-top: 16px;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    .msg-bubble p,
+    .msg-bubble ul,
+    .msg-bubble ol,
+    .msg-bubble blockquote,
+    .msg-bubble pre {
+      margin-bottom: 8px;
+    }
+
+    .msg-bubble ul,
+    .msg-bubble ol {
+      margin-left: 20px;
+    }
+
+    .msg-bubble code {
+      background-color: #f1f1f1;
+      padding: 2px 4px;
+      border-radius: 3px;
+      font-family: monospace;
+      font-size: 14px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .msg-bubble pre {
+      background-color: #f1f1f1;
+      padding: 10px;
+      border-radius: 4px;
+      max-width: 100%;
+      overflow-x: auto;
+      white-space: pre;
+      position: relative;
+    }
+
+    .msg-bubble pre code {
+      background-color: transparent;
+      padding: 0;
+      white-space: pre;
+      word-break: normal;
+    }
+
+    .msg-bubble pre .copy-code-btn {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      background-color: rgba(255, 255, 255, 0.8);
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 12px;
+      cursor: pointer;
+      color: #666;
+      transition: all 0.2s;
+    }
+
+    .msg-bubble pre .copy-code-btn:hover {
+      background-color: #fff;
+      color: #333;
+    }
+
+    .msg-bubble pre .copy-code-btn.copied {
+      background-color: #4caf50;
+      color: #fff;
+      border-color: #4caf50;
+    }
+
+    .msg-bubble blockquote {
+      border-left: 4px solid #ddd;
+      padding-left: 10px;
+      margin-left: 0;
+      color: #666;
+    }
+
+    .msg-bubble table {
+      display: block;
+      width: 100%;
+      overflow-x: auto;
+      border-collapse: collapse;
+    }
+
+    .msg-bubble a {
+      color: #007bff;
+      text-decoration: none;
+    }
+
+    .msg-bubble a:hover {
+      text-decoration: underline;
+    }
+
+    @keyframes bounce {
+
+      0%,
+      80%,
+      100% {
+        transform: scale(0);
+      }
+
+      40% {
+        transform: scale(1);
+      }
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 768px) {
+      body {
+        background-color: #fff;
+        align-items: flex-start;
+      }
+
+      .app-container {
+        max-width: none;
+        box-shadow: none;
+      }
+    }
+
+    @media (max-width: 360px) {
+      .chat-header {
+        padding: 0 10px;
+      }
+
+      .msg-bubble {
+        font-size: 14px;
+      }
+    }
+
+    ::-webkit-scrollbar {
+      width: 5px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    #login {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      max-width: 520px;
+      background: #fff;
+      padding: 16px 20px;
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+      z-index: 1000;
+    }
+
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    #login button {
+      padding: 8px 18px;
+      border: none;
+      border-radius: 8px;
+      background: #1f6feb;
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    #login button:hover {
+      background: #0d47a1;
+    }
+
+    #loginMsg {
+      color: red;
+      margin-top: 8px;
+    }
+
+    #loginMsg {
+      color: red;
+      margin-top: 8px;
+    }
+
+    /* 隐藏app-container当登录未完成 */
+    .app-container {
+      display: none;
+    }
+  </style>
+  <script src="constants.js"></script>
+  <script src="login.js"></script>
 </head>
 
 <body>
-    <!-- 登录框（保留原有逻辑） -->
-    <div id="login">
-        <div class="form-group">
-            <label for="token">token:</label>
-            <input type="text" id="token" placeholder="31-a2-51-32-01-41">
+  <!-- 登录框（保留原有逻辑） -->
+  <div id="login">
+    <div class="form-group">
+      <label for="token">token:</label>
+      <input type="text" id="token" placeholder="21-F1-51-31-01-41">
+    </div>
+    <button onclick="runTest()">开始</button>
+    <div id="loginMsg"></div>
+  </div>
+
+  <!-- 聊天应用主容器 -->
+  <div class="app-container" id="app-container">
+    <!-- 聊天区域 -->
+    <main class="chat-area">
+      <div class="chat-overlay"></div>
+
+      <header class="chat-header">
+        <div class="chat-title-group">
+          <span class="chat-name">AI 智能助手</span>
+          <span class="chat-status">在线</span>
         </div>
-        <button onclick="runTest()">开始</button>
-        <div id="loginMsg"></div>
-    </div>
+        <button class="logout-btn" onclick="logout()">退出</button>
+      </header>
 
-    <!-- 聊天应用主容器 -->
-    <div class="app-container" id="app-container">
-        <!-- 聊天区域 -->
-        <main class="chat-area">
-            <div class="chat-overlay"></div>
+      <div class="messages-container" id="msg-container">
+        <div class="message received">
+          <img src="https://picsum.photos/seed/ai/100/100" class="msg-avatar">
+          <div class="msg-bubble">你好！我是AI智能助手，我可以回答问题、提供信息和帮助你完成各种任务。有什么可以帮助你的吗？</div>
+        </div>
 
-            <header class="chat-header">
-                <div class="chat-title-group">
-                    <span class="chat-name">AI 智能助手</span>
-                    <span class="chat-status">在线</span>
-                </div>
-            </header>
+        <div class="typing-indicator" id="typing">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        </div>
+      </div>
 
-            <div class="messages-container" id="msg-container">
-                <div class="message received">
-                    <img src="https://picsum.photos/seed/ai/100/100" class="msg-avatar">
-                    <div class="msg-bubble">你好！这是响应式聊天窗口演示。试着缩小浏览器窗口，体验移动端切换效果。</div>
-                </div>
-
-                <div class="typing-indicator" id="typing">
-                    <span class="typing-text">正在思考中...</span>
-                    <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-                </div>
+      <footer class="input-area">
+        <div style="display: flex; flex-direction: column; gap: 8px; flex: 1;">
+          <div id="toolsRow" style="display: none; flex-direction: column; gap: 8px;">
+            <div style="display: flex; gap: 12px; align-items: center;">
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap;">
+                <input type="checkbox" id="enableWebSearch" style="cursor: pointer;" checked>
+                <span style="font-size: 14px; color: #374151;">联网搜索</span>
+              </label>
+              <select id="searchEngine"
+                style="padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; display: block;">
+                <option value="search_std">智谱基础版</option>
+                <option value="search_pro">智谱高阶版</option>
+                <option value="search_pro_sogou">搜狗</option>
+                <option value="search_pro_quark">夸克</option>
+              </select>
             </div>
-
-            <footer class="input-area">
-                <div style="display: flex; flex-direction: column; gap: 8px; flex: 1;">
-                    <div id="toolsRow" style="display: none; flex-direction: column; gap: 8px;">
-                        <div style="display: flex; gap: 12px; align-items: center;">
-                            <label
-                                style="display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap;">
-                                <input type="checkbox" id="enableWebSearch" style="cursor: pointer;" checked>
-                                <span style="font-size: 14px; color: #374151;">联网搜索</span>
-                            </label>
-                            <select id="searchEngine"
-                                style="padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; display: none;">
-                                <option value="search_pro_quark">夸克</option>
-                                <option value="search_std">智谱基础版</option>
-                                <option value="search_pro">智谱高阶版</option>
-                                <option value="search_pro_sogou">搜狗</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div style="display: flex; gap: 12px; align-items: flex-end;">
-                        <button id="toggleToolsBtn" class="icon-btn" title="工具"><svg width="20" height="20"
-                                viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2">
-                                <path d="M12 5v14M5 12h14" />
-                            </svg></button>
-                        <div class="input-wrapper">
-                            <input type="text" id="msg-input" placeholder="发消息..." autocomplete="off">
-                        </div>
-                    </div>
-                </div>
-                <button class="send-btn" id="send-btn">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="22" y1="2" x2="11" y2="13"></line>
-                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                    </svg>
-                </button>
-            </footer>
-        </main>
-    </div>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="layout.js"></script>
-    <script src="util.js"></script>
-    <script src="constants.js"></script>
-    <script src="index.js"></script>
+          </div>
+          <div style="display: flex; gap: 12px; align-items: flex-end;">
+            <button id="toggleToolsBtn" class="icon-btn" title="工具"><svg width="20" height="20" viewBox="0 0 24 24"
+                fill="none" stroke="#666" stroke-width="2">
+                <path d="M12 5v14M5 12h14" />
+              </svg></button>
+            <div class="input-wrapper">
+              <input type="text" id="msg-input" placeholder="发消息..." autocomplete="off">
+            </div>
+          </div>
+        </div>
+        <button class="send-btn" id="send-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </footer>
+    </main>
+  </div>
+  <script src="layout.js"></script>
+  <script src="util.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="index.js"></script>
 </body>
 
 </html>
