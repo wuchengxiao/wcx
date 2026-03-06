@@ -71,7 +71,7 @@ function readFromStream(buffer, onDelta) {
                 parsed.choices &&
                 parsed.choices[0] &&
                 parsed.choices[0].delta &&
-                parsed.choices[0].delta.reasoning_content
+                parsed.choices[0].delta.content
             ) || (
                 parsed &&
                 parsed.choices &&
