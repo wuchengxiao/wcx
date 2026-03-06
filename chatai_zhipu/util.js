@@ -10,5 +10,8 @@ var _util = {
     },
     text: function(id, text){
         document.getElementById(id).innerText = text;
+    },
+    ce: function(tag){
+        return document.createElement(tag);
     }
 }

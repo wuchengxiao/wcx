@@ -23,22 +23,29 @@ function generateMessageId() {
 }
 
 async function streamRequest(url, option, onDelta) {
-    const response = await fetch(url, option);
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder('utf-8');
-    let buffer = '';
+    return new Promise(async (resolve, reject) => {
+        try {
+            const response = await fetch(url, option);
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let buffer = '';
 
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-            if (buffer.trim()) {
-                readFromStream(buffer, onDelta);
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) {
+                    if (buffer.trim()) {
+                        readFromStream(buffer, onDelta);
+                    }
+                    break;
+                }
+                buffer += decoder.decode(value, { stream: true });
+                buffer = readFromStream(buffer, onDelta);
             }
-            break;
+            resolve();
+        } catch (err) {
+            reject(err);
         }
-        buffer += decoder.decode(value, { stream: true });
-        buffer = readFromStream(buffer, onDelta);
-    }
+    });
 }
 
 function readFromStream(buffer, onDelta) {
@@ -97,7 +104,7 @@ async function callAPIStream(messages, model, url, token, onDelta) {
             stream: true
         })
     };
-    streamRequest(url, option, onDelta);
+    return streamRequest(url, option, onDelta);
 }
 
 async function callWebSearchAPI(query, searchEngine, token) {
@@ -132,20 +139,20 @@ function appendMessage(role, content, sources) {
         return null;
     }
     
-    const messageEl = document.createElement('div');
+    const messageEl = _util.ce('div');
     messageEl.className = `message ${role === 'user' ? 'sent' : 'received'}`;
     const messageId = generateMessageId();
     messageEl.dataset.messageId = messageId;
     messageContentStore.set(messageId, content || '');
 
-    const avatar = document.createElement('img');
+    const avatar = _util.ce('img');
     avatar.className = 'msg-avatar';
     avatar.src = role === 'user' 
         ? 'https://picsum.photos/seed/me/100/100' 
         : 'https://picsum.photos/seed/ai/100/100';
     avatar.alt = role === 'user' ? 'Me' : 'AI';
 
-    const bubble = document.createElement('div');
+    const bubble = _util.ce('div');
     bubble.className = 'msg-bubble';
     if (role === 'assistant' && typeof marked !== 'undefined') {
         if (content) {
@@ -164,11 +171,11 @@ function appendMessage(role, content, sources) {
     messageEl.appendChild(bubble);
 
     // 创建按钮容器
-    const buttonsContainer = document.createElement('div');
+    const buttonsContainer = _util.ce('div');
     buttonsContainer.className = 'message-buttons';
 
     // 添加删除按钮
-    const deleteBtn = document.createElement('button');
+    const deleteBtn = _util.ce('button');
     deleteBtn.className = 'icon-btn delete-btn';
     deleteBtn.title = '删除消息';
     deleteBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>';
@@ -179,10 +186,11 @@ function appendMessage(role, content, sources) {
 
     // 为用户发送的消息添加重发按钮
     if (role === 'user') {
-        const resendBtn = document.createElement('button');
+        const resendBtn = _util.ce('button');
         resendBtn.className = 'icon-btn resend-btn';
         resendBtn.title = '重发消息';
-        resendBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path><polyline points="15 12 9 12 9 21"></polyline></svg>';
+        //resendBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path><polyline points="15 12 9 12 9 21"></polyline></svg>';
+        resendBtn.textContent = '重发';
         resendBtn.addEventListener('click', function () {
             const input = _util.id('msg-input');
             if (input) {
@@ -195,8 +203,20 @@ function appendMessage(role, content, sources) {
 
     // 为AI回答添加全屏和复制按钮
     if (role === 'assistant') {
+        // 收缩/展开按钮
+        const toggleBtn = _util.ce('button');
+        toggleBtn.className = 'icon-btn toggle-btn';
+        toggleBtn.title = '展开/收起';
+        toggleBtn.textContent = '收起';
+        toggleBtn.addEventListener('click', function (event) {
+            event.stopPropagation();
+            const isCollapsed = bubble.classList.toggle('collapsed');
+            toggleBtn.textContent = isCollapsed ? '展开' : '收起';
+        });
+        buttonsContainer.appendChild(toggleBtn);
+
         // 全屏按钮
-        const fullscreenBtn = document.createElement('button');
+        const fullscreenBtn = _util.ce('button');
         fullscreenBtn.className = 'icon-btn fullscreen-btn';
         fullscreenBtn.title = '全屏查看';
         fullscreenBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>';
@@ -206,7 +226,7 @@ function appendMessage(role, content, sources) {
         buttonsContainer.appendChild(fullscreenBtn);
         
         // 复制按钮
-        const copyBtn = document.createElement('button');
+        const copyBtn = _util.ce('button');
         copyBtn.className = 'icon-btn copy-btn';
         copyBtn.title = '复制回答';
         copyBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
@@ -233,27 +253,38 @@ function appendMessage(role, content, sources) {
         event.stopPropagation();
     });
 
+    if (role === 'assistant') {
+        // 默认展开，不加collapsed类
+        // 检测图片并添加预览区域
+        if (window.createImagePreviewArea) {
+            const imagePreview = window.createImagePreviewArea();
+            if (imagePreview) {
+                messageEl.appendChild(imagePreview);
+            }
+        }
+    }
+
     if (sources && sources.length > 0) {
-        const sourcesDiv = document.createElement('div');
+        const sourcesDiv = _util.ce('div');
         sourcesDiv.className = 'search-sources';
 
-        const label = document.createElement('div');
+        const label = _util.ce('div');
         label.className = 'search-sources-label';
         label.textContent = '搜索来源：';
         sourcesDiv.appendChild(label);
 
-        const linksContainer = document.createElement('div');
+        const linksContainer = _util.ce('div');
         linksContainer.className = 'search-sources-links-container';
 
         sources.forEach(function(src, idx) {
-            const sourceItem = document.createElement('div');
+            const sourceItem = _util.ce('div');
             sourceItem.className = 'search-source-item';
 
-            const numberSpan = document.createElement('span');
+            const numberSpan = _util.ce('span');
             numberSpan.className = 'search-source-number';
             numberSpan.textContent = (idx + 1) + '. ';
 
-            const link = document.createElement('a');
+            const link = _util.ce('a');
             link.href = src.link;
             link.target = '_blank';
             link.rel = 'noopener noreferrer';
@@ -294,7 +325,7 @@ function deleteMessage(messageEl, role, content) {
 }
 
 function openFullscreen(content) {
-    const fullscreenContainer = document.createElement('div');
+    const fullscreenContainer = _util.ce('div');
     fullscreenContainer.id = 'fullscreen-container';
     fullscreenContainer.style.position = 'fixed';
     fullscreenContainer.style.top = '0';
@@ -306,7 +337,7 @@ function openFullscreen(content) {
     fullscreenContainer.style.padding = '20px';
     fullscreenContainer.style.overflowY = 'auto';
 
-    const closeBtn = document.createElement('button');
+    const closeBtn = _util.ce('button');
     closeBtn.className = 'fullscreen-close-btn';
     closeBtn.style.position = 'fixed';
     closeBtn.style.top = '20px';
@@ -324,7 +355,7 @@ function openFullscreen(content) {
         document.body.removeChild(closeBtn);
     });
 
-    const contentContainer = document.createElement('div');
+    const contentContainer = _util.ce('div');
     contentContainer.style.maxWidth = '800px';
     contentContainer.style.margin = '0 auto';
     contentContainer.style.paddingTop = '60px';
@@ -337,7 +368,7 @@ function openFullscreen(content) {
 }
 
 function copyToClipboard(text) {
-    const textarea = document.createElement('textarea');
+    const textarea = _util.ce('textarea');
     textarea.value = text;
     textarea.style.position = 'fixed';
     textarea.style.left = '-999999px';
@@ -350,7 +381,7 @@ function copyToClipboard(text) {
 }
 
 function showCopySuccess() {
-    const tooltip = document.createElement('div');
+    const tooltip = _util.ce('div');
     tooltip.className = 'copy-tooltip';
     tooltip.textContent = '复制成功！';
     tooltip.style.position = 'fixed';
@@ -402,6 +433,19 @@ function finishStreaming(bubble) {
             bubble.innerHTML = marked.parse(finalText);
             addCopyButtonsToCodeBlocks(bubble);
             bubble.setAttribute('data-code-buttons-added', 'true');
+            
+            // 处理图片预览（流式收集到的图片URL）
+            const messageEl = bubble.parentElement;
+            // 收集图片URL
+            if (window.extractImageUrls) {
+                window.extractImageUrls(finalText);
+            }
+            if (messageEl && window.createImagePreviewArea) {
+                const imagePreview = window.createImagePreviewArea();
+                if (imagePreview) {
+                  messageEl.appendChild(imagePreview);
+                }
+            }
         }
     }
 }
@@ -412,7 +456,7 @@ function addCopyButtonsToCodeBlocks(element) {
         if (pre.querySelector('.copy-code-btn')) {
             return;
         }
-        const copyBtn = document.createElement('button');
+        const copyBtn = _util.ce('button');
         copyBtn.className = 'copy-code-btn';
         copyBtn.textContent = '复制';
         copyBtn.addEventListener('click', function () {
@@ -505,26 +549,42 @@ async function sendMessage() {
     setSendingState(true);
     const assistantBubble = appendMessage('assistant', '', searchSources.length > 0 ? searchSources : null);
     let assistantText = '';
+    // 状态显示元素
+    let statusSpan = null;
+    if (assistantBubble) {
+        statusSpan = _util.ce('span');
+        statusSpan.className = 'stream-status';
+        statusSpan.textContent = '思考中...';
+        assistantBubble.appendChild(statusSpan);
+    }
     try {
+        let doneFlag = false;
         const result = await callAPIStream(
             [...conversation.slice(0, -1), userMessage],
             model,
             processinput.processedUrl,
             processinput.processedApiKey,
             function(delta) {
+                // 检查是否为 [DONE] 信号
+                if (delta === '[DONE]') {
+                    doneFlag = true;
+                    if (statusSpan) statusSpan.textContent = '';
+                    return;
+                }
                 assistantText += delta;
                 updateMessageBubble(assistantBubble, assistantText);
+                if (statusSpan) statusSpan.textContent = '回复中...';
             }
         );
 
         if (!assistantText && result) {
             assistantText = extractAssistantReply(result) || '';
-            updateMessageBubble(assistantBubble, assistantText || '正在思考中。。。');
+            updateMessageBubble(assistantBubble, assistantText || '正在思考中...');
         } else if (!assistantText) {
-            updateMessageBubble(assistantBubble, '正在思考中。。。');
+            updateMessageBubble(assistantBubble, '正在思考中...');
         }
 
-        finishStreaming(assistantBubble);
+        if (statusSpan) statusSpan.textContent = '';
 
         const messageEl = assistantBubble.parentElement;
         if (messageEl) {
@@ -536,9 +596,12 @@ async function sendMessage() {
 
         conversation.push({ role: 'assistant', content: assistantText || '' });
     } catch (e) {
-        const errorMessage = '请求失败，请稍后再试。';
+        let errorMessage = '请求失败，请稍后再试。';
+        if (e && (e.status === 429 || (e.message && e.message.includes('429')))) {
+            errorMessage = '服务器请求超时，稍后再试';
+        }
         updateMessageBubble(assistantBubble, errorMessage);
-        finishStreaming(assistantBubble);
+        if (statusSpan) statusSpan.textContent = '';
         const messageEl = assistantBubble.parentElement;
         if (messageEl) {
             const messageId = messageEl.dataset.messageId;
@@ -547,9 +610,9 @@ async function sendMessage() {
             }
         }
         console.error('聊天错误:', e);
-    } finally {
-        setSendingState(false);
     }
+    finishStreaming(assistantBubble);
+    setSendingState(false);
 }
 
 function initChatUI() {

@@ -168,6 +168,14 @@
       word-break: break-word;
     }
 
+    .msg-bubble.collapsed {
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      line-clamp: 4;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
     .received .msg-bubble {
       background-color: #fff;
       border-top-left-radius: 2px;
@@ -317,6 +325,8 @@
     .search-sources a:hover {
       text-decoration: underline;
     }
+
+
 
     .typing-indicator {
       display: none;
@@ -569,6 +579,8 @@
   </style>
   <script src="constants.js"></script>
   <script src="login.js"></script>
+  <link rel="stylesheet" href="imagePreview.css">
+  <script src="imagePreview.js"></script>
 </head>
 
 <body>
