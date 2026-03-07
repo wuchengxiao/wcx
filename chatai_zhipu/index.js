@@ -203,6 +203,11 @@ function appendMessage(role, content, sources) {
 
     // 为AI回答添加全屏和复制按钮
     if (role === 'assistant') {
+        // 创建省略号提示元素
+        const ellipsisEl = _util.ce('div');
+        ellipsisEl.className = 'msg-ellipsis';
+        ellipsisEl.textContent = '...';
+
         // 收缩/展开按钮
         const toggleBtn = _util.ce('button');
         toggleBtn.className = 'icon-btn toggle-btn';
@@ -212,6 +217,7 @@ function appendMessage(role, content, sources) {
             event.stopPropagation();
             const isCollapsed = bubble.classList.toggle('collapsed');
             toggleBtn.textContent = isCollapsed ? '展开' : '收起';
+            isCollapsed ? messageEl.insertBefore(ellipsisEl, buttonsContainer) : messageEl.removeChild(ellipsisEl);
         });
         buttonsContainer.appendChild(toggleBtn);
 
