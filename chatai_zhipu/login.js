@@ -1,6 +1,6 @@
 //输入正确token后，保存url,和apikey的内容。
 var processinput = null;
-let conversation = messages ? messages.slice() : [];
+let conversation = [];
 let isSending = false;
 let hasInitChat = false;
 
@@ -132,16 +132,14 @@ async function runTest() {
         showError("token error");
         return;
     }
-    
     // 保存token到localStorage，保留1小时
     const tokenValue = _util.id('token').value;
     saveTokenToStorage(tokenValue);
-    
     _util.hide('login');
-
-    // 开始聊天
+    // 只显示app-container，聊天UI初始化交由layout.js处理
     _util.show('app-container');
-    initChatUI();
+    // 通知index.js初始化聊天UI
+    if (window.onLoginSuccess) window.onLoginSuccess();
 }
 
 /**
@@ -171,6 +169,7 @@ function logout() {
     conversation = [];
     processinput = null;
     hasInitChat = false;
+    currentRole = null;
     
     // 清空输入框
     const tokenInput = _util.id('token');
@@ -188,6 +187,9 @@ function logout() {
             msgContainer.appendChild(typing);
         }
     }
+    // 移除角色选择区
+    const selector = _util.id('role-selector');
+    if (selector) selector.remove();
     
     // 隐藏聊天界面，显示登录界面
     _util.hide('app-container');

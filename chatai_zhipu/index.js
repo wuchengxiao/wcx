@@ -621,45 +621,9 @@ async function sendMessage() {
     setSendingState(false);
 }
 
-function initChatUI() {
-    if (hasInitChat) {
-        return;
-    }
-    hasInitChat = true;
-
-    // 新UI中的发送按钮和输入框
-    const sendBtn = _util.id('send-btn');
-    const input = _util.id('msg-input');
-    
-    if (sendBtn) {
-        sendBtn.addEventListener('click', sendMessage);
-    }
-    if (input) {
-        input.addEventListener('keydown', function(event) {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                sendMessage();
-            }
-        });
-    }
-
-    // 点击消息区域外时，收起所有已展开的消息按钮
-    document.addEventListener('click', function (event) {
-        if (!event.target.closest('.message')) {
-            document.querySelectorAll('.message.show-actions').forEach(function (el) {
-                el.classList.remove('show-actions');
-            });
-        }
-    });
-
-    // 初始化布局相关事件（在 layout.js 中定义）
-    if (typeof initLayoutEvents === 'function') {
-        initLayoutEvents();
-    }
-
-    if (conversation && conversation.length) {
-        conversation.forEach(function(msg) {
-            appendMessage(msg.role, msg.content);
-        });
+// 登录成功后自动初始化聊天UI
+function onLoginSuccess() {
+    if (typeof window.initChatUI === 'function') {
+        window.initChatUI();
     }
 }

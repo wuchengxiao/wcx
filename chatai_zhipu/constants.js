@@ -3,7 +3,7 @@ var apikey = 'VkdU2NrMUdjRVZhTTJST1VrVkZlRlJWWkZwa01EVkZVMVJLVUZKSGMzaFhiR1JUWVV
 var model = 'glm-4.7';
 
 // 使用示例
-const messages = [{
-    role: 'user',
-    content: '你好'
-}];
+// const messages = [{
+//     role: 'user',
+//     content: '你好'
+// }];

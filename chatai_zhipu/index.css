@@ -580,3 +580,30 @@ body {
 .app-container {
     display: none;
 }
+
+/* 角色选择区域样式 */
+.role-selector-area {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+    margin: 12px 0 0 0;
+    padding: 6px 0 6px 0;
+    background: #f8f8fc;
+    border-radius: 8px;
+    box-shadow: 0 1px 4px #eee;
+}
+.role-selector-btn {
+    padding: 3px 10px;
+    border-radius: 5px;
+    border: 1px solid #bbb;
+    background: #fff;
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1.2;
+    transition: background 0.2s, border 0.2s;
+}
+.role-selector-btn:hover {
+    background: #e6f0ff;
+    border: #3399ff 1.5px solid;
+}
