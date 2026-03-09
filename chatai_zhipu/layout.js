@@ -92,6 +92,26 @@ function showRoleIntro(role) {
     } else {
         msgContainer.appendChild(intro);
     }
+    // 展示引导步骤
+    let oldGuide = _util.id('role-guide-msg');
+    if (oldGuide) oldGuide.remove();
+    if (role.guide && Array.isArray(role.guide)) {
+        const guide = document.createElement('div');
+        guide.id = 'role-guide-msg';
+        guide.className = 'role-guide-msg';
+        guide.style.textAlign = 'left';
+        guide.style.color = '#666';
+        guide.style.margin = '0 0 8px 0';
+        guide.style.fontSize = '13px';
+        guide.innerHTML = '<b>使用引导：</b><ul style="margin:4px 0 0 18px;padding:0;">' +
+            role.guide.map(item => `<li>${item}</li>`).join('') + '</ul>';
+        // 插在intro下方
+        if (intro.nextSibling) {
+            msgContainer.insertBefore(guide, intro.nextSibling);
+        } else {
+            msgContainer.appendChild(guide);
+        }
+    }
 }
 
 // 隐藏角色选择区
@@ -116,6 +136,39 @@ function setupRoleSelectorAutoHide() {
             }
         }, true);
     }
+}
+
+// 聊天窗右上角增加角色切换按钮
+function addRoleSwitchButton() {
+    const appContainer = _util.id('app-container');
+    if (!appContainer) return;
+    if (_util.id('role-switch-btn')) return;
+    // 假设chat-header存在，否则插入appContainer
+    let header = _util.id('chat-header') || appContainer;
+    const btn = document.createElement('button');
+    btn.id = 'role-switch-btn';
+    btn.className = 'role-switch-btn';
+    btn.title = '切换角色/技能';
+    btn.innerHTML = '切换角色';
+    btn.style.position = 'absolute';
+    btn.style.top = '12px';
+    btn.style.right = '16px';
+    btn.style.zIndex = '10';
+    btn.style.fontSize = '13px';
+    btn.style.padding = '3px 10px';
+    btn.style.borderRadius = '5px';
+    btn.style.border = '1px solid #bbb';
+    btn.style.background = '#fff';
+    btn.style.cursor = 'pointer';
+    btn.onclick = function() {
+        const selector = _util.id('role-selector');
+        if (selector) {
+            selector.style.display = (selector.style.display === 'none' || selector.style.display === '') ? 'flex' : 'none';
+        } else {
+            renderRoleSelector();
+        }
+    };
+    header.appendChild(btn);
 }
 
 // 聊天UI初始化，若为新对话则显示角色选择区
@@ -150,6 +203,7 @@ function initChatUI() {
         });
     }
     setupRoleSelectorAutoHide();
+    addRoleSwitchButton();
     // 点击消息区域外时，收起所有已展开的消息按钮
     document.addEventListener('click', function (event) {
         if (!event.target.closest('.message')) {
