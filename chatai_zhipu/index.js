@@ -66,18 +66,24 @@ function readFromStream(buffer, onDelta) {
         }
         try {
             const parsed = JSON.parse(payload);
+            // 提取思考
+            const deltaReasoning = (
+                parsed &&
+                parsed.choices &&
+                parsed.choices[0] &&
+                parsed.choices[0].delta &&
+                parsed.choices[0].delta.reasoning_content
+            ) || '';
+            if (deltaReasoning) {
+                onDelta('[THOUGHT] ' + deltaReasoning);
+            }
+            // 提取回复内容
             const delta = (
                 parsed &&
                 parsed.choices &&
                 parsed.choices[0] &&
                 parsed.choices[0].delta &&
                 parsed.choices[0].delta.content
-            ) || (
-                parsed &&
-                parsed.choices &&
-                parsed.choices[0] &&
-                parsed.choices[0].message &&
-                parsed.choices[0].message.content
             ) || '';
             if (delta) {
                 onDelta(delta);
@@ -159,8 +165,8 @@ function appendMessage(role, content, sources) {
             bubble.innerHTML = marked.parse(content);
             addCopyButtonsToCodeBlocks(bubble);
         } else {
-            // 初始为空，等待流式更新
-            bubble.innerHTML = '';
+            // 初始为“思考中...”，等待流式更新
+            bubble.innerHTML = '<span class="thinking-placeholder">思考中...</span>';
             bubble.setAttribute('data-is-streaming', 'true');
         }
     } else {
@@ -410,6 +416,15 @@ function updateMessageBubble(bubble, content) {
     if (!bubble) {
         return;
     }
+    // 保留思考内容（reasoning-content）
+    let reasoningDiv = bubble.querySelector('.reasoning-content');
+    let reasoningParent = null;
+    let reasoningNext = null;
+    if (reasoningDiv) {
+        reasoningParent = reasoningDiv.parentNode;
+        reasoningNext = reasoningDiv.nextSibling;
+        bubble.removeChild(reasoningDiv);
+    }
     const messageEl = bubble.parentElement;
     if (messageEl && messageEl.classList.contains('received') && typeof marked !== 'undefined') {
         // 流式阶段先按纯文本逐字显示，结束后再统一转为 Markdown
@@ -424,6 +439,14 @@ function updateMessageBubble(bubble, content) {
         }
     } else {
         bubble.textContent = content;
+    }
+    // 重新插入 reasoningDiv，保证其为 DOM 节点，不被 markdown 影响
+    if (reasoningDiv) {
+        if (reasoningNext && reasoningParent === bubble) {
+            bubble.insertBefore(reasoningDiv, reasoningNext);
+        } else {
+            bubble.insertBefore(reasoningDiv, bubble.firstChild);
+        }
     }
     const container = _util.id('msg-container');
     if (container) {
@@ -555,6 +578,10 @@ async function sendMessage() {
     setSendingState(true);
     const assistantBubble = appendMessage('assistant', '', searchSources.length > 0 ? searchSources : null);
     let assistantText = '';
+    let reasoningContent = '';
+    let reasoningDiv = null;
+    let reasoningCollapsed = false;
+    let toggleReasoningBtn = null;
     // 状态显示元素
     let statusSpan = null;
     if (assistantBubble) {
@@ -562,20 +589,62 @@ async function sendMessage() {
         statusSpan.className = 'stream-status';
         statusSpan.textContent = '思考中...';
         assistantBubble.appendChild(statusSpan);
+        // 创建思考内容div并插入
+        reasoningDiv = document.createElement('div');
+        reasoningDiv.className = 'reasoning-content';
+        reasoningDiv.textContent = '';
+        assistantBubble.insertBefore(reasoningDiv, assistantBubble.firstChild);
+        // 展开/收起按钮，初始隐藏，等正式回答出现后显示
+        toggleReasoningBtn = _util.ce('button');
+        toggleReasoningBtn.className = 'toggle-reasoning-btn';
+        toggleReasoningBtn.style.display = 'none';
+        toggleReasoningBtn.textContent = '展开思考内容';
+        toggleReasoningBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            reasoningCollapsed = !reasoningCollapsed;
+            if (reasoningCollapsed) {
+                reasoningDiv.classList.add('collapsed');
+                toggleReasoningBtn.textContent = '展开思考内容';
+            } else {
+                reasoningDiv.classList.remove('collapsed');
+                toggleReasoningBtn.textContent = '收起思考内容';
+            }
+        });
+        assistantBubble.insertBefore(toggleReasoningBtn, reasoningDiv.nextSibling);
     }
     try {
         let doneFlag = false;
+        let answerStarted = false;
         const result = await callAPIStream(
             [...conversation.slice(0, -1), userMessage],
             model,
             processinput.processedUrl,
             processinput.processedApiKey,
             function(delta) {
+                // 检查是否为思考内容
+                if (delta.startsWith('[THOUGHT] ')) {
+                    reasoningContent += delta.replace('[THOUGHT] ', '');
+                    if (reasoningDiv) {
+                        reasoningDiv.textContent = '思考内容：' + reasoningContent;
+                    }
+                    if (statusSpan) {
+                        statusSpan.textContent = '思考中...';
+                    }
+                    return;
+                }
                 // 检查是否为 [DONE] 信号
                 if (delta === '[DONE]') {
                     doneFlag = true;
                     if (statusSpan) statusSpan.textContent = '';
                     return;
+                }
+                // 只要出现正式回答内容，立即收缩思考内容并显示回答（只执行一次）
+                if (!answerStarted && delta.trim().length > 0 && reasoningDiv && toggleReasoningBtn) {
+                    answerStarted = true;
+                    reasoningCollapsed = true;
+                    reasoningDiv.classList.add('collapsed');
+                    toggleReasoningBtn.style.display = '';
+                    toggleReasoningBtn.textContent = '展开思考内容';
                 }
                 assistantText += delta;
                 updateMessageBubble(assistantBubble, assistantText);

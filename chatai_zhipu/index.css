@@ -1,3 +1,30 @@
+/* Reasoning (思考内容) 区域样式 */
+.reasoning-content {
+    background: #f6f6f6;
+    color: #666;
+    font-size: 13px;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    border-radius: 6px;
+    max-height: none;
+    overflow: hidden;
+    transition: max-height 0.2s, white-space 0.2s;
+}
+.reasoning-content.collapsed {
+    max-height: 24px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+.toggle-reasoning-btn {
+    margin: 0 0 8px 0;
+    font-size: 12px;
+    background: none;
+    border: none;
+    color: #007bff;
+    cursor: pointer;
+    display: inline-block;
+}
 :root {
     --primary-color: #007bff;
     --bg-body: #dcdcdc;
