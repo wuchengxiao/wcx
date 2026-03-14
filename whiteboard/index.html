@@ -1,34 +1,303 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>无限画布白板</title>
-        <link rel="stylesheet" href="style.css">
-    </head>
-    <body>
-        <div class="toolbar">
-            <button id="pen" title="画笔">🖌️<span>画笔</span></button>
-            <button id="rect" title="矩形">⬜<span>矩形</span></button>
-            <button id="circle" title="圆形">⭕<span>圆形</span></button>
-            <button id="arrow" title="箭头">➡️<span>箭头</span></button>
-            <button id="text" title="文字">T<span>文字</span></button>
-            <button id="delete" title="删除">🗑️<span>删除</span></button>
-            <button id="clear" title="清空">🧹<span>清空</span></button>
-            <button id="undo" title="撤销">↩️<span>撤销</span></button>
-            <button id="redo" title="前进">↪️<span>前进</span></button>
-            <button id="zoom-in" title="放大">🔍+<span>放大</span></button>
-            <button id="zoom-out" title="缩小">🔍-<span>缩小</span></button>
-            <input type="color" id="color" value="#000000" title="颜色">
-            <input type="number" id="size" value="2" min="1" max="50" title="尺寸">
-            <button class="mode-btn active" data-mode="select" onclick="setMode('select')" title="选择模式">👆<span>选择</span></button>
-            <button class="mode-btn" data-mode="move" onclick="setMode('move')" title="平移模式">🔄<span>平移</span></button>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
+    <title>UML Drawer - 在线UML绘图工具</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="uml-drawer">
+        <!-- 顶部工具栏 -->
+        <header class="toolbar">
+            <h1>UML Drawer</h1>
+            <div class="toolbar-actions">
+                <button id="new-diagram">新建图</button>
+                <button id="download-diagram">下载图</button>
+                <button id="clear-diagram">清空</button>
+                <button id="help">帮助</button>
+            </div>
+        </header>
+
+        <!-- 主内容区 -->
+        <div class="main-content">
+            <!-- 左侧工具栏 -->
+            <aside class="sidebar">
+                <h3>图形工具</h3>
+                <div class="tool-group">
+                    <h4>基本图形</h4>
+                    <div class="tools">
+                        <button class="tool" data-tool="rectangle">
+                            <svg width="24" height="24" viewBox="0 0 24 24">
+                                <rect x="2" y="2" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>矩形</span>
+                        </button>
+                        <button class="tool" data-tool="ellipse">
+                            <svg width="24" height="24" viewBox="0 0 24 24">
+                                <ellipse cx="12" cy="12" rx="10" ry="10" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>椭圆</span>
+                        </button>
+                        <button class="tool" data-tool="text">
+                            <svg width="24" height="24" viewBox="0 0 24 24">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <polyline points="14 2 14 8 20 8" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <line x1="16" y1="13" x2="8" y2="13" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <line x1="16" y1="17" x2="8" y2="17" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <polyline points="10 9 9 9 8 9" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>文本</span>
+                        </button>
+                        <button class="tool" data-tool="line">
+                            <svg width="24" height="24" viewBox="0 0 24 24">
+                                <line x1="2" y1="12" x2="22" y2="12" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>直线</span>
+                        </button>
+                        <button class="tool" data-tool="arrow">
+                            <svg width="24" height="24" viewBox="0 0 24 24">
+                                <line x1="5" y1="12" x2="19" y2="12" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <polyline points="12 5 19 12 12 19" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>箭头</span>
+                        </button>
+                        <button class="tool" data-tool="pen">
+                            <svg width="24" height="24" viewBox="0 0 24 24">
+                                <path d="M12 19l7-7 3 3-7 7-3-3z" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <path d="M2 2l7.586 7.586" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <circle cx="11" cy="11" r="2" fill="currentColor"/>
+                            </svg>
+                            <span>画笔</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="tool-group">
+                    <h4>UML图形</h4>
+                    <div class="tools">
+                        <button class="tool" data-tool="class">
+                            <div class="class-icon">
+                                <div class="class-top"></div>
+                                <div class="class-middle"></div>
+                                <div class="class-bottom"></div>
+                            </div>
+                            <span>类</span>
+                        </button>
+                        <button class="tool" data-tool="use-case">
+                            <svg width="24" height="24" viewBox="0 0 24 24">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>用例</span>
+                        </button>
+                        <button class="tool" data-tool="actor">
+                            <svg width="24" height="24" viewBox="0 0 24 24">
+                                <circle cx="12" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <path d="M5 21h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2z" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>参与者</span>
+                        </button>
+                        <button class="tool" data-tool="package">
+                            <svg width="24" height="24" viewBox="0 0 24 24">
+                                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <polyline points="3.27 6.96 12 12.01 20.73 6.96" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <line x1="12" y1="22.08" x2="12" y2="12" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>包</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="tool-group">
+                    <h4>操作</h4>
+                    <div class="tools">
+                        <button class="tool" data-tool="select">
+                            <svg width="24" height="24" viewBox="0 0 24 24">
+                                <rect x="3" y="3" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="4"/>
+                            </svg>
+                            <span>选择</span>
+                        </button>
+                        <button class="tool" data-tool="delete">
+                            <svg width="24" height="24" viewBox="0 0 24 24">
+                                <polyline points="3 6 5 6 21 6" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>删除</span>
+                        </button>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- 右侧绘图区域 -->
+            <main class="canvas-area">
+                <!-- 图表标签 -->
+                <div class="diagram-tabs">
+                    <div class="tab active" data-diagram="1">
+                        图 1
+                        <button class="close-tab">×</button>
+                    </div>
+                </div>
+
+                <!-- 绘图画布 -->
+                <div class="canvas-container">
+                    <canvas id="canvas" width="1200" height="800"></canvas>
+                    
+                    <!-- 移动端悬浮按钮 -->
+                    <div id="floating-buttons" class="floating-buttons">
+                        <button id="btn-tools" class="floating-btn">
+                            <svg width="24" height="24" viewBox="0 0 24 24">
+                                <rect x="3" y="3" width="7" height="7" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <rect x="14" y="3" width="7" height="7" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <rect x="14" y="14" width="7" height="7" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <rect x="3" y="14" width="7" height="7" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                        </button>
+                        <button id="btn-select" class="floating-btn">
+                            <svg width="24" height="24" viewBox="0 0 24 24">
+                                <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <path d="M13 13l6 6" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 底部功能按钮 -->
+                <div id="bottom-toolbar" class="bottom-toolbar" style="display: none;">
+                    <button id="btn-property" class="bottom-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24">
+                            <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" fill="none" stroke="currentColor" stroke-width="2"/>
+                            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" fill="none" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                        <span>属性</span>
+                    </button>
+                    <button id="btn-delete" class="bottom-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24">
+                            <polyline points="3 6 5 6 21 6" fill="none" stroke="currentColor" stroke-width="2"/>
+                            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" fill="none" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                        <span>删除</span>
+                    </button>
+                </div>
+            </main>
         </div>
-        <div class="canvas-container">
-            <canvas id="canvas"></canvas>
-            <div id="selectionFeedback" class="selection-feedback"></div>
+    </div>
+
+    <!-- 帮助对话框 -->
+    <div id="help-dialog" class="help-dialog">
+        <div class="help-content">
+            <h2>快捷键帮助</h2>
+            <div class="help-section">
+                <h3>选择操作</h3>
+                <ul>
+                    <li><strong>点击</strong> - 选择单个元素</li>
+                    <li><strong>Ctrl+点击</strong> - 多选/取消选择元素</li>
+                    <li><strong>拖拽</strong> - 移动选中的元素</li>
+                    <li><strong>框选</strong> - 拖拽选择多个元素</li>
+                </ul>
+            </div>
+            <div class="help-section">
+                <h3>调整大小</h3>
+                <ul>
+                    <li><strong>选中单个元素</strong> - 显示8个控制点</li>
+                    <li><strong>拖拽控制点</strong> - 调整元素大小</li>
+                </ul>
+            </div>
+            <div class="help-section">
+                <h3>编辑操作</h3>
+                <ul>
+                    <li><strong>Delete/Backspace</strong> - 删除选中元素</li>
+                    <li><strong>Ctrl+C</strong> - 复制选中元素</li>
+                    <li><strong>Ctrl+V</strong> - 粘贴元素</li>
+                    <li><strong>Ctrl+G</strong> - 组合选中元素</li>
+                    <li><strong>Ctrl+U</strong> - 取消组合</li>
+                </ul>
+            </div>
+            <div class="help-section">
+                <h3>画笔工具</h3>
+                <ul>
+                    <li><strong>选择画笔</strong> - 点击画笔工具按钮</li>
+                    <li><strong>绘制</strong> - 按住鼠标拖拽绘制自由线条</li>
+                    <li><strong>完成</strong> - 松开鼠标完成绘制</li>
+                </ul>
+            </div>
+            <button class="close-help" id="close-help">关闭</button>
         </div>
-        <script src="script.js"></script>
-        <script src="layer-manager.js"></script>
-    </body>
+    </div>
+
+    <!-- 属性设置对话框 -->
+    <div id="property-dialog" class="help-dialog">
+        <div class="help-content" style="max-width: 400px;">
+            <h2>属性设置</h2>
+            
+            <div class="help-section">
+                <h3>尺寸</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                    <div>
+                        <label>宽度:</label>
+                        <input type="number" id="prop-width" min="10" style="width: 100%; padding: 5px;">
+                    </div>
+                    <div>
+                        <label>高度:</label>
+                        <input type="number" id="prop-height" min="10" style="width: 100%; padding: 5px;">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="help-section">
+                <h3>线条样式</h3>
+                <div style="margin-bottom: 10px;">
+                    <label>线条粗细:</label>
+                    <input type="number" id="prop-stroke-width" min="1" max="20" style="width: 100%; padding: 5px;">
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <label>线条颜色:</label>
+                    <input type="color" id="prop-stroke-color" style="width: 100%; padding: 5px;">
+                </div>
+            </div>
+            
+            <div class="help-section">
+                <h3>填充样式</h3>
+                <div style="margin-bottom: 10px;">
+                    <label>背景颜色:</label>
+                    <input type="color" id="prop-fill-color" style="width: 100%; padding: 5px;">
+                </div>
+            </div>
+            
+            <div class="help-section">
+                <h3>文本内容</h3>
+                <div style="margin-bottom: 10px;">
+                    <label>文本:</label>
+                    <textarea id="prop-text" rows="3" style="width: 100%; padding: 5px;"></textarea>
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <label>字体大小:</label>
+                    <input type="number" id="prop-font-size" min="8" max="72" style="width: 100%; padding: 5px;">
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <label>文本颜色:</label>
+                    <input type="color" id="prop-text-color" style="width: 100%; padding: 5px;">
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <label>文本位置:</label>
+                    <select id="prop-text-position" style="width: 100%; padding: 5px;">
+                        <option value="center">居中</option>
+                        <option value="top">顶部</option>
+                        <option value="bottom">底部</option>
+                        <option value="left">左侧</option>
+                        <option value="right">右侧</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button id="close-property" style="padding: 8px 16px;">取消</button>
+                <button id="apply-property" style="padding: 8px 16px; background: #4CAF50; color: white; border: none;">应用</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
 </html>

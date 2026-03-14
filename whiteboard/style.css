@@ -1,267 +1,797 @@
-body {
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    font-family: Arial, sans-serif;
-    touch-action: none;
+/* CSS变量定义 */
+:root {
+    --primary-color: #4CAF50;
+    --primary-hover: #45a049;
+    --secondary-color: #2196F3;
+    --background-color: #f5f5f5;
+    --canvas-background: #ffffff;
+    --border-color: #e0e0e0;
+    --text-color: #333333;
+    --text-light: #666666;
+    --shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    --border-radius: 4px;
+    --transition: all 0.2s ease;
 }
 
+/* 全局样式重置 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--background-color);
+    color: var(--text-color);
+    line-height: 1.6;
+}
+
+/* 主容器 */
+.uml-drawer {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* 顶部工具栏 */
 .toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 2rem;
+    background-color: var(--primary-color);
+    color: white;
+    box-shadow: var(--shadow);
+    z-index: 100;
+}
+
+.toolbar h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.toolbar-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.toolbar-actions button {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: var(--border-radius);
+    background-color: rgba(255, 255, 255, 0.2);
+    color: white;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: var(--transition);
+}
+
+.toolbar-actions button:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-1px);
+}
+
+.toolbar-actions button:active {
+    transform: translateY(0);
+}
+
+/* 主内容区 */
+.main-content {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* 左侧工具栏 */
+.sidebar {
+    width: 280px;
+    background-color: white;
+    border-right: 1px solid var(--border-color);
+    padding: 1rem;
+    overflow-y: auto;
+    box-shadow: var(--shadow);
+}
+
+.sidebar h3 {
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+    color: var(--text-color);
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.tool-group {
+    margin-bottom: 1.5rem;
+}
+
+.tool-group h4 {
+    font-size: 0.9rem;
+    color: var(--text-light);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.tools {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+}
+
+.tool {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: white;
+    cursor: pointer;
+    transition: var(--transition);
+    font-size: 0.8rem;
+    text-align: center;
+}
+
+.tool:hover {
+    border-color: var(--primary-color);
+    background-color: rgba(76, 175, 80, 0.05);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow);
+}
+
+.tool.active {
+    border-color: var(--primary-color);
+    background-color: rgba(76, 175, 80, 0.1);
+    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+}
+
+.tool svg {
+    margin-bottom: 0.5rem;
+    color: var(--text-color);
+}
+
+.tool span {
+    color: var(--text-light);
+}
+
+/* 类图标样式 */
+.class-icon {
+    width: 24px;
+    height: 24px;
+    margin-bottom: 0.5rem;
+    position: relative;
+}
+
+.class-top, .class-middle, .class-bottom {
+    position: absolute;
+    left: 0;
+    right: 0;
+    border: 1px solid currentColor;
+    background-color: transparent;
+}
+
+.class-top {
+    top: 0;
+    height: 7px;
+    border-bottom: none;
+}
+
+.class-middle {
+    top: 7px;
+    height: 8px;
+    border-top: none;
+    border-bottom: none;
+}
+
+.class-bottom {
+    top: 15px;
+    height: 9px;
+    border-top: none;
+}
+
+/* 右侧绘图区域 */
+.canvas-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--background-color);
+    overflow: hidden;
+}
+
+/* 图表标签 */
+.diagram-tabs {
+    display: flex;
+    background-color: white;
+    border-bottom: 1px solid var(--border-color);
+    padding: 0 1rem;
+    overflow-x: auto;
+}
+
+.tab {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    margin-right: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-bottom: none;
+    border-radius: 4px 4px 0 0;
+    background-color: var(--background-color);
+    cursor: pointer;
+    transition: var(--transition);
+    white-space: nowrap;
+}
+
+.tab:hover {
+    background-color: #e8e8e8;
+}
+
+.tab.active {
+    background-color: white;
+    border-color: var(--border-color);
+    border-bottom-color: white;
+    font-weight: 500;
+}
+
+.close-tab {
+    margin-left: 0.5rem;
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    color: var(--text-light);
+    padding: 0 0.25rem;
+    border-radius: 2px;
+    transition: var(--transition);
+}
+
+.close-tab:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+    color: #e53935;
+}
+
+/* 绘图画布容器 */
+.canvas-container {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 2rem;
+    overflow: auto;
+    background-color: var(--background-color);
+    min-height: 400px;
+}
+
+/* 画布 */
+#canvas {
+    background-color: var(--canvas-background);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    cursor: crosshair;
+    flex-shrink: 0;
+}
+
+/* 选中元素的样式 */
+.selected {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+/* 底部工具栏 */
+.bottom-toolbar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    border-top: 1px solid var(--border-color);
+    padding: 10px;
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+    z-index: 100;
+}
+
+.bottom-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    padding: 8px 16px;
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.bottom-btn:hover {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.bottom-btn span {
+    font-size: 0.75rem;
+}
+
+/* 悬浮按钮 */
+.floating-buttons {
+    display: none;
+    position: fixed;
+    right: 15px;
+    bottom: 80px;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 999;
+}
+
+.floating-btn {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s;
+}
+
+.floating-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 16px rgba(76, 175, 80, 0.4);
+}
+
+.floating-btn.active {
+    background: #2e7d32;
+}
+
+@media (max-width: 768px) {
+    .floating-buttons {
+        display: flex;
+    }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .sidebar {
+        width: 200px;
+    }
+    
+    .toolbar {
+        padding: 1rem;
+    }
+    
+    .toolbar h1 {
+        font-size: 1.2rem;
+    }
+    
+    .toolbar-actions button {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.8rem;
+    }
+    
+    .canvas-container {
+        padding: 1rem;
+    }
+    
+    #canvas {
+        width: 100%;
+        height: auto;
+        max-width: 100%;
+    }
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+
+/* 工具提示 */
+.tool[title] {
+    position: relative;
+}
+
+.tool[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    z-index: 1000;
+    margin-bottom: 0.5rem;
+}
+
+/* 帮助对话框 */
+.help-dialog {
+    display: none;
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
-    background: var(--toolbar-bg, #f0f0f0);
-    padding: 8px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    z-index: 100;
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    align-items: center;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
     justify-content: center;
-}
-
-/* 移动设备优化 */
-@media (max-width: 768px) {
-    .toolbar {
-        padding: 6px;
-        gap: 6px;
-    }
-}
-
-.toolbar::-webkit-scrollbar {
-    display: none;
-}
-
-.toolbar button {
-    padding: 10px 16px;
-    cursor: pointer;
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    background: var(--btn-bg, #fff);
-    transition: all 0.2s;
-    min-width: 56px;
-    height: 44px;
-    font-size: 18px;
-    font-weight: 500;
-    display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 6px;
-    user-select: none;
-    -webkit-tap-highlight-color: transparent;
 }
 
-/* 工具按钮中的文字 */
-.toolbar button span {
-    font-size: 14px;
-    display: none;
+.help-dialog.show {
+    display: flex;
 }
 
-/* PC设备下显示工具名称 */
-@media (min-width: 769px) {
-    .toolbar button span {
-        display: inline;
-    }
-    
-    .toolbar button {
-        min-width: 80px;
-        padding: 12px 20px;
-    }
-}
-
-.toolbar button:active {
-    transform: scale(0.95);
-}
-
-/* 移动设备优化 */
-@media (max-width: 768px) {
-    .toolbar button {
-        padding: 8px 12px;
-        min-width: 48px;
-        height: 40px;
-        font-size: 16px;
-        border-radius: 6px;
-    }
-    
-    /* 移动设备下确保工具名称隐藏 */
-    .toolbar button span {
-        display: none !important;
-    }
-}
-
-/* 工具栏激活状态样式 */
-.toolbar button.active {
-    border-color: #4285f4;
-    background-color: #e8f0fe;
-    box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.3);
-}
-
-/* 颜色选择器和尺寸输入框样式优化 */
-.toolbar input[type="color"] {
-    width: 44px;
-    height: 44px;
-    border: none;
+.help-content {
+    background-color: white;
+    padding: 2rem;
     border-radius: 8px;
-    cursor: pointer;
-    padding: 0;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
-.toolbar input[type="number"] {
-    width: 70px;
-    height: 44px;
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    padding: 0 8px;
-    font-size: 16px;
+.help-content h2 {
+    margin-bottom: 1.5rem;
+    color: var(--primary-color);
     text-align: center;
 }
 
-/* 移动设备优化 */
-@media (max-width: 768px) {
-    .toolbar input[type="color"] {
-        width: 40px;
-        height: 40px;
-        border-radius: 6px;
-    }
-    
-    .toolbar input[type="number"] {
-        width: 60px;
-        height: 40px;
-        padding: 0 6px;
-        font-size: 14px;
-        border-radius: 6px;
-    }
+.help-section {
+    margin-bottom: 1.5rem;
 }
 
-/* 暗色主题支持 */
-@media (prefers-color-scheme: dark) {
-    :root {
-        --toolbar-bg: #333;
-        --btn-bg: #555;
-        --text-color: #fff;
-    }
-
-    .toolbar {
-        background: var(--toolbar-bg);
-    }
-
-    .toolbar button, .toolbar span, .toolbar select {
-        color: var(--text-color);
-        background: var(--btn-bg);
-        border-color: #666;
-    }
-
-    .toolbar button.active {
-        border-color: #8ab4f8;
-        background-color: #2b3a55;
-    }
+.help-section h3 {
+    margin-bottom: 0.75rem;
+    color: var(--text-color);
+    font-size: 1rem;
 }
 
-.canvas-container {
-    position: absolute;
-    top: calc(60px + 1vw); /* 自适应工具栏高度 */
-    left: 0;
-    right: 0;
-    bottom: 0;
-    overflow: hidden;
-    background-image: linear-gradient(rgba(0, 0, 0, 0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 0, 0, 0.6) 1px, transparent 1px);
-    background-size: 20px 20px;
-    background-position: center center;
-    cursor: default;
-    touch-action: none;
+.help-section ul {
+    list-style: none;
+    padding: 0;
 }
 
-/* 移动设备优化 */
-@media (max-width: 768px) {
-    .canvas-container {
-        top: calc(50px + 1vw);
-    }
+.help-section li {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-light);
 }
 
-#canvas {
-    position: absolute;
-    background: rgba(255, 255, 255, 0.8);
-    cursor: crosshair;
-    transform-origin: 0 0;
+.help-section li:last-child {
+    border-bottom: none;
 }
 
-/* 选区视觉反馈样式 */
-.selection-feedback {
-    position: absolute;
-    border: 1px dashed #4285f4;
-    background-color: rgba(66, 133, 244, 0.1);
-    pointer-events: none;
-    display: none;
-    z-index: 50;
+.help-section strong {
+    color: var(--primary-color);
+    font-weight: 600;
 }
 
-/* 选中元素样式 */
-.selected-element {
-    outline: 2px solid #4285f4;
-    outline-offset: 2px;
-}
-
-.selected {
-    outline: 2px dashed #4285f4;
-}
-
-.element {
-    outline: 2px solid #4285f4;
-}
-
-.selection-box {
-    position: absolute;
-    background: rgba(66, 133, 244, 0.1);
-    border: 1px dashed #4285f4;
-    pointer-events: none;
-}
-
-/* 选区模式控制样式 */
-.selection-controls {
-    margin-left: auto;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    color: var(--text-color, #333);
-}
-
-.selection-controls select {
-    padding: 5px;
-    border-radius: 4px;
-}
-
-/* 使用提示样式 */
-.usage-tips {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    background: rgba(0,0,0,0.7);
-    color: white;
-    padding: 15px;
-    border-radius: 8px;
-    max-width: 300px;
-    z-index: 1000;
-    font-size: 14px;
-}
-
-.usage-tips h3 {
-    margin-top: 0;
-    margin-bottom: 10px;
-}
-
-.usage-tips p {
-    margin: 5px 0;
-}
-
-.usage-tips button {
-    margin-top: 10px;
-    padding: 5px 10px;
-    cursor: pointer;
-    background: #4285f4;
+.close-help {
+    display: block;
+    width: 100%;
+    padding: 0.75rem;
+    margin-top: 1.5rem;
+    background-color: var(--primary-color);
     color: white;
     border: none;
-    border-radius: 4px;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: 1rem;
+    transition: var(--transition);
+}
+
+.close-help:hover {
+    background-color: var(--primary-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow);
+}
+
+.close-help:active {
+    transform: translateY(0);
+}
+
+/* 平板设备适配 */
+@media (max-width: 1024px) {
+    .toolbar {
+        padding: 0.75rem 1rem;
+    }
+    
+    .toolbar h1 {
+        font-size: 1.2rem;
+    }
+    
+    .toolbar-actions button {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.8rem;
+    }
+    
+    .sidebar {
+        width: 220px;
+        padding: 0.75rem;
+    }
+    
+    .tools {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .tool {
+        padding: 0.6rem;
+        font-size: 0.75rem;
+    }
+    
+    .tool svg {
+        width: 20px;
+        height: 20px;
+    }
+}
+
+/* 手机设备适配 */
+@media (max-width: 768px) {
+    .toolbar {
+        padding: 0.5rem;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .toolbar h1 {
+        font-size: 1rem;
+    }
+    
+    .toolbar-actions {
+        width: 100%;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    .toolbar-actions button {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.75rem;
+        flex: 1;
+        min-width: 60px;
+    }
+    
+    .main-content {
+        flex-direction: column;
+    }
+    
+    .sidebar {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: -100%;
+        width: 100%;
+        height: 70vh;
+        max-height: none;
+        border-right: none;
+        border-top: 1px solid var(--border-color);
+        padding: 1rem;
+        overflow-y: auto;
+        transition: bottom 0.3s ease;
+        z-index: 1000;
+        background: white;
+        border-radius: 16px 16px 0 0;
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+    }
+    
+    .sidebar.show {
+        bottom: 0;
+    }
+    
+    .sidebar-toggle {
+        display: none;
+    }
+    
+    @media (max-width: 768px) {
+        .sidebar-toggle {
+            display: none;
+        }
+    }
+    
+    .sidebar h3 {
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .tool-group {
+        margin-bottom: 0.5rem;
+    }
+    
+    .tool-group h4 {
+        font-size: 0.8rem;
+        margin-bottom: 0.3rem;
+    }
+    
+    .tools {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.5rem;
+    }
+    
+    .tool {
+        min-width: 60px;
+        min-height: 60px;
+        padding: 0.5rem;
+        font-size: 0.75rem;
+    }
+    
+    .tool svg {
+        width: 24px;
+        height: 24px;
+    }
+    
+    .tool span {
+        display: block;
+        font-size: 0.7rem;
+        margin-top: 0.25rem;
+    }
+    
+    .canvas-area {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    
+    .diagram-tabs {
+        padding: 0 0.5rem;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        flex-shrink: 0;
+    }
+    
+    .tab {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.85rem;
+        white-space: nowrap;
+    }
+    
+    .canvas-container {
+        flex: 1;
+        padding: 0.5rem;
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 300px;
+    }
+    
+    #canvas {
+        min-width: 300px;
+        min-height: 200px;
+        touch-action: none;
+    }
+}
+
+/* 小屏手机设备适配 */
+@media (max-width: 480px) {
+    .toolbar h1 {
+        font-size: 0.9rem;
+    }
+    
+    .toolbar-actions button {
+        padding: 0.3rem 0.5rem;
+        font-size: 0.7rem;
+        min-width: 50px;
+    }
+    
+    .sidebar {
+        max-height: 420px;
+    }
+    
+    .sidebar h3 {
+        font-size: 0.85rem;
+    }
+    
+    .tool-group h4 {
+        font-size: 0.75rem;
+    }
+    
+    .tools {
+        grid-template-columns: repeat(5, 1fr);
+        gap: 0.2rem;
+    }
+    
+    .tool {
+        padding: 0.3rem;
+        font-size: 0;
+    }
+    
+    .tool svg {
+        width: 16px;
+        height: 16px;
+    }
+    
+    .tab {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.8rem;
+    }
+    
+    .canvas-container {
+        padding: 0.25rem;
+        min-height: 250px;
+    }
+    
+    .help-content {
+        padding: 1rem;
+        max-width: 95%;
+    }
+    
+    .help-content h2 {
+        font-size: 1.2rem;
+    }
+    
+    .help-section h3 {
+        font-size: 0.9rem;
+    }
+    
+    .help-section li {
+        font-size: 0.85rem;
+        padding: 0.3rem 0;
+    }
+}
+
+/* 横屏模式优化 */
+@media (max-width: 768px) and (orientation: landscape) {
+    .sidebar {
+        max-height: 120px;
+    }
+    
+    .tools {
+        grid-template-columns: repeat(6, 1fr);
+    }
+    
+    .tool {
+        padding: 0.3rem;
+    }
+}
+
+/* 触摸设备优化 */
+@media (hover: none) and (pointer: coarse) {
+    .tool:hover {
+        transform: none;
+    }
+    
+    .tool:active {
+        transform: scale(0.95);
+        background-color: rgba(76, 175, 80, 0.15);
+    }
+    
+    .toolbar-actions button:active {
+        transform: scale(0.95);
+    }
+    
+    .close-help:active {
+        transform: scale(0.98);
+    }
+    
+    .tab:active {
+        background-color: rgba(76, 175, 80, 0.1);
+    }
 }
