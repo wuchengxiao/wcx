@@ -11,7 +11,8 @@ function loadAllRoles() {
         'roles/role_math_olympiad.js',
         'roles/role_mistake_checker.js',
         'roles/role_translator.js',
-        'roles/role_writer.js'
+        'roles/role_writer.js'，
+        'roles/role_mayor.js'
     ];
     roleFiles.forEach(function(path) {
         const script = document.createElement('script');
