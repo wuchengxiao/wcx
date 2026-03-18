@@ -164,6 +164,7 @@ function autoLogin() {
 function logout() {
     // 清空 localStorage
     localStorage.removeItem('chatai_token');
+    localStorage.removeItem('chatai_conversation'); // 清空保存的对话内容
     
     // 清空对话历史
     conversation = [];

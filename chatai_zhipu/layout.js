@@ -216,6 +216,10 @@ function initChatUI() {
     if (typeof initLayoutEvents === 'function') {
         initLayoutEvents();
     }
+    // 优先从localStorage还原对话
+    if (typeof loadConversationFromStorage === 'function') {
+        loadConversationFromStorage();
+    }
     // 渲染历史消息
     if (conversation && conversation.length) {
         conversation.forEach(function(msg) {

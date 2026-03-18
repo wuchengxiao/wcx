@@ -17,6 +17,26 @@ function getBrowserParameters() {
 const messageContentStore = new Map();
 let messageIdCounter = 0;
 
+// 自动加载本地存储的对话
+function loadConversationFromStorage() {
+    try {
+        const stored = localStorage.getItem('chatai_conversation');
+        if (stored) {
+            const arr = JSON.parse(stored);
+            if (Array.isArray(arr)) {
+                conversation = arr;
+            }
+        }
+    } catch (e) {}
+}
+
+// 保存对话到本地
+function saveConversationToStorage() {
+    try {
+        localStorage.setItem('chatai_conversation', JSON.stringify(conversation));
+    } catch (e) {}
+}
+
 function generateMessageId() {
     messageIdCounter += 1;
     return `msg_${Date.now()}_${messageIdCounter}`;
@@ -329,6 +349,7 @@ function deleteMessage(messageEl, role, content) {
         const index = conversation.findIndex(msg => msg.role === role && msg.content === originalContent);
         if (index !== -1) {
             conversation.splice(index, 1);
+            saveConversationToStorage();
         }
         if (messageId) {
             messageContentStore.delete(messageId);
@@ -574,6 +595,7 @@ async function sendMessage() {
     }
 
     conversation.push({ role: 'user', content: text });
+    saveConversationToStorage();
 
     setSendingState(true);
     const assistantBubble = appendMessage('assistant', '', searchSources.length > 0 ? searchSources : null);
@@ -670,6 +692,7 @@ async function sendMessage() {
         }
 
         conversation.push({ role: 'assistant', content: assistantText || '' });
+        saveConversationToStorage();
     } catch (e) {
         let errorMessage = '请求失败，请稍后再试。';
         if (e && (e.status === 429 || (e.message && e.message.includes('429')))) {
