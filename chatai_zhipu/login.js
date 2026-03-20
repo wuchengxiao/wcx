@@ -163,8 +163,7 @@ function autoLogin() {
  */
 function logout() {
     // 清空 localStorage
-    localStorage.removeItem('chatai_token');
-    localStorage.removeItem('chatai_conversation'); // 清空保存的对话内容
+    localStorage.clear();
     
     // 清空对话历史
     conversation = [];
@@ -202,7 +201,7 @@ function logout() {
 
 // 页面加载完成后尝试自动登录
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', autoLogin);
+    _util.on(document, 'DOMContentLoaded', autoLogin);
 } else {
     autoLogin();
 }

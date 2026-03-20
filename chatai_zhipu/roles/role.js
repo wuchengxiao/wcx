@@ -15,10 +15,10 @@ function loadAllRoles() {
         'roles/role_mayor.js'
     ];
     roleFiles.forEach(function(path) {
-        const script = document.createElement('script');
+        const script = _util.ce('script');
         script.src = path;
         script.async = false;
-        document.head.appendChild(script);
+        _util.ac(document.head, script);
     });
 }
 loadAllRoles();

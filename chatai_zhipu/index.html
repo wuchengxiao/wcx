@@ -9,6 +9,7 @@
   <script src="constants.js"></script>
   <link rel="stylesheet" href="imagePreview.css">
   <script src="imagePreview.js"></script>
+  <script src="util.js"></script>
 </head>
 
 <body>
@@ -50,7 +51,7 @@
       <footer class="input-area">
         <div style="display: flex; flex-direction: column; gap: 8px; flex: 1;">
           <div id="toolsRow" style="display: none; flex-direction: column; gap: 8px;">
-            <div style="display: flex; gap: 12px; align-items: center;">
+            <div id="btnRow" class="btn-row">
               <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap;">
                 <input type="checkbox" id="enableWebSearch" style="cursor: pointer;" checked>
                 <span style="font-size: 14px; color: #374151;">联网搜索</span>
@@ -85,7 +86,6 @@
   </div>
   <script src="layout.js"></script>
   <script src="login.js"></script>
-  <script src="util.js"></script>
   <script src="marked.min.js"></script>
   <script src="index.js"></script>
   <script src="roles/role.js"></script>

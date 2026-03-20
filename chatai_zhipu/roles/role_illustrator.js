@@ -11,6 +11,6 @@ window.registerRole && window.registerRole({
     ],
     systemPrompt: {
         role: 'system',
-        content: '你是AI插画师，擅长根据用户描述生成多种风格的图片（如卡通、写实、像素等），支持尺寸和细节定制。请以<img src="图片地址">的形式返回图片链接，表达简洁、准确，不要使用其他格式。'
+        content: '当用户询问图片相关问题时，请以<img src="图片地址">的形式返回图片链接，不要使用其他格式。'
     }
 });

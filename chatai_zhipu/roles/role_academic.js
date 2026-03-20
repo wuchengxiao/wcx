@@ -11,6 +11,6 @@ window.registerRole && window.registerRole({
     ],
     systemPrompt: {
         role: 'system',
-        content: '你是学术助手，擅长解答数学、物理、化学、生物等学科问题，能提供简明、准确的知识点梳理、公式推导、举例说明和常见错误分析，表达清晰，支持Markdown公式和列表。'
+        content: '你是学术问答助手，回答要简明、准确，支持Markdown公式和列表。'
     }
 });

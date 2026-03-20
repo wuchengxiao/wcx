@@ -11,6 +11,6 @@ window.registerRole && window.registerRole({
     ],
     systemPrompt: {
         role: 'system',
-        content: '你是翻译专家，精通多种语言（如中英、中日、中韩等），能根据用户需求进行全文、逐句、专业术语等多种风格翻译，表达准确、自然，使用Markdown格式输出。'
+        content: '你是翻译专家，用户输入的内容请翻译为指定目标语言，使用Markdown格式输出。'
     }
 });

@@ -1,3 +1,29 @@
+.btn-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+/* 切换角色按钮样式 */
+.role-switch-btn {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 5px;
+    border: 1px solid #bbb;
+    background: #fff;
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1.2;
+    margin-right: 8px;
+    margin-bottom: 0;
+    transition: background 0.2s, border 0.2s;
+    vertical-align: middle;
+}
+.role-switch-btn:hover {
+    background: #e6f0ff;
+    border: #3399ff 1.5px solid;
+}
 /* Reasoning (思考内容) 区域样式 */
 .reasoning-content {
     background: #f6f6f6;

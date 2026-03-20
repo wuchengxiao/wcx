@@ -276,7 +276,7 @@ function appendMessage(role, content, sources) {
         if (event.target.closest('.message-buttons')) {
             return;
         }
-        document.querySelectorAll('.message.show-actions').forEach(function (el) {
+        _util.qa('.message.show-actions').forEach(function (el) {
             if (el !== messageEl) {
                 el.classList.remove('show-actions');
             }
@@ -384,8 +384,8 @@ function openFullscreen(content) {
     closeBtn.style.cursor = 'pointer';
     closeBtn.textContent = '关闭';
     closeBtn.addEventListener('click', function () {
-        document.body.removeChild(fullscreenContainer);
-        document.body.removeChild(closeBtn);
+        _util.bodyRc(fullscreenContainer);
+        _util.bodyRc(closeBtn);
     });
 
     const contentContainer = _util.ce('div');
@@ -395,9 +395,9 @@ function openFullscreen(content) {
     contentContainer.className = 'msg-bubble';
     contentContainer.innerHTML = content;
 
-    fullscreenContainer.appendChild(contentContainer);
-    document.body.appendChild(fullscreenContainer);
-    document.body.appendChild(closeBtn);
+    _util.ac(fullscreenContainer, contentContainer);
+    _util.bodyAc(fullscreenContainer);
+    _util.bodyAc(closeBtn);
 }
 
 function copyToClipboard(text) {
@@ -406,10 +406,10 @@ function copyToClipboard(text) {
     textarea.style.position = 'fixed';
     textarea.style.left = '-999999px';
     textarea.style.top = '-999999px';
-    document.body.appendChild(textarea);
+    _util.bodyAc(textarea);
     textarea.select();
     document.execCommand('copy');
-    document.body.removeChild(textarea);
+    _util.bodyRc(textarea);
     showCopySuccess();
 }
 
@@ -427,9 +427,9 @@ function showCopySuccess() {
     tooltip.style.borderRadius = '4px';
     tooltip.style.zIndex = '10002';
     tooltip.style.fontSize = '14px';
-    document.body.appendChild(tooltip);
+    _util.bodyAc(tooltip);
     setTimeout(function () {
-        document.body.removeChild(tooltip);
+        _util.bodyRc(tooltip);
     }, 2000);
 }
 
@@ -444,7 +444,7 @@ function updateMessageBubble(bubble, content) {
     if (reasoningDiv) {
         reasoningParent = reasoningDiv.parentNode;
         reasoningNext = reasoningDiv.nextSibling;
-        bubble.removeChild(reasoningDiv);
+        _util.rc(bubble, reasoningDiv);
     }
     const messageEl = bubble.parentElement;
     if (messageEl && messageEl.classList.contains('received') && typeof marked !== 'undefined') {
@@ -493,7 +493,7 @@ function finishStreaming(bubble) {
             if (messageEl && window.createImagePreviewArea) {
                 const imagePreview = window.createImagePreviewArea();
                 if (imagePreview) {
-                  messageEl.appendChild(imagePreview);
+                  _util.ac(messageEl, imagePreview);
                 }
             }
         }
@@ -612,7 +612,7 @@ async function sendMessage() {
         statusSpan.textContent = '思考中...';
         assistantBubble.appendChild(statusSpan);
         // 创建思考内容div并插入
-        reasoningDiv = document.createElement('div');
+        reasoningDiv = _util.ce('div');
         reasoningDiv.className = 'reasoning-content';
         reasoningDiv.textContent = '';
         assistantBubble.insertBefore(reasoningDiv, assistantBubble.firstChild);

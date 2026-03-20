@@ -61,11 +61,11 @@ function openImageFullscreen(imageUrl) {
     img.style.maxWidth = '90%';
     img.style.maxHeight = '90%';
     img.style.objectFit = 'contain';
-    fullscreenContainer.appendChild(img);
+    _util.ac(fullscreenContainer, img);
     fullscreenContainer.addEventListener('click', function() {
-        document.body.removeChild(fullscreenContainer);
+      _util.bodyRc(fullscreenContainer);
     });
-    document.body.appendChild(fullscreenContainer);
+    _util.bodyAc(fullscreenContainer);
 }
 
 // 导出

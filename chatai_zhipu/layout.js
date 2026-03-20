@@ -20,12 +20,12 @@ function renderRoleSelector() {
     if (_util.id('role-selector')) return;
     if (!window.roles || window.roles.length === 0) return; // 无角色时不显示选择区
     // 创建按钮区
-    const selector = document.createElement('div');
+    const selector = _util.ce('div');
     selector.id = 'role-selector';
     selector.className = 'role-selector-area';
     // 按钮
     (window.roles || []).forEach((role, idx) => {
-        const btn = document.createElement('button');
+        const btn = _util.ce('button');
         btn.textContent = role.name;
         btn.title = role.intro || '';
         btn.className = 'role-selector-btn';
@@ -79,7 +79,7 @@ function showRoleIntro(role) {
     // 新建介绍消息
     const msgContainer = _util.id('msg-container');
     if (!msgContainer) return;
-    const intro = document.createElement('div');
+    const intro = _util.ce('div');
     intro.id = 'role-intro-msg';
     intro.className = 'role-intro-msg';
     intro.style.textAlign = 'center';
@@ -96,7 +96,7 @@ function showRoleIntro(role) {
     let oldGuide = _util.id('role-guide-msg');
     if (oldGuide) oldGuide.remove();
     if (role.guide && Array.isArray(role.guide)) {
-        const guide = document.createElement('div');
+        const guide = _util.ce('div');
         guide.id = 'role-guide-msg';
         guide.className = 'role-guide-msg';
         guide.style.textAlign = 'left';
@@ -140,35 +140,53 @@ function setupRoleSelectorAutoHide() {
 
 // 聊天窗右上角增加角色切换按钮
 function addRoleSwitchButton() {
-    const appContainer = _util.id('app-container');
-    if (!appContainer) return;
-    if (_util.id('role-switch-btn')) return;
-    // 假设chat-header存在，否则插入appContainer
-    let header = _util.id('chat-header') || appContainer;
-    const btn = document.createElement('button');
-    btn.id = 'role-switch-btn';
-    btn.className = 'role-switch-btn';
-    btn.title = '切换角色/技能';
-    btn.innerHTML = '切换角色';
-    btn.style.position = 'absolute';
-    btn.style.top = '12px';
-    btn.style.right = '16px';
-    btn.style.zIndex = '10';
-    btn.style.fontSize = '13px';
-    btn.style.padding = '3px 10px';
-    btn.style.borderRadius = '5px';
-    btn.style.border = '1px solid #bbb';
-    btn.style.background = '#fff';
-    btn.style.cursor = 'pointer';
+  const btnRow = _util.id('btnRow');
+  if (!btnRow) return;
+  if(_util.id('changeRole')) return;
+  // <button id="changeRole" class="icon-btn change-role-btn" title="切换角色">切换角色</button>
+  const btn = _util.ce('button');
+  btn.id = 'changeRole';
+  btn.className = 'icon-btn change-role-btn';
+  btn.title = '切换角色';
+  btn.textContent = '切换角色';
+  btn.onclick = function() {
+      const selector = _util.id('role-selector');
+      if (selector) {
+          selector.style.display = (selector.style.display === 'none' || selector.style.display === '') ? 'flex' : 'none';
+      } else {
+          renderRoleSelector();
+      }
+      if (currentRole) {
+          showRoleIntro(currentRole);
+      }
+  };
+  _util.ac(btnRow, btn);
+}
+
+// 清除历史记录后重置角色选择状态
+function addClearHistoryButton() {
+    // <button id="clearHistoryBtn" class="icon-btn clear-history-btn" title="清除历史">清除历史</button>
+    const btnRow = _util.id('btnRow');
+    if (!btnRow) return;
+    if(_util.id('clearHistoryBtn')) return;
+    const btn = _util.ce('button');
+    btn.id = 'clearHistoryBtn';
+    btn.className = 'icon-btn clear-history-btn';
+    btn.title = '清除历史';
+    btn.textContent = '清除历史';
     btn.onclick = function() {
-        const selector = _util.id('role-selector');
-        if (selector) {
-            selector.style.display = (selector.style.display === 'none' || selector.style.display === '') ? 'flex' : 'none';
-        } else {
-            renderRoleSelector();
-        }
-    };
-    header.appendChild(btn);
+      localStorage.removeItem('chatHistory');
+      localStorage.removeItem('chatai_conversation');
+      localStorage.removeItem('chatai_selected_role');
+      localStorage.removeItem('lastRole');
+      currentRole = null;
+      const selector = _util.id('role-selector');
+      if (selector) selector.remove();
+      const chatName = _util.id('chat-name');
+      if (chatName) chatName.textContent = '新对话';
+      location.reload();
+    }
+    _util.ac(btnRow, btn);
 }
 
 // 聊天UI初始化，若为新对话则显示角色选择区
@@ -204,10 +222,11 @@ function initChatUI() {
     }
     setupRoleSelectorAutoHide();
     addRoleSwitchButton();
+    addClearHistoryButton();
     // 点击消息区域外时，收起所有已展开的消息按钮
-    document.addEventListener('click', function (event) {
+    _util.on(document, 'click', function (event) {
         if (!event.target.closest('.message')) {
-            document.querySelectorAll('.message.show-actions').forEach(function (el) {
+            _util.qa('.message.show-actions').forEach(function (el) {
                 el.classList.remove('show-actions');
             });
         }
@@ -275,6 +294,6 @@ function selectChat(el) {
     }
     
     // 桌面端：仅高亮样式
-    document.querySelectorAll('.contact-item').forEach(i => i.classList.remove('active'));
+    _util.qa('.contact-item').forEach(i => i.classList.remove('active'));
     el.classList.add('active');
 }
