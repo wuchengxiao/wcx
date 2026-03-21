@@ -273,6 +273,14 @@ body {
     flex-shrink: 0;
 }
 
+#canvas.pan-mode {
+    cursor: grab;
+}
+
+#canvas.pan-mode:active {
+    cursor: grabbing;
+}
+
 /* 选中元素的样式 */
 .selected {
     outline: 2px solid var(--primary-color);

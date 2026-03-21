@@ -34,6 +34,9 @@ class UMLDrawer {
         this.baseHeight = 800;
         this.canvasSizeSet = false;
         this.lastTap = 0;
+        this.isDraggingCanvas = false;
+        this.canvasDragStartX = 0;
+        this.canvasDragStartY = 0;
         
         this.init();
     }
@@ -43,6 +46,7 @@ class UMLDrawer {
         this.setupEventListeners();
         this.setupToolListeners();
         this.setupDiagramListeners();
+        this.currentTool = 'select';
         this.render();
     }
     
@@ -59,10 +63,10 @@ class UMLDrawer {
             this.canvasSizeSet = true;
         }
         
-        // 计算缩放比例，使画布适应容器
+        // 计算缩放比例，使画布适应容器，无最大限制
         const scaleX = containerWidth / this.baseWidth;
         const scaleY = containerHeight / this.baseHeight;
-        this.canvasScale = Math.min(scaleX, scaleY, 1); // 最大缩放为1（原始大小）
+        this.canvasScale = Math.min(scaleX, scaleY);
         
         this.canvas.width = this.baseWidth;
         this.canvas.height = this.baseHeight;
@@ -192,8 +196,8 @@ class UMLDrawer {
     
     getCanvasCoordinates(clientX, clientY) {
         const rect = this.canvas.getBoundingClientRect();
-        const x = (clientX - rect.left) / this.canvasScale;
-        const y = (clientY - rect.top) / this.canvasScale;
+        const x = (clientX - rect.left) / this.canvasScale - this.canvasOffsetX;
+        const y = (clientY - rect.top) / this.canvasScale - this.canvasOffsetY;
         return { x, y };
     }
     
@@ -208,6 +212,14 @@ class UMLDrawer {
                 tool.classList.add('active');
                 // 设置当前工具
                 this.currentTool = tool.dataset.tool;
+                
+                // 更新画布光标样式
+                const canvas = document.getElementById('canvas');
+                if (this.currentTool === 'pan') {
+                    canvas.classList.add('pan-mode');
+                } else {
+                    canvas.classList.remove('pan-mode');
+                }
                 
                 // 移动端：关闭工具栏弹窗
                 if (window.innerWidth <= 768) {
@@ -237,9 +249,6 @@ class UMLDrawer {
             'clear-diagram': this.clearDiagram.bind(this),
             'help': this.showHelp.bind(this),
             'close-help': this.hideHelp.bind(this),
-            'canvas-size': this.showCanvasSizeDialog.bind(this),
-            'close-canvas-size': this.hideCanvasSizeDialog.bind(this),
-            'apply-canvas-size': this.applyCanvasSize.bind(this),
             'close-property': this.hidePropertyDialog.bind(this),
             'apply-property': this.applyPropertyChanges.bind(this),
             'btn-delete': this.deleteSelectedElements.bind(this),
@@ -291,28 +300,6 @@ class UMLDrawer {
             bottomToolbar.style.display = hasSelection ? 'flex' : 'none';
         } else {
             bottomToolbar.style.display = 'none';
-        }
-    }
-    
-    showCanvasSizeDialog() {
-        document.getElementById('canvas-width').value = this.baseWidth;
-        document.getElementById('canvas-height').value = this.baseHeight;
-        document.getElementById('canvas-size-dialog').classList.add('show');
-    }
-    
-    hideCanvasSizeDialog() {
-        document.getElementById('canvas-size-dialog').classList.remove('show');
-    }
-    
-    applyCanvasSize() {
-        const width = parseInt(document.getElementById('canvas-width').value);
-        const height = parseInt(document.getElementById('canvas-height').value);
-        
-        if (width >= 400 && width <= 5000 && height >= 300 && height <= 5000) {
-            this.setCanvasSize(width, height);
-            this.hideCanvasSizeDialog();
-        } else {
-            alert('画布宽度必须在400-5000之间，高度必须在300-5000之间');
         }
     }
     
@@ -399,6 +386,24 @@ class UMLDrawer {
             document.getElementById('btn-tools').classList.remove('active');
         }
         
+        // 如果是拖拽工具，直接开始拖拽
+        if (this.currentTool === 'pan') {
+            this.isDraggingCanvas = true;
+            this.canvasDragStartX = e.clientX;
+            this.canvasDragStartY = e.clientY;
+            e.preventDefault();
+            return;
+        }
+        
+        // 中键或空格键+左键拖动画布
+        if (e.button === 1 || (e.button === 0 && e.altKey)) {
+            this.isDraggingCanvas = true;
+            this.canvasDragStartX = e.clientX;
+            this.canvasDragStartY = e.clientY;
+            e.preventDefault();
+            return;
+        }
+        
         const coords = this.getCanvasCoordinates(e.clientX, e.clientY);
         const x = coords.x;
         const y = coords.y;
@@ -435,6 +440,17 @@ class UMLDrawer {
     }
     
     handleMouseMove(e) {
+        if (this.isDraggingCanvas) {
+            const dx = (e.clientX - this.canvasDragStartX) / this.canvasScale;
+            const dy = (e.clientY - this.canvasDragStartY) / this.canvasScale;
+            this.canvasOffsetX += dx;
+            this.canvasOffsetY += dy;
+            this.canvasDragStartX = e.clientX;
+            this.canvasDragStartY = e.clientY;
+            this.render();
+            return;
+        }
+        
         const coords = this.getCanvasCoordinates(e.clientX, e.clientY);
         const x = coords.x;
         const y = coords.y;
@@ -459,6 +475,11 @@ class UMLDrawer {
     }
     
     handleMouseUp(e) {
+        if (this.isDraggingCanvas) {
+            this.isDraggingCanvas = false;
+            return;
+        }
+        
         const coords = this.getCanvasCoordinates(e.clientX, e.clientY);
         const x = coords.x;
         const y = coords.y;
@@ -1122,7 +1143,10 @@ class UMLDrawer {
     }
     
     render() {
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.save();
+        this.ctx.translate(this.canvasOffsetX, this.canvasOffsetY);
+        
+        this.ctx.clearRect(-this.canvasOffsetX, -this.canvasOffsetY, this.canvas.width, this.canvas.height);
         
         this.drawGrid();
         
@@ -1162,6 +1186,8 @@ class UMLDrawer {
         diagram.selectedElements.forEach(element => {
             this.drawSelection(this.ctx, element);
         });
+        
+        this.ctx.restore();
         
         this.updateBottomToolbar();
     }
