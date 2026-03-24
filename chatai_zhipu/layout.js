@@ -7,7 +7,7 @@ window.registerRole = function(roleObj) {
         window.roles.push(roleObj);
     }
 };
-let currentRole = null;
+window.currentRole = null;
 
 /**
  * 渲染角色/技能选择按钮区
@@ -51,7 +51,7 @@ function waitForRolesAndRenderSelector() {
  * 选择角色/技能
  */
 function selectRole(idx) {
-    currentRole = window.roles[idx];
+    let currentRole = window.currentRole = window.roles[idx];
     // 记录角色到localStorage
     localStorage.setItem('chatai_selected_role', String(idx));
     // conversation前插入系统提示词

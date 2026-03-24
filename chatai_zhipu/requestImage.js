@@ -9,6 +9,7 @@ window.globalImageApiConfig = {
 // 通用文生图API请求
 async function requestImageByPrompt({ prompt, token, url }) {
     const cfg = window.globalImageApiConfig;
+    const imgUrl = url.replace('/v4/chat/completions', '/v4/images/generations');
     if (!prompt) throw new Error('prompt不能为空');
     const options = {
         method: 'POST',
@@ -23,7 +24,7 @@ async function requestImageByPrompt({ prompt, token, url }) {
         })
     };
     try {
-        const res = await fetch(url || cfg.apiUrl, options);
+        const res = await fetch(imgUrl || cfg.apiUrl, options);
         const data = await res.json();
         if (data && data.data && data.data[0] && data.data[0].url) {
             return data.data[0].url;

@@ -169,7 +169,7 @@ function logout() {
     conversation = [];
     processinput = null;
     hasInitChat = false;
-    currentRole = null;
+    window.currentRole = null;
     
     // 清空输入框
     const tokenInput = _util.id('token');
