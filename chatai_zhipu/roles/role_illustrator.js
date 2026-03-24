@@ -12,5 +12,6 @@ window.registerRole && window.registerRole({
     systemPrompt: {
         role: 'system',
         content: '当用户询问图片相关问题时，请以<img src="图片地址">的形式返回图片链接，不要使用其他格式。'
-    }
+    },
+    enableImageApi: true
 });

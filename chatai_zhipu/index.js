@@ -127,6 +127,7 @@ async function callAPIStream(messages, model, url, token, onDelta) {
             model: model,
             messages: messages,
             temperature: 1.0,
+            web_search: true,
             stream: true
         })
     };
@@ -463,10 +464,16 @@ function updateMessageBubble(bubble, content) {
     }
     // 重新插入 reasoningDiv，保证其为 DOM 节点，不被 markdown 影响
     if (reasoningDiv) {
-        if (reasoningNext && reasoningParent === bubble) {
+        if (
+            reasoningNext &&
+            reasoningParent === bubble &&
+            reasoningNext.parentNode === bubble
+        ) {
             bubble.insertBefore(reasoningDiv, reasoningNext);
-        } else {
+        } else if (bubble.firstChild) {
             bubble.insertBefore(reasoningDiv, bubble.firstChild);
+        } else {
+            bubble.appendChild(reasoningDiv);
         }
     }
     const container = _util.id('msg-container');
@@ -567,7 +574,40 @@ async function sendMessage() {
     }
     input.value = '';
     appendMessage('user', text);
-    
+
+    // 检查当前角色是否启用 imageApi
+    if (window.currentRole && window.currentRole.enableImageApi) {
+        setSendingState(true);
+        const assistantBubble = appendMessage('assistant', '正在生成图片...');
+        try {
+            if (!window.requestImageByPrompt) {
+                alert('图片生成功能未加载，请刷新页面或联系管理员。');
+                updateMessageBubble(assistantBubble, '图片生成功能暂不可用，请稍后重试或联系管理员。');
+                setSendingState(false);
+                return;
+            }
+            const imgUrl = await window.requestImageByPrompt({
+              prompt: text,
+              token: processinput.processedApiKey,
+              url: processinput.processedUrl
+            });
+            if (imgUrl) {
+                const imgTag = `<img src=\"${imgUrl}\" alt=\"AI生成图片\" style=\"max-width:90%;border-radius:8px;box-shadow:0 2px 8px #ccc;\">`;
+                updateMessageBubble(assistantBubble, imgTag);
+                conversation.push({ role: 'assistant', content: imgTag });
+                saveConversationToStorage();
+            } else {
+                updateMessageBubble(assistantBubble, '图片生成失败，请稍后再试。');
+            }
+        } catch (e) {
+            updateMessageBubble(assistantBubble, '图片生成出现异常，请稍后再试。');
+            console.error('AI生图异常:', e);
+        }
+        setSendingState(false);
+        return;
+    }
+
+    // 其他角色原逻辑
     const enableWebSearch = _util.id('enableWebSearch');
     const searchEngine = _util.id('searchEngine');
     const useWebSearch = enableWebSearch && enableWebSearch.checked;
@@ -635,54 +675,20 @@ async function sendMessage() {
         assistantBubble.insertBefore(toggleReasoningBtn, reasoningDiv.nextSibling);
     }
     try {
-        let doneFlag = false;
-        let answerStarted = false;
-        const result = await callAPIStream(
-            [...conversation.slice(0, -1), userMessage],
-            model,
-            processinput.processedUrl,
-            processinput.processedApiKey,
-            function(delta) {
-                // 检查是否为思考内容
-                if (delta.startsWith('[THOUGHT] ')) {
-                    reasoningContent += delta.replace('[THOUGHT] ', '');
-                    if (reasoningDiv) {
-                        reasoningDiv.textContent = '思考内容：' + reasoningContent;
-                    }
-                    if (statusSpan) {
-                        statusSpan.textContent = '思考中...';
-                    }
-                    return;
-                }
-                // 检查是否为 [DONE] 信号
-                if (delta === '[DONE]') {
-                    doneFlag = true;
-                    if (statusSpan) statusSpan.textContent = '';
-                    return;
-                }
-                // 只要出现正式回答内容，立即收缩思考内容并显示回答（只执行一次）
-                if (!answerStarted && delta.trim().length > 0 && reasoningDiv && toggleReasoningBtn) {
-                    answerStarted = true;
-                    reasoningCollapsed = true;
-                    reasoningDiv.classList.add('collapsed');
-                    toggleReasoningBtn.style.display = '';
-                    toggleReasoningBtn.textContent = '展开思考内容';
-                }
-                assistantText += delta;
-                updateMessageBubble(assistantBubble, assistantText);
-                if (statusSpan) statusSpan.textContent = '回复中...';
-            }
-        );
-
-        if (!assistantText && result) {
-            assistantText = extractAssistantReply(result) || '';
-            updateMessageBubble(assistantBubble, assistantText || '正在思考中...');
-        } else if (!assistantText) {
-            updateMessageBubble(assistantBubble, '正在思考中...');
+        // 新：直接用window.requestTextByMessages（非流式，完整回复）
+        if (!window.requestTextByMessages) {
+            updateMessageBubble(assistantBubble, '文本生成功能未加载，请刷新页面或联系管理员。');
+            setSendingState(false);
+            return;
         }
-
+        const result = await window.requestTextByMessages({
+            messages: [...conversation.slice(0, -1), userMessage],
+            token: processinput.processedApiKey,
+            url: processinput.processedUrl
+        });
+        let assistantText = extractAssistantReply(result) || '';
+        updateMessageBubble(assistantBubble, assistantText || '正在思考中...');
         if (statusSpan) statusSpan.textContent = '';
-
         const messageEl = assistantBubble.parentElement;
         if (messageEl) {
             const messageId = messageEl.dataset.messageId;
@@ -690,7 +696,6 @@ async function sendMessage() {
                 messageContentStore.set(messageId, assistantText || '');
             }
         }
-
         conversation.push({ role: 'assistant', content: assistantText || '' });
         saveConversationToStorage();
     } catch (e) {
