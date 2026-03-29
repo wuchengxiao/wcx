@@ -442,9 +442,11 @@ function updateMessageBubble(bubble, content) {
     let reasoningDiv = bubble.querySelector('.reasoning-content');
     let reasoningParent = null;
     let reasoningNext = null;
+    let isCollapsed = false;
     if (reasoningDiv) {
         reasoningParent = reasoningDiv.parentNode;
         reasoningNext = reasoningDiv.nextSibling;
+        isCollapsed = reasoningDiv.classList.contains('collapsed');
         _util.rc(bubble, reasoningDiv);
     }
     const messageEl = bubble.parentElement;
@@ -464,6 +466,9 @@ function updateMessageBubble(bubble, content) {
     }
     // 重新插入 reasoningDiv，保证其为 DOM 节点，不被 markdown 影响
     if (reasoningDiv) {
+        if (isCollapsed) {
+            reasoningDiv.classList.add('collapsed');
+        }
         if (
             reasoningNext &&
             reasoningParent === bubble &&
@@ -639,41 +644,8 @@ async function sendMessage() {
 
     setSendingState(true);
     const assistantBubble = appendMessage('assistant', '', searchSources.length > 0 ? searchSources : null);
+    ReasoningManager.init(assistantBubble);
     let assistantText = '';
-    let reasoningContent = '';
-    let reasoningDiv = null;
-    let reasoningCollapsed = false;
-    let toggleReasoningBtn = null;
-    // 状态显示元素
-    let statusSpan = null;
-    if (assistantBubble) {
-        statusSpan = _util.ce('span');
-        statusSpan.className = 'stream-status';
-        statusSpan.textContent = '思考中...';
-        assistantBubble.appendChild(statusSpan);
-        // 创建思考内容div并插入
-        reasoningDiv = _util.ce('div');
-        reasoningDiv.className = 'reasoning-content';
-        reasoningDiv.textContent = '';
-        assistantBubble.insertBefore(reasoningDiv, assistantBubble.firstChild);
-        // 展开/收起按钮，初始隐藏，等正式回答出现后显示
-        toggleReasoningBtn = _util.ce('button');
-        toggleReasoningBtn.className = 'toggle-reasoning-btn';
-        toggleReasoningBtn.style.display = 'none';
-        toggleReasoningBtn.textContent = '展开思考内容';
-        toggleReasoningBtn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            reasoningCollapsed = !reasoningCollapsed;
-            if (reasoningCollapsed) {
-                reasoningDiv.classList.add('collapsed');
-                toggleReasoningBtn.textContent = '展开思考内容';
-            } else {
-                reasoningDiv.classList.remove('collapsed');
-                toggleReasoningBtn.textContent = '收起思考内容';
-            }
-        });
-        assistantBubble.insertBefore(toggleReasoningBtn, reasoningDiv.nextSibling);
-    }
     try {
         if (!window.requestTextByMessages) {
             updateMessageBubble(assistantBubble, '文本生成功能未加载，请刷新页面或联系管理员。');
@@ -685,24 +657,19 @@ async function sendMessage() {
             token: processinput.processedApiKey,
             url: processinput.processedUrl
         });
-        let assistantText = '';
         for await (const chunk of stream) {
             if (!chunk) continue;
             const delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
             if (!delta) continue;
             if (delta.reasoning_content) {
-                reasoningContent += delta.reasoning_content;
-                if (reasoningDiv) {
-                    reasoningDiv.textContent = reasoningContent;
-                }
+                ReasoningManager.appendReasoning(assistantBubble, delta.reasoning_content);
             }
             if (delta.content) {
+                ReasoningManager.setFormalContentStarted(assistantBubble);
                 assistantText += delta.content;
                 updateMessageBubble(assistantBubble, assistantText);
-                if (statusSpan) statusSpan.textContent = '';
-                if (toggleReasoningBtn && toggleReasoningBtn.style.display === 'none') {
-                    toggleReasoningBtn.style.display = '';
-                }
+                ReasoningManager.clearStatus(assistantBubble);
+                ReasoningManager.clearReasoning(assistantBubble);
             }
         }
         finishStreaming(assistantBubble);
@@ -721,7 +688,7 @@ async function sendMessage() {
             errorMessage = '服务器请求超时，稍后再试';
         }
         updateMessageBubble(assistantBubble, errorMessage);
-        if (statusSpan) statusSpan.textContent = '';
+        ReasoningManager.clearStatus(assistantBubble);
         const messageEl = assistantBubble.parentElement;
         if (messageEl) {
             const messageId = messageEl.dataset.messageId;
