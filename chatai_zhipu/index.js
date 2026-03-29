@@ -675,20 +675,37 @@ async function sendMessage() {
         assistantBubble.insertBefore(toggleReasoningBtn, reasoningDiv.nextSibling);
     }
     try {
-        // 新：直接用window.requestTextByMessages（非流式，完整回复）
         if (!window.requestTextByMessages) {
             updateMessageBubble(assistantBubble, '文本生成功能未加载，请刷新页面或联系管理员。');
             setSendingState(false);
             return;
         }
-        const result = await window.requestTextByMessages({
+        const stream = window.requestTextByMessages({
             messages: [...conversation.slice(0, -1), userMessage],
             token: processinput.processedApiKey,
             url: processinput.processedUrl
         });
-        let assistantText = extractAssistantReply(result) || '';
-        updateMessageBubble(assistantBubble, assistantText || '正在思考中...');
-        if (statusSpan) statusSpan.textContent = '';
+        let assistantText = '';
+        for await (const chunk of stream) {
+            if (!chunk) continue;
+            const delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
+            if (!delta) continue;
+            if (delta.reasoning_content) {
+                reasoningContent += delta.reasoning_content;
+                if (reasoningDiv) {
+                    reasoningDiv.textContent = reasoningContent;
+                }
+            }
+            if (delta.content) {
+                assistantText += delta.content;
+                updateMessageBubble(assistantBubble, assistantText);
+                if (statusSpan) statusSpan.textContent = '';
+                if (toggleReasoningBtn && toggleReasoningBtn.style.display === 'none') {
+                    toggleReasoningBtn.style.display = '';
+                }
+            }
+        }
+        finishStreaming(assistantBubble);
         const messageEl = assistantBubble.parentElement;
         if (messageEl) {
             const messageId = messageEl.dataset.messageId;

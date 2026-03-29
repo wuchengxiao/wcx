@@ -7,8 +7,8 @@ window.globalTextApiConfig = {
     stream: true
 };
 
-// 通用文本API请求（非流式，返回完整结果）
-async function requestTextByMessages({ messages, token, url }) {
+// 通用文本API请求（流式，返回异步生成器）
+async function* requestTextByMessages({ messages, token, url }) {
     const cfg = window.globalTextApiConfig;
     const apiUrl = url || cfg.apiUrl;
     if (!apiUrl) throw new Error('API地址未配置');
@@ -24,16 +24,40 @@ async function requestTextByMessages({ messages, token, url }) {
             messages,
             temperature: cfg.temperature,
             web_search: cfg.web_search,
-            stream: cfg.stream
+            stream: true
         })
     };
     try {
         const res = await fetch(apiUrl, options);
-        const data = await res.json();
-        return data;
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || trimmed === 'data: [DONE]') continue;
+                if (trimmed.startsWith('data: ')) {
+                    try {
+                        const jsonStr = trimmed.slice(6);
+                        const data = JSON.parse(jsonStr);
+                        yield data;
+                    } catch (e) {
+                        console.error('解析流式数据失败:', e);
+                    }
+                }
+            }
+        }
     } catch (err) {
         console.error('文本API请求失败:', err);
-        return null;
+        yield null;
     }
 }
 window.requestTextByMessages = requestTextByMessages;
