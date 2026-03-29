@@ -24,7 +24,7 @@ async function requestTextByMessages({ messages, token, url }) {
             messages,
             temperature: cfg.temperature,
             web_search: cfg.web_search,
-            stream: false
+            stream: cfg.stream
         })
     };
     try {
