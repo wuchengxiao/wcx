@@ -6,6 +6,10 @@ window.registerRole = function(roleObj) {
     if (roleObj && roleObj.name) {
         window.roles.push(roleObj);
     }
+    const selector = _util.id('role-selector');
+    if (selector) {
+        renderRoleSelector();
+    }
 };
 window.currentRole = null;
 
