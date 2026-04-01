@@ -1,6 +1,6 @@
 // 全局文本API配置，只需在此处维护
 window.globalTextApiConfig = {
-    model: 'glm-4.7',
+    model: 'GLM-4.7-Flash',
     apiUrl: '', // 留空表示用登录后的url
     temperature: 1.0,
     web_search: true,
