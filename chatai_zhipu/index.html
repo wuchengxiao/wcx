@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chat - 智能对话助手</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/github-dark.min.css">
+    <script src="highlight_11.9.0/highlight.min.js"></script>
+    <script src="marked_9.1.6/marked.min.js"></script>
+    <script src="util.js"></script>
+    <script src="request/constants.js"></script>
+    <link href="login/login.css" rel="stylesheet">
+    <link href="index.css" rel="stylesheet">
+</head>
+<body>
+    <div class="app" id="app">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <div class="logo-icon">🤖</div>
+                    <span>AI Chat</span>
+                </div>
+                <button class="new-chat-btn" onclick="chatApp.createNewSession()">
+                    <span>+</span>
+                    <span>新建对话</span>
+                </button>
+            </div>
+            
+            <div class="sidebar-content" id="sessionList">
+                <!-- Sessions will be rendered here -->
+            </div>
+            
+            <!-- 暂时不用 -->
+            <div class="sidebar-footer" style="display: none;">
+                <div class="model-selector">
+                    <button class="model-btn" onclick="chatApp.toggleModelDropdown()">
+                        <div class="model-btn-content">
+                            <span class="model-icon" id="currentModelIcon">🧠</span>
+                            <span id="currentModelName">GPT-4</span>
+                        </div>
+                        <span>▼</span>
+                    </button>
+                    <div class="model-dropdown" id="modelDropdown">
+                        <div class="model-option" onclick="chatApp.selectModel('gpt4')">
+                            <span class="model-icon" style="background: #10a37f;">🧠</span>
+                            <span>GPT-4</span>
+                        </div>
+                        <div class="model-option" onclick="chatApp.selectModel('claude')">
+                            <span class="model-icon" style="background: #cc785c;">🎭</span>
+                            <span>Claude 3</span>
+                        </div>
+                        <div class="model-option" onclick="chatApp.selectModel('gemini')">
+                            <span class="model-icon" style="background: #4285f4;">💎</span>
+                            <span>Gemini Pro</span>
+                        </div>
+                        <div class="model-option" onclick="chatApp.selectModel('llama')">
+                            <span class="model-icon" style="background: #4f46e5;">🦙</span>
+                            <span>Llama 3</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main">
+            <header class="header" onclick="chatApp.hideMobileBrowserUi(event)">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <button class="sidebar-toggle" onclick="chatApp.toggleSidebar()">☰</button>
+                    <span class="header-title" id="headerTitle">新对话</span>
+                </div>
+                <div class="header-actions">
+                    <!-- 使用下拉菜单 -->
+                    <details class="header-dropdown">
+                        <summary class="header-btn header-menu-btn" title="更多操作">菜单 ▾</summary>
+                        <div class="header-dropdown-menu">
+                            <button class="header-dropdown-item" onclick="logout(); this.closest('details').removeAttribute('open');" title="退出登录">退出登录</button>
+                            <button class="header-dropdown-item" onclick="chatApp.clearCurrentSession(); this.closest('details').removeAttribute('open');" title="清空对话">清空对话</button>
+                            <button class="header-dropdown-item" onclick="chatApp.exportSession(); this.closest('details').removeAttribute('open');" title="导出对话">导出对话</button>
+                        </div>
+                    </details>
+                </div>
+            </header>
+
+            <div class="chat-container" id="chatContainer">
+                <!-- Welcome screen or messages will be rendered here -->
+            </div>
+
+            <div class="input-area">
+                <div class="input-container">
+                    <div class="input-box">
+                        <textarea 
+                            class="input-textarea" 
+                            id="messageInput"
+                            placeholder="输入消息... (Shift + Enter 换行)"
+                            rows="1"
+                            onkeydown="chatApp.handleKeyDown(event)"
+                            oninput="chatApp.autoResize(this)"
+                        ></textarea>
+                        <div class="input-actions">
+                            <button class="input-btn" title="上传文件">📎</button>
+                            <button class="send-btn" id="sendBtn" onclick="chatApp.sendMessage()" title="发送">
+                                ➤
+                            </button>
+                        </div>
+                    </div>
+                    <div class="input-hint">按 Enter 发送，Shift + Enter 换行</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Fullscreen Modal -->
+    <div class="fullscreen-modal" id="fullscreenModal">
+        <div class="fullscreen-header">
+            <span class="fullscreen-title">消息详情</span>
+            <button class="fullscreen-close" onclick="chatApp.closeFullscreen()">×</button>
+        </div>
+        <div class="fullscreen-content">
+            <div class="fullscreen-message" id="fullscreenContent"></div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script src="login/login.js"></script>
+    <script src="layout.js"></script>
+    <script src="roles/role.js"></script>
+    <script src="index.js"></script>
+    <script src="request/requestText.js"></script>
+    <script src="request/requestImage.js"></script>
+</body>
+</html>
