@@ -78,7 +78,10 @@ function getTokenFromStorage() {
  * @param {string} msg - 错误消息
  */
 function showError(msg) {
-    _util.text('loginMsg', msg);
+    const loginMsg = _util.id('loginMsg');
+    if (loginMsg) {
+        loginMsg.innerText = msg;
+    }
 }
 
 /**
@@ -86,7 +89,11 @@ function showError(msg) {
  * @returns {Array} token数组
  */
 function getInputs() {
-    var inputVar = _util.id('token').value;
+    const tokenInput = _util.id('token');
+    if (!tokenInput) {
+        return [];
+    }
+    var inputVar = tokenInput.value;
     return inputVar.split('-');
 }
 
@@ -127,16 +134,27 @@ function processinputVars(inputVars, sourceUrl, sourceApiKey) {
  */
 async function runTest(inputVars) {
     inputVars = inputVars ||getInputs();
+    if (!Array.isArray(inputVars) || inputVars.length === 0) {
+        showError('token error');
+        return;
+    }
     processinput = processinputVars(inputVars, url, apikey);
     if (!processinput.isSuccess) {
         showError("token error");
         return;
     }
     // 保存token到localStorage，保留2小时
-    const tokenValue = _util.id('token').value;
+    const tokenInput = _util.id('token');
+    const tokenValue = tokenInput ? tokenInput.value : inputVars.join('-');
     saveTokenToStorage(tokenValue);
-    _util.hide('login');
-    _util.show('app');
+    const loginDom = _util.id('login');
+    if (loginDom) {
+        loginDom.style.display = 'none';
+    }
+    const appDom = _util.id('app');
+    if (appDom) {
+        appDom.style.display = 'block';
+    }
     // 通知index.js初始化聊天UI
     if (window.onLoginSuccess) window.onLoginSuccess();
 }

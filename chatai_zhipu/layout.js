@@ -20,9 +20,9 @@ function renderRoleSelector(role) {
     // 无角色时不显示选择区
     if (!window.roles || window.roles.length === 0) return; 
     // 创建按钮区
-    const selector = _util.id('roleSelector');
+    let selector = _util.id('roleSelector');
     if(!selector){
-        const selector = _util.ce('div');
+        selector = _util.ce('div');
         selector.id = 'roleSelector';
         selector.className = 'role-selector-area';
         // 插入到msg-container底部

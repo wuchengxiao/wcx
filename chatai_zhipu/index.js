@@ -31,19 +31,50 @@ class ChatApp {
             }
         };
         this.currentModel = 'gpt4';
+        // 临时思考内容（不落盘）
+        this.sessionThinkingById = {};
+        this.sessionThinkingMessageIdById = {};
 
         this.init();
+    }
+
+    loadCurrentSessionId() {
+        try {
+            return localStorage.getItem('chat_current_session_id');
+        } catch {
+            return null;
+        }
+    }
+
+    saveCurrentSessionId() {
+        try {
+            if (this.currentSessionId) {
+                localStorage.setItem('chat_current_session_id', this.currentSessionId);
+            } else {
+                localStorage.removeItem('chat_current_session_id');
+            }
+        } catch {
+            // ignore storage errors
+        }
     }
 
     init() {
         // Load last session or create new one
         const sessionIds = Object.keys(this.sessions);
-        if (sessionIds.length > 0) {
-            this.currentSessionId = sessionIds[0];
+        const savedCurrentId = this.loadCurrentSessionId();
+        if (savedCurrentId && this.sessions[savedCurrentId]) {
+            this.currentSessionId = savedCurrentId;
+            this.syncCurrentSessionState();
+        } else if (sessionIds.length > 0) {
+            const latestSession = Object.values(this.sessions)
+                .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0];
+            this.currentSessionId = latestSession ? latestSession.id : sessionIds[0];
             this.syncCurrentSessionState();
         } else {
             this.createNewSession();
         }
+
+        this.saveCurrentSessionId();
 
         this.renderSessionList();
         this.renderChat();
@@ -51,6 +82,15 @@ class ChatApp {
 
         // Focus input
         document.getElementById('messageInput').focus();
+    }
+
+    // Get session title dynamically from first user message
+    getSessionTitle(session) {
+        if (!session) return '新对话';
+        const firstUserMsg = session.messages?.find(m => m && m.role === 'user' && m.content);
+        if (!firstUserMsg) return '新对话';
+        const content = String(firstUserMsg.content).trim();
+        return content.slice(0, 20) + (content.length > 20 ? '...' : '');
     }
 
     // Session Management
@@ -63,10 +103,14 @@ class ChatApp {
                     return;
                 if (!Array.isArray(session.messages))
                     session.messages = [];
-                if (!session.model || !this.models[session.model])
-                    session.model = this.currentModel;
                 if (typeof session.roleIndex !== 'number')
                     session.roleIndex = null;
+                if (!session.id)
+                    session.id = 'session_' + Date.now();
+                if (!session.model || !this.models[session.model])
+                    session.model = this.currentModel;
+                session.createdAt = session.createdAt || new Date().toISOString();
+                session.updatedAt = session.updatedAt || new Date().toISOString();
             });
             return sessions;
         } catch {
@@ -75,14 +119,36 @@ class ChatApp {
     }
 
     saveSessions() {
-        localStorage.setItem('chat_sessions', JSON.stringify(this.sessions));
+        try {
+            const sessionsToSave = Object.fromEntries(
+                Object.entries(this.sessions).map(([id, session]) => {
+                    const safeMessages = Array.isArray(session.messages)
+                        ? session.messages.map(msg => {
+                            const safeMsg = { ...msg };
+                            delete safeMsg.reasoning;
+                            return safeMsg;
+                        })
+                        : [];
+                    return [id, {
+                        id,
+                        roleIndex: typeof session.roleIndex === 'number' ? session.roleIndex : null,
+                        model: session.model || this.currentModel,
+                        createdAt: session.createdAt,
+                        updatedAt: session.updatedAt,
+                        messages: safeMessages
+                    }];
+                })
+            );
+            localStorage.setItem('chat_sessions', JSON.stringify(sessionsToSave));
+        } catch (e) {
+            // ignore storage errors
+        }
     }
 
     createNewSession() {
         const id = 'session_' + Date.now();
         const session = {
             id,
-            title: '新对话',
             messages: [],
             model: this.currentModel,
             roleIndex: null,
@@ -91,8 +157,11 @@ class ChatApp {
         };
 
         this.sessions[id] = session;
+        this.sessionThinkingById[id] = '';
+        this.sessionThinkingMessageIdById[id] = null;
         this.currentSessionId = id;
         this.syncCurrentSessionState();
+        this.saveCurrentSessionId();
         this.saveSessions();
         this.renderSessionList();
         this.renderChat();
@@ -106,6 +175,7 @@ class ChatApp {
     switchSession(id) {
         this.currentSessionId = id;
         this.syncCurrentSessionState();
+        this.saveCurrentSessionId();
         this.renderSessionList();
         this.renderChat();
 
@@ -120,15 +190,20 @@ class ChatApp {
 
         if (confirm('确定要删除这个对话吗？')) {
             delete this.sessions[id];
+            delete this.sessionThinkingById[id];
+            delete this.sessionThinkingMessageIdById[id];
 
             const remainingIds = Object.keys(this.sessions);
             if (remainingIds.length > 0) {
-                this.currentSessionId = remainingIds[0];
+                const latestSession = Object.values(this.sessions)
+                    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0];
+                this.currentSessionId = latestSession ? latestSession.id : remainingIds[0];
                 this.syncCurrentSessionState();
             } else {
                 this.createNewSession();
             }
 
+            this.saveCurrentSessionId();
             this.saveSessions();
             this.renderSessionList();
             this.renderChat();
@@ -141,6 +216,8 @@ class ChatApp {
 
         if (confirm('确定要清空当前对话吗？')) {
             this.sessions[this.currentSessionId].messages = [];
+            this.sessionThinkingById[this.currentSessionId] = '';
+            this.sessionThinkingMessageIdById[this.currentSessionId] = null;
             this.sessions[this.currentSessionId].updatedAt = new Date().toISOString();
             this.saveSessions();
             this.renderChat();
@@ -153,7 +230,7 @@ class ChatApp {
 
         const session = this.sessions[this.currentSessionId];
         const exportData = {
-            title: session.title,
+            title: this.getSessionTitle(session),
             model: this.models[session.model].name,
             createdAt: session.createdAt,
             messages: session.messages.map(m => ({
@@ -169,7 +246,7 @@ class ChatApp {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `chat_${session.title}_${new Date().toISOString().slice(0, 10)}.json`;
+            a.download = `chat_${this.getSessionTitle(session)}_${new Date().toISOString().slice(0, 10)}.json`;
         a.click();
         URL.revokeObjectURL(url);
 
@@ -261,24 +338,15 @@ class ChatApp {
                 minute: '2-digit'
             })
         };
-
         session.messages.push(userMessage);
         session.updatedAt = new Date().toISOString();
-
-        // Update title if first message
-        if (session.messages.length === 1) {
-            session.title = content.slice(0, 20) + (content.length > 20 ? '...' : '');
-        }
-
         this.saveSessions();
         this.renderSessionList();
         this.renderChat();
 
-        // Clear input
         input.value = '';
-        input.style.height = 'auto';
+        this.autoResize(input);
 
-        // 角色启用生图时，走文生图接口
         if (selectedRole && selectedRole.enableImageApi) {
             const assistantMessage = {
                 id: 'msg_' + (Date.now() + 1),
@@ -336,19 +404,19 @@ class ChatApp {
                 ...session.messages.map(m => ({ role: m.role, content: m.content }))
             ];
             let replyContent = '';
-            let replyReasoning = '';
             // 先插入一条空的assistant消息用于流式填充
             const assistantMessage = {
                 id: 'msg_' + (Date.now() + 1),
                 role: 'assistant',
                 content: '',
-                reasoning: '',
                 time: new Date().toLocaleTimeString('zh-CN', {
                     hour: '2-digit',
                     minute: '2-digit'
                 })
             };
             session.messages.push(assistantMessage);
+            this.sessionThinkingById[this.currentSessionId] = '';
+            this.sessionThinkingMessageIdById[this.currentSessionId] = assistantMessage.id;
             this.saveSessions();
             this.renderChat();
             let token = processinput.processedApiKey;
@@ -365,18 +433,18 @@ class ChatApp {
                     if (delta) {
                         const reasoningChunk = delta.reasoning_content || delta.reasoning || delta.thinking || '';
                         if (reasoningChunk) {
-                            replyReasoning += reasoningChunk;
-                            assistantMessage.reasoning = replyReasoning;
+                            const sid = this.currentSessionId;
+                            this.sessionThinkingById[sid] = (this.sessionThinkingById[sid] || '') + reasoningChunk;
+                            // 还未进入正式回答前，实时显示思考过程
+                            this.updateMessageBubble(assistantMessage.id, replyContent, this.sessionThinkingById[sid] || '');
                         }
                     }
                     if (chunk.choices && chunk.choices[0] && chunk.choices[0].delta && chunk.choices[0].delta.content) {
                         replyContent += chunk.choices[0].delta.content;
                         assistantMessage.content = replyContent;
                         // 一旦进入正式回答，隐藏并清空思考过程
-                        if (assistantMessage.reasoning) {
-                            assistantMessage.reasoning = '';
-                            replyReasoning = '';
-                        }
+                        this.sessionThinkingById[this.currentSessionId] = '';
+                        this.sessionThinkingMessageIdById[this.currentSessionId] = null;
                         this.saveSessions();
                         this.updateMessageBubble(assistantMessage.id, replyContent, '');
                     }
@@ -386,6 +454,8 @@ class ChatApp {
             }
             if (hasError) {
                 assistantMessage.content = '【接口请求失败或未配置】';
+                this.sessionThinkingById[this.currentSessionId] = '';
+                this.sessionThinkingMessageIdById[this.currentSessionId] = null;
                 this.saveSessions();
                 this.renderChat();
             }
@@ -395,6 +465,8 @@ class ChatApp {
         } catch (e) {
             // 错误处理
             const session = this.sessions[this.currentSessionId];
+            this.sessionThinkingById[this.currentSessionId] = '';
+            this.sessionThinkingMessageIdById[this.currentSessionId] = null;
             const assistantMessage = {
                 id: 'msg_' + (Date.now() + 2),
                 role: 'assistant',
@@ -529,12 +601,11 @@ class ChatApp {
             } else {
                 groups['更早'].push(session);
             }
-        }
-        );
+        });
 
         let html = '';
 
-        Object.entries(groups).forEach( ([groupName,groupSessions]) => {
+        Object.entries(groups).forEach(([groupName, groupSessions]) => {
             if (groupSessions.length === 0)
                 return;
 
@@ -545,28 +616,26 @@ class ChatApp {
 
             groupSessions.forEach(session => {
                 const isActive = session.id === this.currentSessionId;
-                const model = this.models[session.model];
+                const model = this.models[session.model] ||{};
                 const role = this.getSessionRole(session);
                 const roleName = role ? role.name : '未选角色';
 
                 html += `
                     <div class="session-item ${isActive ? 'active' : ''}" onclick="chatApp.switchSession('${session.id}')">
-                        <div class="session-icon">${model.icon}</div>
+                        <div class="session-icon">${model.icon || ''}</div>
                         <div class="session-info">
-                            <div class="session-title">${this.escapeHtml(session.title)}</div>
-                            <div class="session-meta">${this.escapeHtml(roleName)} · ${model.name} · ${session.messages.length} 条消息</div>
+                            <div class="session-title">${this.escapeHtml(this.getSessionTitle(session))}</div>
+                            <div class="session-meta">${this.escapeHtml(roleName)} · ${model.name || ''} · ${session.messages.length} 条消息</div>
                         </div>
                         <div class="session-actions">
                             <button class="session-action-btn" onclick="chatApp.deleteSession('${session.id}', event)" title="删除">🗑️</button>
                         </div>
                     </div>
                 `;
-            }
-            );
+            });
 
             html += '</div>';
-        }
-        );
+        });
 
         container.innerHTML = html || '<div style="padding: 20px; text-align: center; color: var(--text-muted);">暂无对话</div>';
     }
@@ -581,7 +650,7 @@ class ChatApp {
             return;
         }
 
-        document.getElementById('headerTitle').textContent = session.title;
+        document.getElementById('headerTitle').textContent = this.getSessionTitle(session);
 
         if (session.messages.length === 0) {
             container.innerHTML = this.renderWelcomeScreen();
@@ -593,6 +662,14 @@ class ChatApp {
                 ${this.renderMessagesHtml()}
             </div>
         `;
+
+        const sid = this.currentSessionId;
+        const transientThinking = this.sessionThinkingById[sid] || '';
+        const thinkingMsgId = this.sessionThinkingMessageIdById[sid];
+        if (thinkingMsgId && transientThinking) {
+            const msg = session.messages.find(m => m.id === thinkingMsgId);
+            this.updateMessageBubble(thinkingMsgId, msg ? (msg.content || '') : '', transientThinking);
+        }
 
         this.scrollToBottom();
     }
@@ -606,15 +683,15 @@ class ChatApp {
             const isUser = msg.role === 'user';
             const isCollapsed = !!msg.collapsed;
             const html = marked.parse(msg.content);
-            const shouldShowReasoning = !isUser && !!msg.reasoning && !msg.content;
-            const reasoningHtml = shouldShowReasoning ? marked.parse(msg.reasoning) : '';
+            const reasoningHtml = '';
+            const model = session.model ? this.models[session.model] : {};
 
             return `
                 <div class="message ${isCollapsed ? 'collapsed' : ''}" data-message-id="${msg.id}">
                     <div class="message-avatar ${msg.role}">${isUser ? '👤' : '🤖'}</div>
                     <div class="message-content">
                         <div class="message-header">
-                            <span class="message-author">${isUser ? '你' : this.models[session.model].name}</span>
+                            <span class="message-author">${isUser ? '你' : (model.name || '')}</span>
                             <span class="message-time">${msg.time}</span>
                         </div>
                         ${reasoningHtml ? `

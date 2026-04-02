@@ -3,7 +3,7 @@ window.globalTextApiConfig = {
     model: 'GLM-4.7-Flash',
     apiUrl: '', // 留空表示用登录后的url
     temperature: 1.0,
-    web_search: true,
+    web_search: false,
     stream: true
 };
 
