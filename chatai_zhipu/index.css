@@ -572,6 +572,14 @@ body {
     margin-bottom: 0;
 }
 
+.message-body img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--radius-sm);
+    margin: 8px 0;
+}
+
 .message-reasoning {
     margin: 8px 0 10px;
     border: 1px dashed var(--border);
@@ -816,14 +824,23 @@ body {
 .fullscreen-content {
     flex: 1;
     padding: 40px;
-    overflow-y: auto;
+    overflow: auto;
 }
 
 .fullscreen-message {
-    max-width: 900px;
+    max-width: 100%;
     margin: 0 auto;
     font-size: 16px;
     line-height: 1.8;
+}
+
+.fullscreen-message img {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: none;
+    max-height: none;
+    margin: 8px 0;
 }
 
 /* Toast */

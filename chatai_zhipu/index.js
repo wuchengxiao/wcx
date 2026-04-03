@@ -1,36 +1,16 @@
 // Chat Application
 class ChatApp {
     constructor() {
-        this.sessions = this.loadSessions();
-        this.currentSessionId = null;
         this.models = {
             'GLM-4.7': {
                 name: 'GLM-4.7-Flash',
                 icon: '⚡',
                 color: '#f39c12'
-            },
-            'gpt4': {
-                name: 'GPT-4',
-                icon: '🧠',
-                color: '#10a37f'
-            },
-            'claude': {
-                name: 'Claude 3',
-                icon: '🎭',
-                color: '#cc785c'
-            },
-            'gemini': {
-                name: 'Gemini Pro',
-                icon: '💎',
-                color: '#4285f4'
-            },
-            'llama': {
-                name: 'Llama 3',
-                icon: '🦙',
-                color: '#4f46e5'
             }
         };
-        this.currentModel = 'gpt4';
+        this.currentModel = 'GLM-4.7';
+        this.sessions = this.loadSessions();
+        this.currentSessionId = null;
         // 临时思考内容（不落盘）
         this.sessionThinkingById = {};
         this.sessionThinkingMessageIdById = {};
@@ -98,6 +78,8 @@ class ChatApp {
         try {
             const saved = localStorage.getItem('chat_sessions');
             const sessions = saved ? JSON.parse(saved) : {};
+            const modelMap = this.models || {};
+            const defaultModel = this.currentModel || Object.keys(modelMap)[0] || null;
             Object.values(sessions).forEach(session => {
                 if (!session || typeof session !== 'object')
                     return;
@@ -107,8 +89,8 @@ class ChatApp {
                     session.roleIndex = null;
                 if (!session.id)
                     session.id = 'session_' + Date.now();
-                if (!session.model || !this.models[session.model])
-                    session.model = this.currentModel;
+                if (!session.model || !modelMap[session.model])
+                    session.model = defaultModel;
                 session.createdAt = session.createdAt || new Date().toISOString();
                 session.updatedAt = session.updatedAt || new Date().toISOString();
             });
@@ -554,13 +536,36 @@ class ChatApp {
         }
     }
 
+    showFullscreenByMessageId(messageId, event) {
+        if (event)
+            event.stopPropagation();
+
+        const session = this.sessions[this.currentSessionId];
+        if (!session)
+            return;
+
+        const msg = session.messages.find(m => m.id === messageId);
+        if (!msg) {
+            this.showToast('未找到消息内容');
+            return;
+        }
+
+        this.showFullscreen(msg.content);
+    }
+
     showFullscreen(content) {
         const modal = document.getElementById('fullscreenModal');
         const contentDiv = document.getElementById('fullscreenContent');
 
+        const safeContent = typeof content === 'string' ? content : String(content ?? '');
+
         // Parse markdown
-        const html = marked.parse(content);
-        contentDiv.innerHTML = html;
+        try {
+            const html = marked.parse(safeContent);
+            contentDiv.innerHTML = html;
+        } catch {
+            contentDiv.textContent = safeContent;
+        }
 
         // Highlight code blocks
         contentDiv.querySelectorAll('pre code').forEach(block => {
@@ -708,7 +713,7 @@ class ChatApp {
                             <button class="message-action" onclick="chatApp.copyMessage(${JSON.stringify(msg.content).replace(/"/g, '&quot;')}, event)">
                                 复制
                             </button>
-                            <button class="message-action" onclick="chatApp.showFullscreen(${JSON.stringify(msg.content).replace(/"/g, '&quot;')})">
+                            <button class="message-action" onclick="chatApp.showFullscreenByMessageId('${msg.id}', event)">
                                 全屏
                             </button>
                             <button class="message-action" onclick="chatApp.deleteMessage('${msg.id}', event)">
