@@ -133,14 +133,17 @@ function processinputVars(inputVars, sourceUrl, sourceApiKey) {
  * 处理登录测试/验证
  */
 async function runTest(inputVars) {
-    inputVars = inputVars ||getInputs();
+    if (inputVars && inputVars.preventDefault) {
+        inputVars.preventDefault();
+        inputVars = getInputs();
+    }
     if (!Array.isArray(inputVars) || inputVars.length === 0) {
-        showError('token error');
+        showError('请检查输入格式');
         return;
     }
     processinput = processinputVars(inputVars, url, apikey);
     if (!processinput.isSuccess) {
-        showError("token error");
+        showError("登录失败，请检查输入内容是否正确");
         return;
     }
     // 保存token到localStorage，保留2小时
