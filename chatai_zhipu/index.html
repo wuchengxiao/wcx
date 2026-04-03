@@ -76,6 +76,7 @@
                     <details class="header-dropdown">
                         <summary class="header-btn header-menu-btn" title="更多操作">菜单 ▾</summary>
                         <div class="header-dropdown-menu">
+                            <button class="header-dropdown-item" id="themeToggleBtn" onclick="chatApp.toggleTheme(); this.closest('details').removeAttribute('open');" title="切换主题">切换到亮色主题</button>
                             <button class="header-dropdown-item" onclick="logout(); this.closest('details').removeAttribute('open');" title="退出登录">退出登录</button>
                             <button class="header-dropdown-item" onclick="chatApp.clearCurrentSession(); this.closest('details').removeAttribute('open');" title="清空对话">清空对话</button>
                             <button class="header-dropdown-item" onclick="chatApp.exportSession(); this.closest('details').removeAttribute('open');" title="导出对话">导出对话</button>

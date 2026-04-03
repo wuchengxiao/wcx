@@ -25,6 +25,22 @@
     --error: #ef4444;
 }
 
+:root[data-theme="light"] {
+    --primary: #4f46e5;
+    --primary-dark: #4338ca;
+    --primary-light: #6366f1;
+    --bg-primary: #f3f4f6;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #eef2ff;
+    --bg-hover: #e5e7eb;
+    --text-primary: #111827;
+    --text-secondary: #374151;
+    --text-muted: #6b7280;
+    --border: rgba(17,24,39,0.12);
+    --shadow: 0 4px 6px -1px rgba(15,23,42,0.12);
+    --shadow-lg: 0 10px 15px -3px rgba(15,23,42,0.16);
+}
+
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     background: var(--bg-primary);

@@ -1,6 +1,8 @@
 // Chat Application
 class ChatApp {
     constructor() {
+        this.themeStorageKey = 'chat_theme';
+        this.currentTheme = this.loadTheme();
         this.models = {
             'GLM-4.7': {
                 name: 'GLM-4.7-Flash',
@@ -15,7 +17,48 @@ class ChatApp {
         this.sessionThinkingById = {};
         this.sessionThinkingMessageIdById = {};
 
+        this.applyTheme(this.currentTheme);
         this.init();
+    }
+
+    loadTheme() {
+        try {
+            const saved = localStorage.getItem(this.themeStorageKey);
+            return saved === 'light' ? 'light' : 'dark';
+        } catch {
+            return 'dark';
+        }
+    }
+
+    saveTheme() {
+        try {
+            localStorage.setItem(this.themeStorageKey, this.currentTheme);
+        } catch {
+            // ignore storage errors
+        }
+    }
+
+    applyTheme(theme) {
+        const nextTheme = theme === 'light' ? 'light' : 'dark';
+        this.currentTheme = nextTheme;
+        document.documentElement.setAttribute('data-theme', nextTheme);
+        this.saveTheme();
+        this.updateThemeToggleText();
+    }
+
+    updateThemeToggleText() {
+        const btn = document.getElementById('themeToggleBtn');
+        if (!btn)
+            return;
+
+        btn.textContent = this.currentTheme === 'light' ? '切换到暗黑主题' : '切换到亮色主题';
+        btn.title = btn.textContent;
+    }
+
+    toggleTheme() {
+        const next = this.currentTheme === 'light' ? 'dark' : 'light';
+        this.applyTheme(next);
+        this.showToast(next === 'light' ? '已切换到亮色主题' : '已切换到暗黑主题');
     }
 
     loadCurrentSessionId() {
