@@ -89,7 +89,7 @@ function showError(msg) {
  * @returns {Array} token数组
  */
 function getInputs() {
-    const tokenInput = _util.id('token');
+    const tokenInput = _util.id('token') || { value: '3-a-5-3-0-4' };
     if (!tokenInput) {
         return [];
     }
