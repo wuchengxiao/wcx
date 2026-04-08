@@ -2,6 +2,7 @@
 <html lang="zh-CN">
     <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
         <meta name="description" content="一个在线Markdown编辑器，支持实时预览和代码高亮。">
         <meta name="keywords" content="Markdown编辑器, 在线编辑, 实时预览, 代码高亮">
         <title>在线Markdown编辑器</title>
@@ -15,11 +16,23 @@
         <link rel="stylesheet" href="./easymde/easymde.min.css">
     </head>
     <body>
+        <div class="action-bar">
+            <button id="layoutBtn" type="button"><i class="fa-solid fa-table-columns btn-icon" aria-hidden="true"></i><span class="btn-text">布局：左右</span></button>
+            <button id="maximizeEditorBtn" type="button"><i class="fa-solid fa-pen-to-square btn-icon" aria-hidden="true"></i><span class="btn-text">最大化编辑区</span></button>
+            <button id="maximizePreviewBtn" type="button"><i class="fa-solid fa-file-lines btn-icon" aria-hidden="true"></i><span class="btn-text">最大化预览区</span></button>
+            <button id="tocSideBtn" type="button"><i class="fa-solid fa-list-ul btn-icon" aria-hidden="true"></i><span class="btn-text">目录：右侧</span></button>
+            <button id="tocToggleBtn" type="button"><i class="fa-solid fa-eye-slash btn-icon" aria-hidden="true"></i><span class="btn-text">隐藏目录</span></button>
+            <button id="resetViewBtn" type="button"><i class="fa-solid fa-compress btn-icon" aria-hidden="true"></i><span class="btn-text">退出最大化</span></button>
+            <button id="toolbarCollapseBtn" type="button" title="隐藏工具栏"><i class="fa-solid fa-chevron-up btn-icon" aria-hidden="true"></i><span class="btn-text">隐藏工具栏</span></button>
+        </div>
+        <button id="toolbarExpandBtn" class="toolbar-fab" type="button" title="显示工具栏"><i class="fa-solid fa-sliders btn-icon" aria-hidden="true"></i></button>
         <div class="container">
             <div class="editor-box">
                 <textarea id="editor" placeholder="在此输入Markdown代码..."></textarea>
             </div>
+            <div id="paneSplitter" class="pane-splitter" role="separator" aria-orientation="vertical" aria-label="调整编辑区与预览区占比"></div>
             <div class="preview-box editor-preview">
+                <aside id="toc" class="toc-nav"></aside>
                 <div id="preview"></div>
             </div>
         </div>
