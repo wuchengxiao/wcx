@@ -274,6 +274,18 @@ body.maximize-preview .pane-splitter {
     margin: 1em 0;
 }
 
+#preview h3 {
+    margin: 1em 0 0.5em;
+} 
+
+#preview h4, #preview h5, #preview h6 {
+    margin: 1em 0 0.25em;
+} 
+
+#preview p {
+    margin: 1em 0;
+}
+
 #preview code {
     font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
     padding: 0.2em 0.4em;
@@ -295,6 +307,39 @@ body.maximize-preview .pane-splitter {
     border-left: 4px solid #dfe2e5;
     padding: 0 1em;
     margin: 0.5em 0;
+}
+
+#preview ul,
+#preview ol {
+    padding-left: 1.6em;
+    margin: 0.5em 0;
+}
+
+#preview li + li {
+    margin-top: 0.2em;
+}
+
+#preview table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    display: block;
+    overflow-x: auto;
+}
+
+#preview th,
+#preview td {
+    border: 1px solid #d0d7de;
+    padding: 6px 10px;
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    max-width: 390px;
+}
+
+#preview thead th {
+    background: #f6f8fa;
 }
 
 @media (max-width: 900px) {

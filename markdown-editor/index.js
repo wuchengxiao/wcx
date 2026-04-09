@@ -37,10 +37,18 @@ function applyPaneRatio() {
     }
 
     const ratio = clamp(viewState.paneRatio, 0.15, 0.85);
-    const offset = SPLITTER_SIZE / 2;
+    const rect = container.getBoundingClientRect();
+    const styles = window.getComputedStyle(container);
+    const isVerticalLayout = viewState.layout === 'vertical';
+    const gap = parseFloat(isVerticalLayout ? styles.rowGap : styles.columnGap) || 0;
+    const total = isVerticalLayout ? rect.height : rect.width;
+    const available = Math.max(total - SPLITTER_SIZE - gap * 2, 0);
 
-    editorBox.style.flex = `0 0 calc(${ratio * 100}% - ${offset}px)`;
-    previewBox.style.flex = `0 0 calc(${(1 - ratio) * 100}% - ${offset}px)`;
+    const editorSize = available * ratio;
+    const previewSize = available - editorSize;
+
+    editorBox.style.flex = `0 0 ${editorSize}px`;
+    previewBox.style.flex = `0 0 ${previewSize}px`;
 }
 
 function updateViewControls() {
@@ -236,6 +244,8 @@ function buildToc() {
 }
 
 // 实时渲染函数
+// easyMDE.markdown() 内部根据 singleLineBreaks:true 使用 breaks:true，
+// 单独换行符 / 行尾两个空格 + 回车 / <br> 均会在预览中产生 <br>
 function renderPreview(editorInstance) {
     const markdownStr = editorInstance.value();
     const html = easyMDE.markdown(markdownStr);
@@ -251,6 +261,10 @@ const easyMDE = new EasyMDE({
     autoDownloadFontAwesome: false,
     spellChecker: false,
     minHeight: '0px',
+    renderingConfig: {
+        singleLineBreaks: true,
+        codeSyntaxHighlighting: true
+    },
     toolbar: [
         {
             name: 'bold',
@@ -381,6 +395,10 @@ toolbarCollapseBtn.addEventListener('click', () => {
 toolbarExpandBtn.addEventListener('click', () => {
     viewState.toolbarVisible = true;
     applyViewState();
+});
+
+window.addEventListener('resize', () => {
+    applyPaneRatio();
 });
 
 initPaneSplitter();
