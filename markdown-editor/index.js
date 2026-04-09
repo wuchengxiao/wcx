@@ -13,6 +13,8 @@ const tocToggleBtn = utils._id('tocToggleBtn');
 const resetViewBtn = utils._id('resetViewBtn');
 const toolbarCollapseBtn = utils._id('toolbarCollapseBtn');
 const toolbarExpandBtn = utils._id('toolbarExpandBtn');
+const uploadBtn = utils._id('uploadBtn');
+const fileInput = utils._id('fileInput');
 
 const viewState = {
     layout: 'horizontal',
@@ -256,6 +258,41 @@ function renderPreview(editorInstance) {
     hljs.highlightAll();
 }
 
+// 处理文件上传
+function handleFileUpload(file) {
+    if (!file) return;
+    
+    // 检查文件类型
+    const acceptedTypes = ['.md', '.markdown', '.txt'];
+    const fileName = file.name.toLowerCase();
+    const isValidType = acceptedTypes.some(type => fileName.endsWith(type)) || 
+                       file.type === 'text/markdown' || 
+                       file.type === 'text/plain';
+    
+    if (!isValidType) {
+        alert('请选择有效的Markdown文件（.md, .markdown, .txt）');
+        return;
+    }
+    
+    // 读取文件内容
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        try {
+            const content = event.target.result;
+            easyMDE.value(content);
+            renderPreview(easyMDE);
+        } catch (error) {
+            alert('文件读取失败: ' + error.message);
+        }
+    };
+    
+    reader.onerror = () => {
+        alert('文件读取出错');
+    };
+    
+    reader.readAsText(file);
+}
+
 const easyMDE = new EasyMDE({
     element: utils._id('editor'),
     autoDownloadFontAwesome: false,
@@ -395,6 +432,37 @@ toolbarCollapseBtn.addEventListener('click', () => {
 toolbarExpandBtn.addEventListener('click', () => {
     viewState.toolbarVisible = true;
     applyViewState();
+});
+
+// 上传按钮处理
+uploadBtn.addEventListener('click', () => {
+    fileInput.click();
+});
+
+// 文件输入处理
+fileInput.addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    if (file) {
+        handleFileUpload(file);
+    }
+    // 重置input，以便可以再次选择同一个文件
+    event.target.value = '';
+});
+
+// 处理拖拽上传
+document.addEventListener('dragover', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+});
+
+document.addEventListener('drop', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const files = event.dataTransfer.files;
+    if (files.length > 0) {
+        handleFileUpload(files[0]);
+    }
 });
 
 window.addEventListener('resize', () => {
