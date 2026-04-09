@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>在线 Excel 读取器</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- 顶部标题栏 -->
+    <header class="app-header">
+      <div class="header-left">
+        <span class="logo">📊</span>
+        <h1>在线 Excel 读取器</h1>
+      </div>
+      <div class="header-right">
+        <button id="btnExport" class="btn btn-outline" style="display:none;">
+          <span class="icon">⬇</span> 导出 CSV
+        </button>
+        <button id="btnClear" class="btn btn-ghost" style="display:none;">
+          <span class="icon">✕</span> 清除
+        </button>
+      </div>
+    </header>
+
+    <!-- 主体 -->
+    <main class="app-main">
+      <!-- 上传区域 -->
+      <section id="dropzone" class="dropzone">
+        <div class="dropzone-content">
+          <div class="dropzone-icon">📂</div>
+          <p class="dropzone-title">拖拽 Excel 文件到这里</p>
+          <p class="dropzone-sub">支持 .xlsx · .xls · .csv 格式</p>
+          <label class="btn btn-primary" for="fileInput">
+            <span class="icon">📁</span> 选择文件
+          </label>
+          <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" hidden />
+        </div>
+      </section>
+
+      <!-- 文件信息条 -->
+      <section id="fileInfoBar" class="file-info-bar" style="display:none;">
+        <div class="file-info-left">
+          <span class="file-icon">📄</span>
+          <span id="fileName" class="file-name"></span>
+          <span id="fileSize" class="file-size"></span>
+        </div>
+        <div class="file-info-right">
+          <span id="rowCount" class="badge badge-blue"></span>
+          <span id="colCount" class="badge badge-green"></span>
+        </div>
+      </section>
+
+      <!-- 工具栏 -->
+      <div id="toolbar" class="toolbar" style="display:none;">
+        <div class="toolbar-left">
+          <input id="searchInput" type="text" class="search-input" placeholder="🔍  搜索内容…" />
+        </div>
+        <div class="toolbar-right">
+          <label class="toolbar-label">首行为表头</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="headerToggle" />
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- 表格区域 -->
+      <div id="tableWrap" class="table-wrap" style="display:none;">
+        <div id="tableContainer" class="table-container"></div>
+      </div>
+
+      <!-- 加载动画 -->
+      <div id="loading" class="loading" style="display:none;">
+        <div class="spinner"></div>
+        <p>正在解析文件…</p>
+      </div>
+
+      <!-- 空状态 -->
+      <div id="emptyState" class="empty-state" style="display:none;">
+        <div class="empty-icon">🗃️</div>
+        <p>当前 Sheet 没有数据</p>
+      </div>
+    </main>
+
+    <!-- 底部 Sheet 选项卡（更接近 Excel） -->
+    <div id="sheetTabs" class="sheet-tabs" style="display:none;"></div>
+
+    <!-- 底部状态栏 -->
+    <footer id="statusBar" class="status-bar" style="display:none;">
+      <span id="statusText">就绪</span>
+      <span id="filterInfo" class="filter-info"></span>
+    </footer>
+  </div>
+
+  <!-- SheetJS CDN -->
+  <script src="xlsx.full.min.js"></script>
+  <script src="jszip3_10_1/jszip.min.js"></script>
+  <script src="exceljs4_4_0/exceljs.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

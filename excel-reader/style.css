@@ -1,0 +1,731 @@
+/* ===== 全局变量 ===== */
+:root {
+  --primary: #4f6ef7;
+  --primary-dark: #3a56d4;
+  --primary-light: #eef0fe;
+  --success: #22c55e;
+  --success-light: #dcfce7;
+  --danger: #ef4444;
+  --bg: #f4f6fb;
+  --surface: #ffffff;
+  --border: #e2e8f0;
+  --text: #1e293b;
+  --text-muted: #64748b;
+  --header-bg: #1e293b;
+  --header-text: #f8fafc;
+  --radius: 10px;
+  --shadow: 0 2px 12px rgba(0,0,0,.08);
+  --transition: .18s ease;
+}
+
+/* ===== 重置 ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+/* ===== 布局 ===== */
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ===== 顶部栏 ===== */
+.app-header {
+  background: var(--header-bg);
+  color: var(--header-text);
+  padding: 0 24px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0,0,0,.2);
+}
+.header-left { display: flex; align-items: center; gap: 10px; }
+.logo { font-size: 22px; }
+.app-header h1 { font-size: 17px; font-weight: 600; letter-spacing: .3px; }
+.header-right { display: flex; gap: 8px; }
+
+/* ===== 按钮 ===== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border-radius: 7px;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all var(--transition);
+}
+.btn .icon { font-size: 14px; }
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+.btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); }
+.btn-outline {
+  background: transparent;
+  color: var(--header-text);
+  border: 1.5px solid rgba(255,255,255,.35);
+}
+.btn-outline:hover { background: rgba(255,255,255,.1); }
+.btn-ghost {
+  background: transparent;
+  color: rgba(255,255,255,.65);
+}
+.btn-ghost:hover { color: #fff; background: rgba(255,255,255,.1); }
+
+/* ===== 主体 ===== */
+.app-main {
+  flex: 1;
+  padding: 28px 24px;
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ===== 拖拽区域 ===== */
+.dropzone {
+  border: 2.5px dashed var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  padding: 56px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.dropzone:hover,
+.dropzone.drag-over {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  transform: scale(1.005);
+}
+.dropzone-icon { font-size: 52px; margin-bottom: 14px; }
+.dropzone-title { font-size: 17px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.dropzone-sub { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
+
+/* ===== 文件信息条 ===== */
+.file-info-bar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: var(--shadow);
+}
+.file-info-left { display: flex; align-items: center; gap: 8px; }
+.file-icon { font-size: 20px; }
+.file-name { font-weight: 600; font-size: 14px; }
+.file-size { font-size: 12px; color: var(--text-muted); }
+.file-info-right { display: flex; gap: 8px; }
+
+/* ===== 徽章 ===== */
+.badge {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+.badge-blue { background: var(--primary-light); color: var(--primary); }
+.badge-green { background: var(--success-light); color: #16a34a; }
+
+/* ===== Sheet 选项卡 ===== */
+.sheet-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  min-height: 42px;
+  padding: 6px 12px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 -1px 0 rgba(0,0,0,.02);
+}
+.sheet-tab {
+  padding: 6px 14px;
+  border-radius: 8px 8px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-bottom: 2px solid transparent;
+  background: #f8fafc;
+  color: var(--text-muted);
+  transition: all var(--transition);
+}
+.sheet-tab:hover { border-color: #cbd5e1; color: var(--primary); }
+.sheet-tab.active {
+  background: #fff;
+  border-color: var(--border);
+  border-bottom-color: var(--primary);
+  color: var(--primary);
+}
+
+/* ===== 工具栏 ===== */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.toolbar-left { flex: 1; min-width: 200px; }
+.toolbar-right { display: flex; align-items: center; gap: 10px; }
+.toolbar-label { font-size: 13px; color: var(--text-muted); }
+.search-input {
+  width: 100%;
+  max-width: 360px;
+  padding: 8px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 13.5px;
+  outline: none;
+  transition: border-color var(--transition);
+  background: var(--surface);
+}
+.search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,110,247,.12); }
+
+/* ===== 开关 ===== */
+.toggle-switch { position: relative; display: inline-block; width: 40px; height: 22px; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-track {
+  position: absolute; inset: 0;
+  background: #cbd5e1;
+  border-radius: 22px;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.toggle-track::after {
+  content: '';
+  position: absolute;
+  left: 3px; top: 3px;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform var(--transition);
+  box-shadow: 0 1px 3px rgba(0,0,0,.2);
+}
+.toggle-switch input:checked + .toggle-track { background: var(--primary); }
+.toggle-switch input:checked + .toggle-track::after { transform: translateX(18px); }
+
+/* ===== 图形识别面板 ===== */
+.graphics-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 12px 14px;
+}
+.graphics-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.graphics-header strong {
+  font-size: 13px;
+  color: var(--text);
+}
+.graphics-summary {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.graphics-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+}
+.graphics-item {
+  border: 1px solid #edf2f7;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 7px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.graphics-item-left {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.graphics-type {
+  font-size: 11px;
+  color: var(--primary);
+  background: var(--primary-light);
+  border-radius: 12px;
+  padding: 2px 7px;
+  font-weight: 600;
+}
+.graphics-name {
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 520px;
+}
+.graphics-anchor {
+  font-size: 12px;
+  color: #475569;
+}
+.graphics-empty {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 4px 2px;
+}
+
+/* ===== 表格容器 ===== */
+.table-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.table-container {
+  position: relative;
+  overflow: auto;
+  max-height: calc(100vh - 320px);
+}
+
+.graphics-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 15;
+}
+
+.graphics-draw {
+  position: absolute;
+  border: 2px solid #64748b;
+  border-radius: 6px;
+  background: rgba(148, 163, 184, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.45);
+  overflow: hidden;
+}
+
+.graphics-draw-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.graphics-draw-chart-preview {
+  object-fit: fill;
+  background: #fff;
+}
+
+.graphics-draw-label {
+  display: inline-block;
+  max-width: 100%;
+  font-size: 11px;
+  line-height: 1.2;
+  color: #0f172a;
+  padding: 2px 6px;
+  background: rgba(255,255,255,.7);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  position: absolute;
+  left: 0;
+  bottom: 0;
+}
+
+.graphics-draw-shape {
+  border-color: #2563eb;
+  background: rgba(59, 130, 246, 0.14);
+}
+
+.graphics-draw-picture {
+  border-color: #16a34a;
+  background: rgba(34, 197, 94, 0.16);
+}
+
+.graphics-draw-chart {
+  border-color: #ea580c;
+  background: rgba(251, 146, 60, 0.16);
+}
+
+.graphics-draw-connector {
+  border-style: dashed;
+  border-color: #7c3aed;
+  background: rgba(139, 92, 246, 0.12);
+}
+
+.graphics-draw-group {
+  border-color: #0f766e;
+  background: rgba(20, 184, 166, 0.12);
+}
+
+/* ===== 表格样式 ===== */
+.excel-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.excel-table th {
+  background: #f1f5f9;
+  color: var(--text-muted);
+  font-weight: 600;
+  padding: 10px 14px;
+  border-bottom: 2px solid var(--border);
+  border-right: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--transition);
+}
+.excel-table th:hover { background: #e2e8f0; }
+.excel-table th.sort-asc::after { content: ' ↑'; color: var(--primary); }
+.excel-table th.sort-desc::after { content: ' ↓'; color: var(--primary); }
+.excel-table th:last-child,
+.excel-table td:last-child { border-right: none; }
+.excel-table td {
+  padding: 9px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  border-right: 1px solid #f1f5f9;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+.excel-table tbody tr:hover td:not(.has-cell-style) { background: var(--primary-light); }
+.excel-table tbody tr:last-child td { border-bottom: none; }
+
+/* 行号列 */
+.row-num {
+  color: var(--text-muted);
+  font-size: 11px;
+  text-align: center;
+  min-width: 42px;
+  background: #f8fafc !important;
+}
+.excel-table th.row-num { cursor: default; }
+
+/* 高亮搜索 */
+mark {
+  background: #fef08a;
+  color: var(--text);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* ===== 加载动画 ===== */
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 60px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.spinner {
+  width: 36px; height: 36px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ===== 空状态 ===== */
+.empty-state {
+  text-align: center;
+  padding: 60px;
+  color: var(--text-muted);
+}
+.empty-icon { font-size: 48px; margin-bottom: 12px; }
+
+/* ===== 底部状态栏 ===== */
+.status-bar {
+  background: var(--header-bg);
+  color: rgba(255,255,255,.6);
+  font-size: 12px;
+  padding: 5px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.filter-info { color: var(--primary); font-weight: 500; }
+
+/* ===== 响应式 ===== */
+@media (max-width: 1024px) {
+  .app-main {
+    padding: 18px 14px;
+    gap: 12px;
+  }
+
+  .table-container {
+    max-height: calc(100vh - 300px);
+  }
+
+  .excel-table th,
+  .excel-table td {
+    padding: 8px 10px;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-header {
+    height: 44px;
+    min-height: 44px;
+    padding: 0 8px;
+    gap: 6px;
+    align-items: center;
+    flex-direction: row;
+  }
+
+  .header-left {
+    min-width: 0;
+    gap: 6px;
+    flex: 1;
+  }
+
+  .logo {
+    font-size: 18px;
+  }
+
+  .app-header h1 {
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .header-right {
+    width: auto;
+    gap: 6px;
+    flex-wrap: nowrap;
+  }
+
+  .header-right .btn {
+    padding: 4px 8px;
+    font-size: 11.5px;
+    border-radius: 6px;
+  }
+
+  .header-right .btn .icon {
+    font-size: 12px;
+  }
+
+  .app-main {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .dropzone {
+    padding: 24px 10px;
+    border-radius: 12px;
+  }
+
+  .dropzone-icon {
+    font-size: 34px;
+    margin-bottom: 8px;
+  }
+
+  .dropzone-title {
+    font-size: 14px;
+    margin-bottom: 4px;
+  }
+
+  .file-info-bar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 6px 8px;
+  }
+
+  .file-info-left {
+    min-width: 0;
+    flex: 1;
+    gap: 6px;
+  }
+
+  .file-icon {
+    font-size: 16px;
+  }
+
+  .file-name {
+    font-size: 12px;
+    max-width: 56vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .file-size {
+    display: none;
+  }
+
+  .file-info-right {
+    width: auto;
+    justify-content: flex-start;
+    gap: 4px;
+  }
+
+  .badge {
+    font-size: 10.5px;
+    padding: 2px 7px;
+  }
+
+  .toolbar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+
+  .toolbar-left {
+    width: auto;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .toolbar-right {
+    width: auto;
+    flex: 0 0 auto;
+    gap: 6px;
+    justify-content: flex-end;
+  }
+
+  .toolbar-label {
+    font-size: 12px;
+  }
+
+  .search-input {
+    max-width: none;
+    padding: 6px 10px;
+    font-size: 12px;
+    border-radius: 7px;
+  }
+
+  .toggle-switch {
+    width: 34px;
+    height: 20px;
+  }
+
+  .toggle-track::after {
+    width: 14px;
+    height: 14px;
+  }
+
+  .toggle-switch input:checked + .toggle-track::after {
+    transform: translateX(14px);
+  }
+
+  .table-wrap {
+    border-radius: 8px;
+  }
+
+  .table-container {
+    max-height: calc(100vh - 230px);
+  }
+
+  .excel-table {
+    font-size: 12px;
+  }
+
+  .excel-table th,
+  .excel-table td {
+    padding: 7px 8px;
+    max-width: 220px;
+  }
+
+  .sheet-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    min-height: 36px;
+    padding: 4px 6px;
+    scrollbar-width: thin;
+  }
+
+  .sheet-tab {
+    flex: 0 0 auto;
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+
+  .status-bar {
+    display: none !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-main {
+    padding: 6px;
+    gap: 6px;
+  }
+
+  .app-header {
+    padding: 0 6px;
+  }
+
+  .app-header h1 {
+    font-size: 12px;
+  }
+
+  .header-right .btn {
+    padding: 4px 6px;
+    font-size: 11px;
+  }
+
+  .dropzone-sub {
+    font-size: 11px;
+    margin-bottom: 12px;
+  }
+
+  .excel-table {
+    font-size: 11.5px;
+  }
+
+  .excel-table th,
+  .excel-table td {
+    padding: 6px 7px;
+    max-width: 180px;
+  }
+
+  .row-num {
+    min-width: 36px;
+    font-size: 10px;
+  }
+
+  .badge {
+    font-size: 10px;
+  }
+
+  .toolbar-label {
+    font-size: 11px;
+  }
+}
