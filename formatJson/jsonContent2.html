@@ -38,6 +38,12 @@
                 background-color: #555;
                 border-right: 1px solid #777;
                 white-space: nowrap;
+                display: flex;
+                align-items: center;
+            }
+
+            .tab-title {
+                flex: 1;
             }
 
             .tab.active {
@@ -83,7 +89,7 @@
                 font-family: Consolas, monospace;
                 font-size: 14px;
                 padding: 10px;
-                overflow: auto;
+                overflow: hidden;
                 background-color: white;
             }
 
@@ -94,6 +100,11 @@
                 resize: none;
                 outline: none;
                 tab-size: 2;
+                overflow: auto;
+            }
+
+            #output {
+                overflow: auto;
             }
 
             .resize-handle {
@@ -268,7 +279,8 @@
                         <button id="copyBtn">复制</button>
                         <button id="expandAllBtn">展开全部</button>
                         <button id="collapseAllBtn">折叠全部</button>
-                        <button id="toggleTheme">切换主题</button>
+                        <button id="downloadBtn">下载</button>
+                        <button id="uploadBtn">上传</button>
                     </div>
                     <div class="editor" id="output"></div>
                 </div>
@@ -286,7 +298,8 @@
                 const copyBtn = document.getElementById('copyBtn');
                 const expandAllBtn = document.getElementById('expandAllBtn');
                 const collapseAllBtn = document.getElementById('collapseAllBtn');
-                const toggleTheme = document.getElementById('toggleTheme');
+                const downloadBtn = document.getElementById('downloadBtn');
+                const uploadBtn = document.getElementById('uploadBtn');
                 const resizeHandle = document.getElementById('resizeHandle');
 
                 let tabs = [{
@@ -299,13 +312,110 @@
                 }];
                 let activeTabId = 0;
                 let isDarkTheme = false;
+                let tabIdSeed = Date.now();
 
-                // 初始化格式化
-                formatJson();
+                function createTabId() {
+                    tabIdSeed += 1;
+                    return tabIdSeed;
+                }
+
+                // 处理JSON文件的共享函数
+                function processJsonFile(file, callback) {
+                    if (!file.name.endsWith('.json')) {
+                        alert(`文件 "${file.name}" 不是JSON文件，已跳过`);
+                        if (callback) callback(false);
+                        return;
+                    }
+
+                    const reader = new FileReader();
+                    reader.onload = function(event) {
+                        const content = event.target.result;
+                        
+                        // 创建新标签页
+                        const newId = createTabId();
+                        const tabName = file.name.replace(/\.json$/, '');
+
+                        tabs.push({
+                            id: newId,
+                            name: tabName,
+                            input: content,
+                            output: '',
+                            jsonData: null,
+                            formatter: null
+                        });
+
+                        const tabElement = document.createElement('div');
+                        tabElement.className = 'tab';
+                        tabElement.dataset.tab = newId;
+
+                        const titleSpan = document.createElement('span');
+                        titleSpan.className = 'tab-title';
+                        titleSpan.textContent = tabName;
+                        tabElement.appendChild(titleSpan);
+
+                        tabsContainer.insertBefore(tabElement, addTabBtn);
+                        setupTabContextMenu(tabElement, newId);
+                        switchTab(newId);
+                        
+                        // 自动格式化导入的JSON
+                        try {
+                            const json = JSON.parse(content);
+                            const tab = tabs.find(t => t.id === newId);
+                            if (tab) {
+                                tab.jsonData = json;
+                                renderFormatter(tab);
+                            }
+                            if (callback) callback(true);
+                        } catch (err) {
+                            output.innerHTML = `<div style="color:red;padding:10px">JSON格式错误: ${err.message}</div>`;
+                            if (callback) callback(false);
+                        }
+                    };
+                    reader.onerror = function() {
+                        alert(`文件 "${file.name}" 读取失败`);
+                        if (callback) callback(false);
+                    };
+                    reader.readAsText(file);
+                }
+
+                // 处理JSON文件拖放
+                const inputPanel = editorContainer.querySelector('.panel');
+                inputPanel.addEventListener('dragover', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    inputPanel.style.backgroundColor = '#e3f2fd';
+                });
+
+                inputPanel.addEventListener('dragleave', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    inputPanel.style.backgroundColor = '';
+                });
+
+                inputPanel.addEventListener('drop', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    inputPanel.style.backgroundColor = '';
+
+                    const files = e.dataTransfer.files;
+                    if (files.length > 0) {
+                        let processedCount = 0;
+                        for (let i = 0; i < files.length; i++) {
+                            processJsonFile(files[i], function(success) {
+                                processedCount++;
+                                if (processedCount === files.length) {
+                                    if (files.length > 1) {
+                                        alert(`已导入 ${files.length} 个文件`);
+                                    }
+                                }
+                            });
+                        }
+                    }
+                });
 
                 // 添加标签页
                 addTabBtn.addEventListener('click', function() {
-                    const newId = Date.now();
+                    const newId = createTabId();
                     const tabName = `JSON ${tabs.length + 1}`;
 
                     tabs.push({
@@ -319,10 +429,15 @@
 
                     const tabElement = document.createElement('div');
                     tabElement.className = 'tab';
-                    tabElement.textContent = tabName;
                     tabElement.dataset.tab = newId;
 
+                    const titleSpan = document.createElement('span');
+                    titleSpan.className = 'tab-title';
+                    titleSpan.textContent = tabName;
+                    tabElement.appendChild(titleSpan);
+
                     tabsContainer.insertBefore(tabElement, addTabBtn);
+                    setupTabContextMenu(tabElement, newId);
                     switchTab(newId);
 
                     // 初始化新标签页
@@ -332,13 +447,23 @@
                     }
                 });
 
-                // 切换标签页
+                // 切换标签页 - 使用事件委托处理所有点击
                 tabsContainer.addEventListener('click', function(e) {
-                    if (e.target.classList.contains('tab')) {
-                        const tabId = parseInt(e.target.dataset.tab);
+                    // 忽略菜单操作和动作按钮
+                    if (e.target.closest('.tab-menu') || e.target.closest('.tab-actions')) {
+                        return;
+                    }
+
+                    let target = e.target;
+                    // 如果点击的是tab内的文字或容器，向上查找到tab元素
+                    if (target.classList.contains('tab-title') || target.closest('.tab-menu-container')) {
+                        target = target.closest('.tab');
+                    }
+                    if (target && target.classList.contains('tab')) {
+                        const tabId = Number(target.dataset.tab);
                         switchTab(tabId);
                     }
-                });
+                }, true); // 使用捕获阶段
 
                 function switchTab(tabId) {
                     // 保存当前标签页状态
@@ -353,7 +478,7 @@
 
                     // 更新标签页样式
                     document.querySelectorAll('.tab').forEach(tab => {
-                        tab.classList.toggle('active', parseInt(tab.dataset.tab) === tabId);
+                        tab.classList.toggle('active', Number(tab.dataset.tab) === tabId);
                     }
                     );
                 }
@@ -482,13 +607,13 @@
                     container.appendChild(actions);
                     container.appendChild(menu);
 
-                    // 点击其他地方隐藏菜单
-                    document.addEventListener('click', (e) => {
-                        if (!container.contains(e.target)) {
+                    // 点击tab外部隐藏菜单
+                    const hideMenuOnClickOutside = (e) => {
+                        if (!tabElement.contains(e.target)) {
                             menu.style.display = 'none';
                         }
-                    }
-                    );
+                    };
+                    document.addEventListener('click', hideMenuOnClickOutside, true);
                 }
 
                 function hideAllMenus() {
@@ -615,23 +740,23 @@
 
                 // 初始化时为每个标签添加菜单
                 document.querySelectorAll('.tab').forEach(tab => {
-                    const tabId = parseInt(tab.dataset.tab);
+                    const tabId = Number(tab.dataset.tab);
                     if (!isNaN(tabId)) {
+                        // 如果tab内部没有title span，先创建它
+                        if (!tab.querySelector('.tab-title')) {
+                            const titleSpan = document.createElement('span');
+                            titleSpan.className = 'tab-title';
+                            titleSpan.textContent = tab.textContent;
+                            tab.innerHTML = '';
+                            tab.appendChild(titleSpan);
+                        }
                         setupTabContextMenu(tab, tabId);
                     }
                 }
                 );
 
-                // 新增标签时也添加菜单
-                addTabBtn.addEventListener('click', function() {
-                    setTimeout( () => {
-                        const newTab = document.querySelector(`.tab[data-tab="${activeTabId}"]`);
-                        if (newTab) {
-                            setupTabContextMenu(newTab, activeTabId);
-                        }
-                    }
-                    , 0);
-                });
+                // 初始化格式化
+                formatJson();
 
                 // 展开全部
                 expandAllBtn.addEventListener('click', function() {
@@ -649,13 +774,49 @@
                     }
                 });
 
-                // 切换主题
-                toggleTheme.addEventListener('click', function() {
-                    isDarkTheme = !isDarkTheme;
+                // 下载JSON文件
+                downloadBtn.addEventListener('click', function() {
                     const tab = tabs.find(tab => tab.id === activeTabId);
-                    if (tab?.formatter) {
-                        renderFormatter(tab);
+                    if (!tab?.jsonData) {
+                        alert('请先输入有效的JSON数据');
+                        return;
                     }
+
+                    const jsonString = JSON.stringify(tab.jsonData, null, 2);
+                    const blob = new Blob([jsonString], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `${tab.name}.json`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                });
+
+                // 上传JSON文件
+                uploadBtn.addEventListener('click', function() {
+                    const fileInput = document.createElement('input');
+                    fileInput.type = 'file';
+                    fileInput.multiple = true;
+                    fileInput.accept = '.json';
+                    fileInput.onchange = function(e) {
+                        const files = e.target.files;
+                        if (files.length > 0) {
+                            let processedCount = 0;
+                            for (let i = 0; i < files.length; i++) {
+                                processJsonFile(files[i], function(success) {
+                                    processedCount++;
+                                    if (processedCount === files.length) {
+                                        if (files.length > 1) {
+                                            alert(`已导入 ${files.length} 个文件`);
+                                        }
+                                    }
+                                });
+                            }
+                        }
+                    };
+                    fileInput.click();
                 });
 
                 // 调整面板宽度
