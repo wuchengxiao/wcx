@@ -3,17 +3,18 @@
 // 动态角色注册与管理
 window.roles = [];
 window.registerRole = function(roleObj) {
+    const idx = window.roles.length;
     if (roleObj && roleObj.name) {
         window.roles.push(roleObj);
     }
-    renderRoleSelector(roleObj);
+    renderRoleSelector(roleObj, idx);
 };
 window.currentRole = null;
 
 /**
  * 渲染角色/技能选择按钮区
  */
-function renderRoleSelector(role) {
+function renderRoleSelector(role, idx) {
     // 消息容器
     const msgContainer = _util.id('chatContainer');
     if (!msgContainer) return;
