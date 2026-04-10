@@ -13,7 +13,8 @@ function loadAllRoles() {
         'roles/role_translator.js',
         'roles/role_writer.js',
         'roles/role_mayor.js',
-        'roles/role_japanese_girl.js'
+        'roles/role_japanese_girl.js',
+        'roles/role_tcm_master.js'
     ];
     roleFiles.forEach(function(path) {
         const script = _util.ce('script');

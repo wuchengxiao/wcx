@@ -418,10 +418,60 @@ class ChatApp {
         session.roleIndex = roleIndex;
         session.updatedAt = new Date().toISOString();
         window.currentRole = roles[roleIndex] || null;
+        this.appendRoleGreeting(window.currentRole, session);
         this.saveSessions();
         this.renderSessionList();
         this.renderChat();
         this.showToast(`已选择：${roles[roleIndex].name}`);
+    }
+
+    buildRoleGreeting(role) {
+        if (!role)
+            return '你好！请选择你想聊的话题，我会一步步带你开始。';
+
+        const name = role.name || '助手';
+        if (typeof role.openingLine === 'string' && role.openingLine.trim()) {
+            return role.openingLine.trim();
+        }
+
+        const firstGuide = Array.isArray(role.guide)
+            ? String(role.guide.find(item => typeof item === 'string' && item.trim()) || '').trim()
+            : '';
+
+        if (firstGuide) {
+            return `你好，我是${name}。${firstGuide}`;
+        }
+
+        const intro = typeof role.intro === 'string' ? role.intro.trim() : '';
+        if (intro) {
+            return `你好，我是${name}。${intro}`;
+        }
+
+        return `你好，我是${name}。你可以直接告诉我你的需求，我会先给你一个清晰的起步方案。`;
+    }
+
+    appendRoleGreeting(role, session = this.sessions[this.currentSessionId]) {
+        if (!session || !role)
+            return;
+
+        const greeting = this.buildRoleGreeting(role);
+        const roleGreetingMessage = {
+            id: 'msg_' + (Date.now() + 1),
+            role: 'assistant',
+            content: greeting,
+            isRoleGreeting: true,
+            time: new Date().toLocaleTimeString('zh-CN', {
+                hour: '2-digit',
+                minute: '2-digit'
+            })
+        };
+
+        const lastMessage = session.messages[session.messages.length - 1];
+        if (lastMessage && lastMessage.role === 'assistant' && lastMessage.isRoleGreeting) {
+            session.messages[session.messages.length - 1] = roleGreetingMessage;
+        } else {
+            session.messages.push(roleGreetingMessage);
+        }
     }
 
     // Messaging

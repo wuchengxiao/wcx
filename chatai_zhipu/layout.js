@@ -63,7 +63,6 @@ function waitForRolesAndRenderSelector() {
  */
 function selectRole(idx) {
     let currentRole = window.currentRole = window.roles[idx];
-    alert('选择角色：' + currentRole.name);
     // 记录角色到localStorage
     localStorage.setItem('chatai_selected_role', String(idx));
     // conversation前插入系统提示词
