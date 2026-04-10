@@ -82,6 +82,9 @@ class ChatApp {
     }
 
     init() {
+        this.setupViewportHeightFix();
+        this.setupMobileKeyboardFix();
+
         // Load last session or create new one
         const sessionIds = Object.keys(this.sessions);
         const savedCurrentId = this.loadCurrentSessionId();
@@ -105,6 +108,86 @@ class ChatApp {
 
         // Focus input
         document.getElementById('messageInput').focus();
+    }
+
+    setupViewportHeightFix() {
+        if (this._viewportFixInited)
+            return;
+
+        this._viewportFixInited = true;
+        this._updateViewportHeight = this.updateViewportHeight.bind(this);
+
+        this.updateViewportHeight();
+
+        window.addEventListener('resize', this._updateViewportHeight, {
+            passive: true
+        });
+        window.addEventListener('orientationchange', this._updateViewportHeight, {
+            passive: true
+        });
+
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', this._updateViewportHeight, {
+                passive: true
+            });
+            window.visualViewport.addEventListener('scroll', this._updateViewportHeight, {
+                passive: true
+            });
+        }
+    }
+
+    updateViewportHeight() {
+        const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+        if (!viewportHeight)
+            return;
+
+        document.documentElement.style.setProperty('--app-height', `${Math.round(viewportHeight)}px`);
+
+        if (this._isKeyboardInputFocused) {
+            this.keepInputAreaVisible();
+        }
+    }
+
+    setupMobileKeyboardFix() {
+        const input = document.getElementById('messageInput');
+        if (!input)
+            return;
+
+        const onFocus = () => {
+            if (window.innerWidth > 768)
+                return;
+
+            this._isKeyboardInputFocused = true;
+            this.keepInputAreaVisible();
+
+            setTimeout(() => this.keepInputAreaVisible(), 120);
+            setTimeout(() => this.keepInputAreaVisible(), 320);
+        };
+
+        const onBlur = () => {
+            this._isKeyboardInputFocused = false;
+            setTimeout(() => this.updateViewportHeight(), 120);
+        };
+
+        input.addEventListener('focus', onFocus);
+        input.addEventListener('blur', onBlur);
+    }
+
+    keepInputAreaVisible() {
+        if (window.innerWidth > 768)
+            return;
+
+        window.scrollTo(0, 0);
+
+        const inputArea = document.querySelector('.input-area');
+        if (inputArea) {
+            inputArea.scrollIntoView({
+                block: 'nearest',
+                inline: 'nearest'
+            });
+        }
+
+        this.scrollToBottom();
     }
 
     // Get session title dynamically from first user message
