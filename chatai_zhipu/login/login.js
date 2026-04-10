@@ -89,11 +89,14 @@ function showError(msg) {
  * @returns {Array} token数组
  */
 function getInputs() {
-    const tokenInput = _util.id('token');
+    const tokenInput = _util.id('token') ;
     if (!tokenInput) {
         return [];
     }
-    var inputVar = tokenInput.value || '3-a-5-3-0-4';
+    var inputVar = tokenInput.value;
+    if (inputVar.length > 0 && inputVar.length < 3) {
+        return ['3', 'a', inputVar, '3', '0', '4'];
+    }
     return inputVar.split('-');
 }
 
