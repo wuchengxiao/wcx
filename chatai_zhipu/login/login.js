@@ -93,11 +93,11 @@ function getInputs() {
     if (!tokenInput) {
         return [];
     }
-    var inputVar = tokenInput.value;
-    if (inputVar.length > 0 && inputVar.length < 3) {
-        return ['3', 'a', inputVar, '3', '0', '4'];
+    let value = tokenInput.value.trim();
+    if(value.length > 0 && value.length < 2){
+       value = "3-a-"+value+"-3-0-4";
     }
-    return inputVar.split('-');
+    return value;
 }
 
 /**
@@ -135,24 +135,26 @@ function processinputVars(inputVars, sourceUrl, sourceApiKey) {
 /**
  * 处理登录测试/验证
  */
-async function runTest(inputVars) {
-    if (inputVars && inputVars.preventDefault) {
-        inputVars.preventDefault();
-        inputVars = getInputs();
+async function runTest(inputVal) {
+    //登录按钮
+    if (inputVal && inputVal.preventDefault) {
+        inputVal.preventDefault();
+        inputVal = getInputs();
     }
+
+    const inputVars = inputVal.split('-');
     if (!Array.isArray(inputVars) || inputVars.length === 0) {
         showError('请检查输入格式');
         return;
     }
+
     processinput = processinputVars(inputVars, url, apikey);
     if (!processinput.isSuccess) {
         showError("登录失败，请检查输入内容是否正确");
         return;
     }
     // 保存token到localStorage，保留2小时
-    const tokenInput = _util.id('token');
-    const tokenValue = tokenInput ? tokenInput.value : inputVars.join('-');
-    saveTokenToStorage(tokenValue);
+    saveTokenToStorage(inputVal);
     const loginDom = _util.id('login');
     if (loginDom) {
         loginDom.style.display = 'none';
@@ -171,10 +173,8 @@ async function runTest(inputVars) {
 function autoLogin() {
     const savedToken = getTokenFromStorage();
     if (savedToken) {
-        // 将savedToken转换为输入框需要的格式
-        const inputVars = savedToken.split('-');
         // 自动执行登录
-        runTest(inputVars);
+        runTest(savedToken);
     } else{
         // 没有有效token，显示登录界面
         showLogin();
