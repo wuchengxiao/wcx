@@ -616,11 +616,50 @@ class ChatApp {
 
     // Message Actions
     copyMessage(content, event) {
-        event.stopPropagation();
-        navigator.clipboard.writeText(content).then( () => {
-            this.showToast('已复制到剪贴板');
+        if (event)
+            event.stopPropagation();
+
+        const text = typeof content === 'string' ? content : String(content ?? '');
+
+        const fallbackCopy = () => {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.setAttribute('readonly', '');
+            textarea.style.position = 'fixed';
+            textarea.style.top = '-9999px';
+            textarea.style.left = '-9999px';
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+
+            let ok = false;
+            try {
+                ok = document.execCommand('copy');
+            } catch {
+                ok = false;
+            }
+
+            document.body.removeChild(textarea);
+
+            if (ok) {
+                this.showToast('已复制到剪贴板');
+            } else {
+                this.showToast('复制失败，请手动复制');
+            }
+        };
+
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function' && window.isSecureContext) {
+            navigator.clipboard.writeText(text)
+                .then(() => {
+                    this.showToast('已复制到剪贴板');
+                })
+                .catch(() => {
+                    fallbackCopy();
+                });
+            return;
         }
-        );
+
+        fallbackCopy();
     }
 
     deleteMessage(messageId, event) {
