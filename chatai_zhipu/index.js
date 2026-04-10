@@ -474,6 +474,20 @@ class ChatApp {
         }
     }
 
+    getRequestErrorText(error, prefix = '请求失败') {
+        const rawMessage = (() => {
+            if (!error) return '';
+            if (typeof error === 'string') return error.trim();
+            if (error instanceof Error) return String(error.message || '').trim();
+            if (error.error) return this.getRequestErrorText(error.error, prefix).replace(/^【[^】]+】/, '').trim();
+            if (typeof error.message === 'string') return error.message.trim();
+            if (typeof error.msg === 'string') return error.msg.trim();
+            return '';
+        })();
+
+        return `【${prefix}】${rawMessage || '请稍后重试。'}`;
+    }
+
     // Messaging
     // 依赖 request/requestText.js
     async sendMessage() {
@@ -534,7 +548,7 @@ class ChatApp {
                     url: processinput.processedUrl
                 });
 
-                assistantMessage.content = imgUrl
+                assistantMessage.content = typeof imgUrl === 'string' && imgUrl.trim()
                     ? `![AI生成图片](${imgUrl})`
                     : '图片生成失败，请稍后重试。';
 
@@ -543,7 +557,7 @@ class ChatApp {
                 this.renderSessionList();
                 this.updateMessageBubble(assistantMessage.id, assistantMessage.content, '');
             } catch (e) {
-                assistantMessage.content = '图片生成出现异常，请稍后重试。';
+                assistantMessage.content = this.getRequestErrorText(e, '图片生成失败');
                 session.updatedAt = new Date().toISOString();
                 this.saveSessions();
                 this.renderSessionList();
@@ -556,6 +570,7 @@ class ChatApp {
         this.showTypingIndicator();
 
         // === 使用真实API流式回复 ===
+        let assistantMessage = null;
         try {
             const messages = [
                 ...(selectedRole && selectedRole.systemPrompt ? [selectedRole.systemPrompt] : []),
@@ -563,7 +578,7 @@ class ChatApp {
             ];
             let replyContent = '';
             // 先插入一条空的assistant消息用于流式填充
-            const assistantMessage = {
+            assistantMessage = {
                 id: 'msg_' + (Date.now() + 1),
                 role: 'assistant',
                 content: '',
@@ -580,64 +595,80 @@ class ChatApp {
             let token = processinput.processedApiKey;
             let url = processinput.processedUrl;
             // 流式请求
-            let hasError = false;
-            if (window.requestTextByMessages) {
-                for await (const chunk of window.requestTextByMessages({ messages, token, url })) {
-                    if (!chunk) {
-                        hasError = true;
-                        break;
-                    }
-                    const delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta ? chunk.choices[0].delta : null;
-                    if (delta) {
-                        const reasoningChunk = delta.reasoning_content || delta.reasoning || delta.thinking || '';
-                        if (reasoningChunk) {
-                            const sid = this.currentSessionId;
-                            this.sessionThinkingById[sid] = (this.sessionThinkingById[sid] || '') + reasoningChunk;
-                            // 还未进入正式回答前，实时显示思考过程
-                            this.updateMessageBubble(assistantMessage.id, replyContent, this.sessionThinkingById[sid] || '');
-                        }
-                    }
-                    if (chunk.choices && chunk.choices[0] && chunk.choices[0].delta && chunk.choices[0].delta.content) {
-                        replyContent += chunk.choices[0].delta.content;
-                        assistantMessage.content = replyContent;
-                        // 一旦进入正式回答，隐藏并清空思考过程
-                        this.sessionThinkingById[this.currentSessionId] = '';
-                        this.sessionThinkingMessageIdById[this.currentSessionId] = null;
-                        this.saveSessions();
-                        this.updateMessageBubble(assistantMessage.id, replyContent, '');
+            if (!window.requestTextByMessages) {
+                throw new Error('文本请求功能未加载，请刷新页面后重试。');
+            }
+
+            for await (const chunk of window.requestTextByMessages({ messages, token, url })) {
+                if (!chunk) {
+                    throw new Error('接口未返回有效数据');
+                }
+
+                if (chunk.error) {
+                    throw new Error(this.getRequestErrorText(chunk.error, '请求失败').replace(/^【请求失败】/, '').trim());
+                }
+
+                const delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta ? chunk.choices[0].delta : null;
+                if (delta) {
+                    const reasoningChunk = delta.reasoning_content || delta.reasoning || delta.thinking || '';
+                    if (reasoningChunk) {
+                        const sid = this.currentSessionId;
+                        this.sessionThinkingById[sid] = (this.sessionThinkingById[sid] || '') + reasoningChunk;
+                        // 还未进入正式回答前，实时显示思考过程
+                        this.updateMessageBubble(assistantMessage.id, replyContent, this.sessionThinkingById[sid] || '');
                     }
                 }
-            } else {
-                hasError = true;
+
+                if (chunk.choices && chunk.choices[0] && chunk.choices[0].delta && chunk.choices[0].delta.content) {
+                    replyContent += chunk.choices[0].delta.content;
+                    assistantMessage.content = replyContent;
+                    // 一旦进入正式回答，隐藏并清空思考过程
+                    this.sessionThinkingById[this.currentSessionId] = '';
+                    this.sessionThinkingMessageIdById[this.currentSessionId] = null;
+                    this.saveSessions();
+                    this.updateMessageBubble(assistantMessage.id, replyContent, '');
+                }
             }
-            if (hasError) {
-                assistantMessage.content = '【接口请求失败或未配置】';
+
+            if (!replyContent.trim()) {
+                assistantMessage.content = '【请求失败】接口未返回有效内容';
                 this.sessionThinkingById[this.currentSessionId] = '';
                 this.sessionThinkingMessageIdById[this.currentSessionId] = null;
                 this.saveSessions();
-                this.renderChat();
+                this.updateMessageBubble(assistantMessage.id, assistantMessage.content, '');
             }
+
             session.updatedAt = new Date().toISOString();
             this.saveSessions();
             this.renderSessionList();
         } catch (e) {
-            // 错误处理
-            const session = this.sessions[this.currentSessionId];
             this.sessionThinkingById[this.currentSessionId] = '';
             this.sessionThinkingMessageIdById[this.currentSessionId] = null;
-            const assistantMessage = {
-                id: 'msg_' + (Date.now() + 2),
-                role: 'assistant',
-                content: '【请求出错】' + (e && e.message ? e.message : ''),
-                time: new Date().toLocaleTimeString('zh-CN', {
-                    hour: '2-digit',
-                    minute: '2-digit'
-                })
-            };
-            session.messages.push(assistantMessage);
+
+            if (assistantMessage) {
+                assistantMessage.content = this.getRequestErrorText(e, '请求失败');
+            } else {
+                assistantMessage = {
+                    id: 'msg_' + (Date.now() + 2),
+                    role: 'assistant',
+                    content: this.getRequestErrorText(e, '请求失败'),
+                    time: new Date().toLocaleTimeString('zh-CN', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    })
+                };
+                session.messages.push(assistantMessage);
+            }
+
             session.updatedAt = new Date().toISOString();
             this.saveSessions();
-            this.renderChat();
+            this.renderSessionList();
+
+            if (assistantMessage && assistantMessage.id) {
+                this.updateMessageBubble(assistantMessage.id, assistantMessage.content, '');
+            } else {
+                this.renderChat();
+            }
         }
     }
 
