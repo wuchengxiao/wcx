@@ -159,10 +159,10 @@ async function runTest(inputVal) {
     if (loginDom) {
         loginDom.style.display = 'none';
     }
-    const appDom = _util.id('app');
-    if (appDom) {
-        appDom.style.display = 'block';
-    }
+    // const appDom = _util.id('app');
+    // if (appDom) {
+    //     appDom.style.display = 'block';
+    // }
     // 通知index.js初始化聊天UI
     if (window.onLoginSuccess) window.onLoginSuccess();
 }
