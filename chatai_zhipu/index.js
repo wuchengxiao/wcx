@@ -26,7 +26,7 @@ class ChatApp {
             const saved = localStorage.getItem(this.themeStorageKey);
             return saved === 'light' ? 'light' : 'dark';
         } catch {
-            return 'dark';
+            return 'light';
         }
     }
 
