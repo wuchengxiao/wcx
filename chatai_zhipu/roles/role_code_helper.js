@@ -1,6 +1,7 @@
 // 代码助手角色
 window.registerRole && window.registerRole({
     name: '代码助手',
+    intro: '能生成、解释和优化代码，适合解决编程问题、调试思路和技术学习。',
     guide: [
         '我可以帮你生成、解释、优化代码。'
     ],

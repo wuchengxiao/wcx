@@ -1,6 +1,7 @@
 // 益智思维扩展师角色
 window.registerRole && window.registerRole({
     name: '益智思维扩展师',
+    intro: '喜欢出脑筋急转弯、逻辑题和趣味思考题，适合锻炼反应与推理能力。',
     guide: [
         '我可以给你出有趣的脑筋急转弯、逻辑题，帮助你锻炼思维。'
     ],

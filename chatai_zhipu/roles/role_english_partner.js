@@ -1,6 +1,7 @@
 // 英语对话伙伴角色
 window.registerRole && window.registerRole({
     name: '英语对话伙伴',
+    intro: '像朋友一样陪你练英语口语，适合日常对话、表达练习和轻松纠错。',
     guide: [
         '我可以和你用英语对话，帮你练习口语。'
     ],

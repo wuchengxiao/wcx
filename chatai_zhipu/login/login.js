@@ -27,7 +27,6 @@ function decryptStringNTimes(decryptTimes, encryptedString) {
     if (!encryptedString) {
         return null;
     }
-    // 简单的解密算法（示例：字符位置交换）
     for (let i = 0; i < decryptTimes; i++) {
         encryptedString = atob(encryptedString);
     }
@@ -101,13 +100,15 @@ function getInputs() {
 }
 
 /**
- * 处理输入的token，提取url和apikey
+ * 处理输入的token，提取 url、apikey 以及网络搜索配置
  * @param {Array} inputVars - token数组
  * @param {string} sourceUrl - 加密的url
  * @param {string} sourceApiKey - 加密的apikey
- * @returns {Object} 包含processedUrl, processedApiKey, isSuccess的对象
+ * @param {string} sourceWebSearchUrl - 加密的网络搜索地址
+ * @param {string} sourceWebSearchApiKey - 加密的网络搜索密钥
+ * @returns {Object} 包含 processedUrl、processedApiKey、processedWebSearchUrl、processedWebSearchApiKey、isSuccess 的对象
  */
-function processinputVars(inputVars, sourceUrl, sourceApiKey) {
+function processinputVars(inputVars, sourceUrl, sourceApiKey, sourceWebSearchUrl, sourceWebSearchApiKey) {
     let isSuccess = false;
     if (inputVars.length < 6) {
         return {
@@ -116,9 +117,13 @@ function processinputVars(inputVars, sourceUrl, sourceApiKey) {
     }
     let processedUrl = '';
     let processedApiKey = '';
+    let processedWebSearchUrl = '';
+    let processedWebSearchApiKey = '';
     try {
         processedUrl = decryptStringNTimes(inputVars[2], insertCharAtPosition(inputVars[0], inputVars[1], sourceUrl));
         processedApiKey = decryptStringNTimes(inputVars[5], insertCharAtPosition(inputVars[3], inputVars[4], sourceApiKey));
+        processedWebSearchUrl = decryptStringNTimes(inputVars[2], insertCharAtPosition(inputVars[0], inputVars[1], sourceWebSearchUrl));
+        processedWebSearchApiKey = decryptStringNTimes(inputVars[5], insertCharAtPosition(inputVars[3], 'W', sourceWebSearchApiKey));
     } catch (e) {
         return {
             isSuccess
@@ -128,6 +133,8 @@ function processinputVars(inputVars, sourceUrl, sourceApiKey) {
     return {
         processedUrl,
         processedApiKey,
+        processedWebSearchUrl,
+        processedWebSearchApiKey,
         isSuccess
     };
 }
@@ -148,7 +155,7 @@ async function runTest(inputVal) {
         return;
     }
 
-    processinput = processinputVars(inputVars, url, apikey);
+    processinput = processinputVars(inputVars, url, apikey, webSearchUrl, webSearchApiKey);
     if (!processinput.isSuccess) {
         showError("登录失败，请检查输入内容是否正确");
         return;
@@ -159,10 +166,7 @@ async function runTest(inputVal) {
     if (loginDom) {
         loginDom.style.display = 'none';
     }
-    // const appDom = _util.id('app');
-    // if (appDom) {
-    //     appDom.style.display = 'block';
-    // }
+
     // 通知index.js初始化聊天UI
     if (window.onLoginSuccess) window.onLoginSuccess();
 }

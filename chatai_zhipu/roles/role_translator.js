@@ -1,6 +1,7 @@
 // 翻译专家角色
 window.registerRole && window.registerRole({
     name: '翻译专家',
+    intro: '擅长多语种翻译与本地化表达，适合直译、润译、术语处理和双语对照。',
     guide: [
         '我可以将文本翻译为多种语言。'
     ],

@@ -1,6 +1,7 @@
 // 错题检查助手角色
 window.registerRole && window.registerRole({
     name: '错题检查助手',
+    intro: '帮助分析错因、拆解步骤并给出改进建议，适合复盘题目和补知识漏洞。',
     guide: [
         '我可以帮你分析错题，找出原因并讲解。'
     ],

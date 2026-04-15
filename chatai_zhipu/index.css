@@ -612,7 +612,24 @@ body {
     overflow: hidden;
 }
 
+.message-tooltrace {
+    margin: 8px 0 10px;
+    border: 1px dashed rgba(59, 130, 246, 0.35);
+    border-radius: var(--radius-sm);
+    background: rgba(59, 130, 246, 0.08);
+    overflow: hidden;
+}
+
 .message-reasoning > summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    user-select: none;
+}
+
+.message-tooltrace > summary {
     cursor: pointer;
     list-style: none;
     padding: 8px 12px;
@@ -625,17 +642,38 @@ body {
     display: none;
 }
 
+.message-tooltrace > summary::-webkit-details-marker {
+    display: none;
+}
+
 .message-reasoning > summary::before {
     content: '▸';
     margin-right: 6px;
     color: var(--text-muted);
 }
 
+.message-tooltrace > summary::before {
+    content: '▸';
+    margin-right: 6px;
+    color: #60a5fa;
+}
+
 .message-reasoning[open] > summary::before {
     content: '▾';
 }
 
+.message-tooltrace[open] > summary::before {
+    content: '▾';
+}
+
 .message-reasoning-body {
+    padding: 0 12px 10px;
+    font-size: 13px;
+    line-height: 1.65;
+    color: var(--text-secondary);
+}
+
+.message-tooltrace-body {
     padding: 0 12px 10px;
     font-size: 13px;
     line-height: 1.65;
@@ -870,15 +908,18 @@ body {
 /* Toast */
 .toast {
     position: fixed;
-    bottom: 100px;
+    top: calc(env(safe-area-inset-top, 0px) + 20px);
     left: 50%;
-    transform: translateX(-50%) translateY(100px);
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border);
-    padding: 12px 20px;
-    border-radius: var(--radius-sm);
-    font-size: 13px;
-    color: var(--text-primary);
+    transform: translateX(-50%) translateY(-20px);
+    background: rgba(15, 23, 42, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 10px 16px;
+    border-radius: 10px;
+    font-size: 12px;
+    color: #f8fafc;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
     opacity: 0;
     transition: all 0.3s;
     z-index: 1001;
@@ -1018,40 +1059,165 @@ body {
 /* Role Selector */
 .role-selector-area {
     display: flex;
-    gap: 12px;
+    flex-direction: column;
+    gap: 14px;
     margin-top: 12px;
     padding: 12px 0;
-    flex-wrap: wrap;
-    justify-content: center;
 }
 
 .role-selector-title {
     width: 100%;
+    font-size: 13px;
+    color: var(--text-secondary);
+    text-align: left;
+    font-weight: 600;
+}
+
+.role-selector-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.role-selector-group-title {
     font-size: 12px;
     color: var(--text-muted);
-    text-align: left;
-    padding-left: 12px;
-    margin-bottom: 8px;
+    padding-left: 4px;
+}
+
+.role-selector-group-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
 }
 
 .role-selector-btn {
-    padding: 10px 16px;
+    padding: 12px 14px;
     background: var(--bg-tertiary);
     border: 1px solid var(--border);
-    border-radius: 20px;
+    border-radius: 14px;
     font-size: 13px;
     color: var(--text-secondary);
     cursor: pointer;
     transition: all 0.2s;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 92px;
+    width: 100%;
 }
 
 .role-selector-btn:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
+    transform: translateY(-1px);
 }
 
 .role-selector-btn.active {
     background: var(--primary);
     border-color: var(--primary);
     color: #fff;
+}
+
+.role-selector-btn-name {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.role-selector-btn-desc {
+    font-size: 12px;
+    line-height: 1.5;
+    color: inherit;
+    opacity: 0.88;
+}
+
+.persona-panel {
+    margin-bottom: 16px;
+    padding: 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+}
+
+.persona-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.persona-panel-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.persona-panel-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.persona-panel-name {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.persona-panel-intro {
+    margin-top: 6px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+
+.persona-panel-btn {
+    border: 1px solid var(--border);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-radius: 999px;
+    padding: 10px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    flex-shrink: 0;
+}
+
+.persona-panel-btn:hover {
+    background: var(--bg-hover);
+}
+
+.persona-panel .role-selector-area {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+}
+
+@media (max-width: 768px) {
+    .role-selector-group-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .role-selector-btn {
+        padding: 10px 12px;
+        min-height: 84px;
+    }
+
+    .role-selector-btn-name {
+        font-size: 13px;
+    }
+
+    .role-selector-btn-desc {
+        font-size: 11px;
+        line-height: 1.4;
+    }
+
+    .persona-panel-header {
+        flex-direction: column;
+    }
+
+    .persona-panel-btn {
+        width: 100%;
+    }
 }

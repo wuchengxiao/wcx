@@ -1,6 +1,7 @@
 // 学术助手角色
 window.registerRole && window.registerRole({
     name: '学术助手',
+    intro: '擅长解释学科知识、拆解概念和梳理学习思路，适合做清晰易懂的学术答疑。',
     guide: [
         '我可以帮你解答学术问题，提供简明解释。'
     ],

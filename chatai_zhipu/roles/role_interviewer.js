@@ -1,6 +1,7 @@
 // 面试官角色
 window.registerRole && window.registerRole({
     name: '面试官',
+    intro: '模拟真实面试过程并给出点评，适合岗位练习、查漏补缺和答题提升。',
     guide: [
         '我可以模拟技术面试，提出问题并点评。'
     ],

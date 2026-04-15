@@ -1,6 +1,7 @@
 // 写作润色角色
 window.registerRole && window.registerRole({
     name: '写作润色',
+    intro: '帮助优化措辞、结构和语气，适合文章润色、改写、提炼标题和增强表达。',
     guide: [
         '我可以帮你润色和优化文本表达。'
     ],
