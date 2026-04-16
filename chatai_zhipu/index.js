@@ -14,6 +14,7 @@ class ChatApp {
         this.currentModel = 'GLM-4.7';
         this.sessions = this.loadSessions();
         this.currentSessionId = null;
+        this.isSending = false;
         // 临时思考内容（不落盘）
         this.sessionThinkingById = {};
         this.sessionThinkingMessageIdById = {};
@@ -888,12 +889,22 @@ class ChatApp {
 
     // Messaging
     // 依赖 request/requestText.js
-    async sendMessage() {
+    async sendMessage(options = {}) {
+        const opts = options || {};
         const input = document.getElementById('messageInput');
-        const content = input.value.trim();
+        const usesInputValue = typeof opts.content !== 'string';
+        const rawContent = usesInputValue ? input.value : opts.content;
+        const content = typeof rawContent === 'string' ? rawContent.trim() : '';
 
         if (!content)
             return;
+
+        if (this.isSending) {
+            this.showToast('请等待当前回复完成后再发送');
+            return;
+        }
+
+        this.isSending = true;
 
         const session = this.sessions[this.currentSessionId];
         const selectedRole = this.getSessionRole(session);
@@ -915,8 +926,10 @@ class ChatApp {
         this.renderSessionList();
         this.renderChat();
 
-        input.value = '';
-        this.autoResize(input);
+        if (usesInputValue && input) {
+            input.value = '';
+            this.autoResize(input);
+        }
 
         // Show typing indicator
         this.showTypingIndicator();
@@ -1084,6 +1097,8 @@ class ChatApp {
             } else {
                 this.renderChat();
             }
+        } finally {
+            this.isSending = false;
         }
     }
 
@@ -1168,6 +1183,93 @@ class ChatApp {
             this.saveSessions();
             this.renderChat();
         }
+    }
+
+    getUserMessageRound(session, messageId) {
+        if (!session || !Array.isArray(session.messages))
+            return null;
+
+        const startIndex = session.messages.findIndex(message => message && message.id === messageId);
+        if (startIndex < 0)
+            return null;
+
+        const userMessage = session.messages[startIndex];
+        if (!userMessage || userMessage.role !== 'user')
+            return null;
+
+        let endIndex = startIndex;
+        for (let index = startIndex + 1; index < session.messages.length; index++) {
+            const currentMessage = session.messages[index];
+            if (!currentMessage)
+                continue;
+            if (currentMessage.role === 'user')
+                break;
+            endIndex = index;
+        }
+
+        return {
+            startIndex,
+            endIndex,
+            userMessage,
+            removedMessages: session.messages.slice(startIndex, endIndex + 1)
+        };
+    }
+
+    removeMessageRound(session, roundInfo) {
+        if (!session || !roundInfo)
+            return;
+
+        const removedMessages = Array.isArray(roundInfo.removedMessages) ? roundInfo.removedMessages : [];
+        const thinkingMessageId = this.sessionThinkingMessageIdById[this.currentSessionId];
+
+        if (thinkingMessageId && removedMessages.some(message => message && message.id === thinkingMessageId)) {
+            this.sessionThinkingById[this.currentSessionId] = '';
+            this.sessionThinkingMessageIdById[this.currentSessionId] = null;
+        }
+
+        session.messages.splice(roundInfo.startIndex, roundInfo.endIndex - roundInfo.startIndex + 1);
+        session.updatedAt = new Date().toISOString();
+    }
+
+    async resendMessage(messageId, event) {
+        if (event)
+            event.stopPropagation();
+
+        if (this.isSending) {
+            this.showToast('请等待当前回复完成后再重发');
+            return;
+        }
+
+        const session = this.sessions[this.currentSessionId];
+        const roundInfo = this.getUserMessageRound(session, messageId);
+        if (!roundInfo) {
+            this.showToast('只能重发用户发送的消息');
+            return;
+        }
+
+        const resendContent = typeof roundInfo.userMessage.content === 'string'
+            ? roundInfo.userMessage.content.trim()
+            : '';
+        if (!resendContent) {
+            this.showToast('这条消息内容为空，无法重发');
+            return;
+        }
+
+        const assistantCount = Math.max(0, roundInfo.endIndex - roundInfo.startIndex);
+        const confirmText = assistantCount > 0
+            ? '确定要重发这条消息吗？当前这条消息及其回答会被删除，然后重新发送。'
+            : '确定要重发这条消息吗？当前这条消息会被删除，然后重新发送。';
+
+        if (!confirm(confirmText))
+            return;
+
+        this.removeMessageRound(session, roundInfo);
+        this.saveSessions();
+        this.renderSessionList();
+        this.renderChat();
+        this.updateInputPlaceholder();
+
+        await this.sendMessage({ content: resendContent, source: 'resend' });
     }
 
     toggleMessageCollapse(messageId, event) {
@@ -1379,6 +1481,11 @@ class ChatApp {
                             <button class="message-action message-action-collapse" onclick="chatApp.toggleMessageCollapse('${msg.id}', event)">
                                 ${isCollapsed ? '展开' : '收起'}
                             </button>
+                            ${isUser ? `
+                                <button class="message-action" onclick="chatApp.resendMessage('${msg.id}', event)">
+                                    重发
+                                </button>
+                            ` : ''}
                             <button class="message-action" onclick="chatApp.copyMessage(${JSON.stringify(msg.content).replace(/"/g, '&quot;')}, event)">
                                 复制
                             </button>
