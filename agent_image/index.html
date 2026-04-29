@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文心智能体客服</title>
+    <style>
+        /* ==================== 
+           CSS 样式部分 
+           ==================== */
+        
+        /* 全局重置与基础样式 */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f5f5f5;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* 聊天主容器 */
+        .chat-wrapper {
+            width: 100%;
+            max-width: 600px; /* 桌面端最大宽度 */
+            height: 90vh;     /* 高度占视口90% */
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-wrapper.locked {
+            filter: blur(1px);
+            pointer-events: none;
+            user-select: none;
+        }
+
+        /* 头部 */
+        .chat-header {
+            background: #409eff;
+            color: #fff;
+            padding: 15px 20px;
+            text-align: center;
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        /* 消息列表区域 */
+        .message-list {
+            flex: 1; /* 占据剩余空间 */
+            padding: 20px;
+            overflow-y: auto; /* 允许垂直滚动 */
+            background-color: #f9f9f9;
+            scroll-behavior: smooth;
+        }
+
+        /* 消息行布局 */
+        .msg-row {
+            display: flex;
+            margin-bottom: 15px;
+            opacity: 0; /* 初始透明，用于动画 */
+            animation: fadeIn 0.3s forwards;
+        }
+
+        /* 用户消息：靠右显示 */
+        .msg-row.user { justify-content: flex-end; }
+        
+        /* 机器人消息：靠左显示 */
+        .msg-row.bot { justify-content: flex-start; }
+
+        /* 气泡样式 */
+        .bubble {
+            max-width: 75%;
+            padding: 12px 16px;
+            border-radius: 8px;
+            line-height: 1.5;
+            word-break: break-word;
+            font-size: 15px;
+            position: relative;
+        }
+
+        /* 用户气泡颜色 */
+        .user .bubble {
+            background-color: #409eff;
+            color: #fff;
+            border-top-right-radius: 2px;
+        }
+
+        /* 机器人气泡颜色 */
+        .bot .bubble {
+            background-color: #e4e7ed;
+            color: #333;
+            border-top-left-radius: 2px;
+        }
+
+        /* 机器人富内容 */
+        .bot .bubble .answer-text {
+            white-space: pre-wrap;
+        }
+        .thinking-panel {
+            margin-top: 10px;
+            padding: 8px 10px;
+            border-radius: 6px;
+            background: #f0f2f5;
+            border-left: 3px solid #409eff;
+            font-size: 13px;
+            color: #555;
+            display: none;
+        }
+        .thinking-panel.show { display: block; }
+        .thinking-title {
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: #409eff;
+        }
+        .thinking-item { margin-bottom: 4px; }
+        .thinking-item:last-child { margin-bottom: 0; }
+        .thinking-status {
+            display: inline-block;
+            min-width: 42px;
+            margin-right: 6px;
+            font-weight: 600;
+        }
+        .bot-images {
+            margin-top: 10px;
+            display: grid;
+            gap: 8px;
+        }
+        .bot-images img {
+            width: 100%;
+            max-width: 320px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            background: #fff;
+            display: block;
+        }
+
+        /* 鉴权弹层 */
+        .auth-mask {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.35);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 999;
+        }
+        .auth-mask.show { display: flex; }
+        .auth-card {
+            width: 92%;
+            max-width: 420px;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+            padding: 18px;
+        }
+        .auth-title {
+            font-size: 18px;
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .auth-desc {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 12px;
+            line-height: 1.6;
+        }
+        .auth-input-wrap {
+            display: flex;
+            gap: 8px;
+        }
+        #tokenInput {
+            flex: 1;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            outline: none;
+        }
+        #tokenInput:focus { border-color: #409eff; }
+        #tokenSubmitBtn {
+            border: none;
+            border-radius: 6px;
+            background: #409eff;
+            color: #fff;
+            font-size: 14px;
+            padding: 0 14px;
+            cursor: pointer;
+        }
+        #tokenSubmitBtn:hover { background: #66b1ff; }
+        .auth-error {
+            min-height: 18px;
+            margin-top: 8px;
+            color: #f56c6c;
+            font-size: 12px;
+        }
+
+        /* 输入区域 */
+        .input-area {
+            display: flex;
+            padding: 15px;
+            border-top: 1px solid #eee;
+            background: #fff;
+        }
+
+        /* 输入框样式 */
+        #inputBox {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            outline: none;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        #inputBox:focus { border-color: #409eff; }
+
+        /* 发送按钮 */
+        #sendBtn {
+            margin-left: 10px;
+            padding: 0 20px;
+            background: #409eff;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        #sendBtn:hover { background: #66b1ff; }
+        #sendBtn:disabled { background: #ccc; cursor: not-allowed; }
+
+        /* 加载动画 (三个点) */
+        .typing-indicator::after {
+            content: '...';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+
+        /* 简单动画定义 */
+        @keyframes fadeIn { to { opacity: 1; transform: translateY(0); } }
+        @keyframes dots { 0%, 20% { content: ''; } 40% { content: '.'; } 60% { content: '..'; } 80%, 100% { content: '...'; } }
+
+        /* 移动端适配 */
+        @media (max-width: 480px) {
+            .chat-wrapper { height: 100vh; border-radius: 0; max-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ==================== 
+     HTML 结构部分 
+     ==================== -->
+<section class="chat-wrapper">
+    <header class="chat-header">
+        智能助手
+    </header>
+    
+    <!-- 消息容器 -->
+    <main id="messageList" class="message-list">
+        <!-- 欢迎语 -->
+        <div class="msg-row bot">
+            <div class="bubble">你好！我是你的智能助手，有什么可以帮你的吗？</div>
+        </div>
+    </main>
+
+    <!-- 输入区 -->
+    <footer class="input-area">
+        <input id="inputBox" type="text" placeholder="请输入问题..." autocomplete="off"/>
+        <button id="sendBtn">发送</button>
+    </footer>
+</section>
+
+<section id="authMask" class="auth-mask">
+    <div class="auth-card">
+        <div class="auth-title">请输入访问口令</div>
+        <div class="auth-desc">口令验证成功后保存 2 小时，超时将自动失效并需要重新输入。</div>
+        <div class="auth-input-wrap">
+            <input id="tokenInput" type="password" placeholder="请输入, 如 0m36o4" autocomplete="off" />
+            <button id="tokenSubmitBtn">确认</button>
+        </div>
+        <div id="authError" class="auth-error"></div>
+    </div>
+</section>
+
+<!-- ==================== 
+     JavaScript 逻辑部分 
+     ==================== -->
+<script src="./app.js"></script>
+</body>
+</html>
