@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="HTML 代码实时预览工具：支持 Monaco 编辑器、拖拽导入 HTML、实时防抖渲染、左右/上下布局切换与编辑/预览区最大化。" />
+  <meta name="keywords" content="HTML预览, 实时预览, 在线编辑器, Monaco Editor, 前端工具, iframe Blob" />
+  <meta name="author" content="HTML Render Tool" />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="zh_CN" />
+  <meta property="og:title" content="HTML 代码实时预览工具" />
+  <meta property="og:description" content="基于原生 HTML/CSS/JS 的单页面预览工具，支持高亮编辑、拖拽导入与安全渲染。" />
+  <meta property="og:site_name" content="HTML 代码实时预览工具" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="HTML 代码实时预览工具" />
+  <meta name="twitter:description" content="支持 Monaco 编辑器与 Blob URL 安全渲染的 HTML 实时预览工具。" />
+  <title>HTML 代码实时预览工具</title>
+  <!-- 入口 emoji 图标（favicon） -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E%F0%9F%9A%80%3C/text%3E%3C/svg%3E" />
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "HTML 代码实时预览工具",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Web Browser",
+      "description": "支持 Monaco 编辑、拖拽导入 HTML、防抖实时预览与 iframe Blob 安全渲染的前端工具。",
+      "inLanguage": "zh-CN"
+    }
+  </script>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <h1 style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;">HTML 代码实时预览工具</h1>
+  <!-- 顶部工具栏 -->
+  <header id="toolbar" class="toolbar">
+    <div class="toolbar-group">
+      <button id="btn-horizontal" class="toolbar-btn is-active" type="button">左右排列</button>
+      <button id="btn-vertical" class="toolbar-btn" type="button">上下排列</button>
+    </div>
+
+    <div class="toolbar-group">
+      <button id="btn-max-editor" class="toolbar-btn" type="button">最大化编辑区</button>
+      <button id="btn-max-preview" class="toolbar-btn" type="button">最大化预览区</button>
+    </div>
+
+    <div class="toolbar-group toolbar-group-right">
+      <button id="btn-hide-toolbar" class="toolbar-btn toolbar-btn-danger" type="button">隐藏工具栏</button>
+    </div>
+  </header>
+
+  <!-- 主体容器：左编辑、右预览（默认） -->
+  <main id="workspace" class="workspace layout-horizontal">
+    <section id="editor-panel" class="panel panel-editor">
+      <div class="panel-title">HTML 编辑器</div>
+      <div id="editor" class="editor"></div>
+    </section>
+
+    <section id="preview-panel" class="panel panel-preview">
+      <div class="panel-title">实时预览</div>
+      <!-- 使用 iframe + Blob URL 渲染，不使用 document.write -->
+      <iframe
+        id="preview-frame"
+        class="preview-frame"
+        title="实时预览"
+        sandbox="allow-scripts allow-forms allow-modals allow-popups"
+      ></iframe>
+    </section>
+  </main>
+
+  <!-- 工具栏隐藏后的悬浮触发器（FAB） -->
+  <button id="toolbar-fab" class="toolbar-fab" type="button" aria-label="显示工具栏" title="显示工具栏">
+    ☰
+  </button>
+
+  <!-- 拖拽 HTML 文件时的确认弹窗 -->
+  <div id="drop-modal" class="modal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <h2 id="modal-title">检测到 HTML 文件</h2>
+      <p>是否加载该文件并更新到编辑器进行预览？</p>
+      <div class="modal-actions">
+        <button id="modal-cancel" class="toolbar-btn" type="button">取消</button>
+        <button id="modal-confirm" class="toolbar-btn is-active" type="button">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Monaco Editor CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs/loader.min.js"></script>
+  <script src="./script.js"></script>
+</body>
+</html>
