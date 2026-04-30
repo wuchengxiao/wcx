@@ -289,12 +289,13 @@
                 flex-wrap: wrap;
                 gap: 5px;
                 align-items: center;
+                align-content: flex-start;
                 padding: 5px 8px;
                 background-color: #f9f9f9;
                 border-bottom: 1px solid #ddd;
                 min-height: 36px;
-                max-height: 72px;
-                overflow-y: auto;
+                height: auto;
+                overflow: visible;
             }
 
             .filter-box {
@@ -325,6 +326,24 @@
                 font-size: 12px;
                 white-space: nowrap;
                 flex-shrink: 0;
+            }
+
+            .match-options {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-left: 6px;
+                font-size: 12px;
+                color: #555;
+                flex-shrink: 0;
+            }
+
+            .match-options label {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                cursor: pointer;
+                user-select: none;
             }
 
             .locate-status {
@@ -385,6 +404,10 @@
                             <button id="nodeLocateBtn">定位</button>
                             <span id="locateStatus" class="locate-status">0 / 0</span>
                         </div>
+                        <div class="match-options">
+                            <label><input id="ignoreCaseToggle" type="checkbox">忽略大小写</label>
+                            <label><input id="fuzzyMatchToggle" type="checkbox">模糊匹配</label>
+                        </div>
                     </div>
                     <div class="editor" id="output"></div>
                 </div>
@@ -410,6 +433,8 @@
                 const nodeLocateInput = document.getElementById('nodeLocateInput');
                 const nodeLocateBtn = document.getElementById('nodeLocateBtn');
                 const locateStatus = document.getElementById('locateStatus');
+                const ignoreCaseToggle = document.getElementById('ignoreCaseToggle');
+                const fuzzyMatchToggle = document.getElementById('fuzzyMatchToggle');
 
                 let tabs = [{
                     id: 0,
@@ -423,10 +448,46 @@
                 let isDarkTheme = false;
                 let tabIdSeed = Date.now();
 
+                function isMatch(source, keyword, options = {}) {
+                    const {
+                        ignoreCase = false,
+                        fuzzy = false
+                    } = options;
+
+                    let left = String(source ?? '');
+                    let right = String(keyword ?? '');
+
+                    if (ignoreCase) {
+                        left = left.toLowerCase();
+                        right = right.toLowerCase();
+                    }
+
+                    return fuzzy ? left.includes(right) : left === right;
+                }
+
+                function normalizeRenderedKey(text) {
+                    return String(text || '')
+                        .replace(/["'`]/g, '')
+                        .replace(/:$/g, '')
+                        .trim();
+                }
+
+                function getMatchOptions() {
+                    return {
+                        ignoreCase: Boolean(ignoreCaseToggle?.checked),
+                        fuzzy: Boolean(fuzzyMatchToggle?.checked)
+                    };
+                }
+
+                function buildLocateSignature(keyword, options) {
+                    const normalizedKeyword = options.ignoreCase ? String(keyword).toLowerCase() : String(keyword);
+                    return `${normalizedKeyword}::${options.ignoreCase ? 1 : 0}::${options.fuzzy ? 1 : 0}`;
+                }
+
                 // 获取JSON中指定属性的所有路径
                 function findNodePaths(node, propertyName, currentPath = []) {
                     const paths = [];
-                    const normalized = propertyName.toLowerCase();
+                    const matchOptions = getMatchOptions();
 
                     function traverse(obj, path) {
                         if (Array.isArray(obj)) {
@@ -436,8 +497,7 @@
                         } else if (obj && typeof obj === 'object') {
                             Object.entries(obj).forEach(([key, value]) => {
                                 const keyPath = [...path, key];
-                                // 不区分大小写 + 模糊匹配
-                                if (key.toLowerCase().includes(normalized)) {
+                                if (isMatch(key, propertyName, matchOptions)) {
                                     paths.push({
                                         path: keyPath,
                                         value: value,
@@ -797,17 +857,18 @@
                         return;
                     }
 
-                    const normalizedInput = propertyName.toLowerCase();
-                    const lastProperty = (output.dataset.nodePropertyName || '').toLowerCase();
+                    const matchOptions = getMatchOptions();
+                    const currentSignature = buildLocateSignature(propertyName, matchOptions);
+                    const lastSignature = output.dataset.nodeLocateSignature || '';
                     const lastIndex = Number.parseInt(output.dataset.currentNodeIndex || '-1', 10);
                     const lastCount = Number.parseInt(output.dataset.currentNodeCount || '0', 10);
 
-                    // 输入变化时：重新定位（并展开）
-                    if (lastProperty !== normalizedInput) {
+                    // 输入/开关变化时：重新定位（并展开）
+                    if (lastSignature !== currentSignature) {
                         if (tab.formatter) {
                             tab.formatter.openAtDepth(Infinity);
                         }
-                        highlightAndLocateNode(propertyName, 0);
+                        highlightAndLocateNode(propertyName, 0, currentSignature);
                         return;
                     }
 
@@ -818,7 +879,7 @@
                         nextIndex = ((nextIndex % lastCount) + lastCount) % lastCount;
                     }
 
-                    highlightAndLocateNode(propertyName, nextIndex);
+                    highlightAndLocateNode(propertyName, nextIndex, currentSignature);
                 });
 
                 nodeLocateInput.addEventListener('keydown', function(e) {
@@ -1029,7 +1090,7 @@
                 }
 
                 // 高亮和定位节点
-                function highlightAndLocateNode(propertyName, occurrenceIndex = 0) {
+                function highlightAndLocateNode(propertyName, occurrenceIndex = 0, locateSignature = '') {
                     // 使用requestAnimationFrame确保DOM已更新
                     requestAnimationFrame(function() {
                         // 清除之前的高亮
@@ -1037,25 +1098,19 @@
                             el.classList.remove('node-highlight', 'node-highlight-active');
                         });
 
-                        const normalizeKey = (text) => String(text || '')
-                            .replace(/["'`]/g, '')
-                            .replace(/:$/g, '')
-                            .trim()
-                            .toLowerCase();
-
-                        const targetKeyName = normalizeKey(propertyName);
+                        const matchOptions = getMatchOptions();
+                        const targetKeyName = normalizeRenderedKey(propertyName);
 
                         // 找到所有包含该属性名的行
                         const keyElements = Array.from(output.querySelectorAll('.json-formatter-key')).filter(el => {
-                            // 不区分大小写 + 模糊匹配
-                            return normalizeKey(el.textContent).includes(targetKeyName);
+                            return isMatch(normalizeRenderedKey(el.textContent), targetKeyName, matchOptions);
                         });
 
                         if (keyElements.length === 0) {
                             console.log(`未找到属性 "${propertyName}"`);
                             delete output.dataset.currentNodeIndex;
                             delete output.dataset.currentNodeCount;
-                            delete output.dataset.nodePropertyName;
+                            delete output.dataset.nodeLocateSignature;
                             locateStatus.textContent = '0 / 0';
                             return;
                         }
@@ -1096,7 +1151,7 @@
                         // 存储当前定位状态（用于连续点击时循环定位）
                         output.dataset.currentNodeIndex = String(targetIndex);
                         output.dataset.currentNodeCount = String(keyElements.length);
-                        output.dataset.nodePropertyName = propertyName;
+                        output.dataset.nodeLocateSignature = locateSignature || buildLocateSignature(propertyName, matchOptions);
                         locateStatus.textContent = `${targetIndex + 1} / ${keyElements.length}`;
                     });
                 }
