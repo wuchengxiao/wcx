@@ -43,10 +43,11 @@
         .chat-header {
             background: #409eff;
             color: #fff;
-            padding: 15px 20px;
+            padding: 6px 12px;
             text-align: center;
-            font-size: 18px;
-            font-weight: 500;
+            font-size: 14px;
+            font-weight: 600;
+            line-height: 1.15;
         }
 
         /* 消息列表区域 */
@@ -54,6 +55,7 @@
             flex: 1; /* 占据剩余空间 */
             padding: 20px;
             overflow-y: auto; /* 允许垂直滚动 */
+            overflow-x: hidden;
             background-color: #f9f9f9;
             scroll-behavior: smooth;
         }
@@ -74,7 +76,7 @@
 
         /* 气泡样式 */
         .bubble {
-            max-width: 75%;
+            max-width: 90%;
             padding: 12px 16px;
             border-radius: 8px;
             line-height: 1.5;
@@ -95,11 +97,323 @@
             background-color: #e4e7ed;
             color: #333;
             border-top-left-radius: 2px;
+            overflow-wrap: anywhere;
         }
 
         /* 机器人富内容 */
-        .bot .bubble .answer-text {
+        .bot .bubble .answer-text.is-plain {
             white-space: pre-wrap;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 13px;
+            line-height: 1.7;
+            background: #f7f8fa;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 10px 12px;
+            overflow-x: auto;
+            color: #1f2937;
+        }
+        .bot .bubble .answer-text {
+            max-width: 100%;
+            overflow-wrap: anywhere;
+        }
+        .bot .bubble .answer-text.is-markdown {
+            max-width: 100%;
+            overflow-x: auto;
+        }
+        .bot .bubble .answer-text.is-markdown .md-renderer {
+            max-width: 100%;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            line-height: 1.7;
+        }
+        .bot .bubble .answer-text.is-markdown > *:first-child { margin-top: 0; }
+        .bot .bubble .answer-text.is-markdown > *:last-child { margin-bottom: 0; }
+        .bot .bubble .answer-text.is-markdown .md-renderer p,
+        .bot .bubble .answer-text.is-markdown .md-renderer ul,
+        .bot .bubble .answer-text.is-markdown .md-renderer ol,
+        .bot .bubble .answer-text.is-markdown .md-renderer blockquote,
+        .bot .bubble .answer-text.is-markdown .md-renderer pre,
+        .bot .bubble .answer-text.is-markdown .md-renderer table,
+        .bot .bubble .answer-text.is-markdown .md-renderer h1,
+        .bot .bubble .answer-text.is-markdown .md-renderer h2,
+        .bot .bubble .answer-text.is-markdown .md-renderer h3,
+        .bot .bubble .answer-text.is-markdown .md-renderer h4,
+        .bot .bubble .answer-text.is-markdown .md-renderer h5,
+        .bot .bubble .answer-text.is-markdown .md-renderer h6 {
+            margin: 0.55em 0;
+        }
+        .bot .bubble .answer-text.is-markdown .md-renderer pre {
+            max-width: 100%;
+            overflow: auto;
+            white-space: pre-wrap;
+            padding: 10px;
+            border-radius: 6px;
+            background: #f5f7fa;
+        }
+        .bot .bubble .answer-text.is-markdown .md-renderer code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 0.92em;
+            overflow-wrap: anywhere;
+        }
+        .bot .bubble .answer-text.is-markdown .md-renderer table {
+            display: block;
+            max-width: 100%;
+            overflow-x: auto;
+            border-collapse: collapse;
+        }
+        .bot .bubble .answer-text.is-markdown .md-renderer th,
+        .bot .bubble .answer-text.is-markdown .md-renderer td {
+            border: 1px solid #dcdfe6;
+            padding: 6px 8px;
+            text-align: left;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+        .bot .bubble .answer-text.is-markdown .md-renderer img {
+            max-width: 100%;
+            height: auto;
+        }
+        .bubble-actions {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            display: flex;
+            gap: 6px;
+            z-index: 2;
+            opacity: 0;
+            transition: opacity 0.18s ease;
+        }
+        .bubble:hover .bubble-actions,
+        .bubble:focus-within .bubble-actions {
+            opacity: 1;
+        }
+        .bubble-expand-btn {
+            width: 28px;
+            height: 28px;
+            border: none;
+            border-radius: 14px;
+            background: rgba(0, 0, 0, 0.12);
+            color: inherit;
+            font-size: 15px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .bubble-expand-btn:hover { background: rgba(0, 0, 0, 0.18); }
+
+        .img-preview-mask {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.88);
+            z-index: 1200;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        .img-preview-mask.show { display: flex; }
+        .img-preview-main {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 56px 24px 52px;
+            position: relative;
+        }
+        .img-preview-stage {
+            width: min(96vw, 1400px);
+            height: calc(100vh - 120px);
+            position: relative;
+            overflow: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .img-preview-image {
+            max-width: none;
+            max-height: none;
+            width: auto;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+            background: #111;
+            display: block;
+        }
+        .img-preview-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 44px;
+            height: 44px;
+            border: none;
+            border-radius: 22px;
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 3;
+        }
+        .img-preview-btn:hover { background: rgba(255, 255, 255, 0.32); }
+        .img-preview-prev { left: 10px; }
+        .img-preview-next { right: 10px; }
+        .img-preview-close {
+            position: absolute;
+            top: 12px;
+            right: 14px;
+            width: 40px;
+            height: 40px;
+            border: none;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            font-size: 26px;
+            line-height: 1;
+            cursor: pointer;
+            z-index: 4;
+        }
+        .img-preview-close:hover { background: rgba(255, 255, 255, 0.32); }
+        .img-preview-zoom {
+            position: absolute;
+            top: 12px;
+            left: 14px;
+            display: flex;
+            gap: 8px;
+            z-index: 4;
+        }
+        .img-preview-zoom button {
+            width: 36px;
+            height: 36px;
+            border: none;
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            font-size: 20px;
+            cursor: pointer;
+        }
+        .img-preview-zoom button:hover { background: rgba(255, 255, 255, 0.32); }
+        .img-preview-counter {
+            position: absolute;
+            bottom: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            font-size: 13px;
+            padding: 6px 10px;
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.45);
+        }
+        .bot-images img {
+            cursor: zoom-in;
+            transition: transform 0.15s;
+        }
+        .bot-images img:hover { transform: translateY(-1px); }
+
+        .msg-fullscreen-mask {
+            position: fixed;
+            inset: 0;
+            z-index: 1150;
+            background: rgba(0, 0, 0, 0.72);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+        .msg-fullscreen-mask.show { display: flex; }
+        .msg-fullscreen-card {
+            width: min(1100px, 100%);
+            height: min(88vh, 100%);
+            background: #fff;
+            border-radius: 14px;
+            overflow: hidden;
+            box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        .msg-fullscreen-close {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            width: 38px;
+            height: 38px;
+            border: none;
+            border-radius: 19px;
+            background: rgba(15, 23, 42, 0.08);
+            color: #334155;
+            font-size: 20px;
+            cursor: pointer;
+            z-index: 2;
+        }
+        .msg-fullscreen-close:hover { background: rgba(15, 23, 42, 0.14); }
+        .msg-fullscreen-body {
+            flex: 1;
+            overflow: auto;
+            padding: 56px 24px 20px;
+            color: #111827;
+            line-height: 1.7;
+        }
+        .msg-fullscreen-body .msg-row {
+            width: 100%;
+            margin: 0;
+            opacity: 1;
+            animation: none;
+        }
+        .msg-fullscreen-body .bubble {
+            max-width: 100%;
+        }
+        .msg-fullscreen-body .bubble-actions {
+            display: none !important;
+        }
+        .msg-fullscreen-body.is-plain { white-space: pre-wrap; }
+        .msg-fullscreen-body.is-markdown { overflow-wrap: anywhere; }
+        .msg-fullscreen-body.is-markdown > *:first-child { margin-top: 0; }
+        .msg-fullscreen-body.is-markdown > *:last-child { margin-bottom: 0; }
+        .msg-fullscreen-body.is-markdown p,
+        .msg-fullscreen-body.is-markdown ul,
+        .msg-fullscreen-body.is-markdown ol,
+        .msg-fullscreen-body.is-markdown blockquote,
+        .msg-fullscreen-body.is-markdown pre,
+        .msg-fullscreen-body.is-markdown table,
+        .msg-fullscreen-body.is-markdown h1,
+        .msg-fullscreen-body.is-markdown h2,
+        .msg-fullscreen-body.is-markdown h3,
+        .msg-fullscreen-body.is-markdown h4,
+        .msg-fullscreen-body.is-markdown h5,
+        .msg-fullscreen-body.is-markdown h6 {
+            margin: 0.65em 0;
+        }
+        .msg-fullscreen-body.is-markdown pre {
+            max-width: 100%;
+            overflow: auto;
+            white-space: pre;
+            padding: 12px 14px;
+            border-radius: 8px;
+            background: #f5f7fa;
+        }
+        .msg-fullscreen-body.is-markdown code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 0.94em;
+            overflow-wrap: anywhere;
+        }
+        .msg-fullscreen-body.is-markdown table {
+            display: block;
+            width: max-content;
+            max-width: 100%;
+            overflow-x: auto;
+            border-collapse: collapse;
+        }
+        .msg-fullscreen-body.is-markdown th,
+        .msg-fullscreen-body.is-markdown td {
+            border: 1px solid #d1d5db;
+            padding: 7px 10px;
+            text-align: left;
+            white-space: nowrap;
+        }
+        .msg-fullscreen-body.is-markdown img {
+            max-width: 100%;
+            height: auto;
         }
         .thinking-panel {
             margin-top: 10px;
@@ -249,6 +563,28 @@
         @media (max-width: 480px) {
             .chat-wrapper { height: 100vh; border-radius: 0; max-width: 100%; }
         }
+        @media (max-width: 768px) {
+            .img-preview-stage {
+                width: 100vw;
+                height: calc(100vh - 112px);
+            }
+            .img-preview-btn {
+                width: 40px;
+                height: 40px;
+                font-size: 22px;
+            }
+            .msg-fullscreen-mask {
+                padding: 0;
+            }
+            .msg-fullscreen-card {
+                width: 100%;
+                height: 100vh;
+                border-radius: 0;
+            }
+            .msg-fullscreen-body {
+                padding: 16px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -291,6 +627,8 @@
 <!-- ==================== 
      JavaScript 逻辑部分 
      ==================== -->
+<script src="./marked.min.js"></script>
+<script src="./3.1.6/purify.min.js"></script>
 <script src="./app.js"></script>
 </body>
 </html>

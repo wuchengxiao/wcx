@@ -14,7 +14,21 @@ const FIXED_ENCODED = 'VjFaaQyUXhTbFZTYTNSUFlUTkNUbHBWVlRWbFZscFlaRVJLYUZaV1NucF
 const state = {
     threadId: '',
     isLoading: false,
-    isAuthed: false
+    isAuthed: false,
+    messageFullscreen: {
+        visible: false,
+        text: '',
+        useMarkdown: false
+    },
+    preview: {
+        visible: false,
+        urls: [],
+        index: 0,
+        scale: 1,
+        minScale: 0.2,
+        maxScale: 5,
+        scaleStep: 0.2
+    }
 };
 
 // --- 2. DOM 元素引用 ---
@@ -26,7 +40,20 @@ const elements = {
     authMask: document.getElementById('authMask'),
     tokenInput: document.getElementById('tokenInput'),
     tokenSubmitBtn: document.getElementById('tokenSubmitBtn'),
-    authError: document.getElementById('authError')
+    authError: document.getElementById('authError'),
+    messageFullscreenMask: null,
+    messageFullscreenBody: null,
+    messageFullscreenCloseBtn: null,
+    previewMask: null,
+    previewStage: null,
+    previewImage: null,
+    previewCounter: null,
+    previewPrevBtn: null,
+    previewNextBtn: null,
+    previewCloseBtn: null,
+    previewZoomInBtn: null,
+    previewZoomOutBtn: null,
+    previewZoomResetBtn: null
 };
 
 // --- 3. 鉴权逻辑 ---
@@ -182,7 +209,18 @@ function appendMessage(text, sender) {
 
     const bubble = document.createElement('div');
     bubble.className = 'bubble';
-    bubble.textContent = text;
+
+    const actionBar = createBubbleActionBar();
+    const content = document.createElement('div');
+    content.className = 'answer-text is-plain';
+    content.textContent = text;
+
+    actionBar.expandBtn.addEventListener('click', () => {
+        openMessageFullscreen(row);
+    });
+
+    bubble.appendChild(actionBar.container);
+    bubble.appendChild(content);
 
     row.appendChild(bubble);
     elements.messageList.appendChild(row);
@@ -196,6 +234,8 @@ function createBotRichMessage() {
     const bubble = document.createElement('div');
     bubble.className = 'bubble';
 
+    const actionBar = createBubbleActionBar();
+
     const answerText = document.createElement('div');
     answerText.className = 'answer-text';
 
@@ -206,6 +246,7 @@ function createBotRichMessage() {
     const imageList = document.createElement('div');
     imageList.className = 'bot-images';
 
+    bubble.appendChild(actionBar.container);
     bubble.appendChild(answerText);
     bubble.appendChild(thinkingPanel);
     bubble.appendChild(imageList);
@@ -214,11 +255,30 @@ function createBotRichMessage() {
     elements.messageList.scrollTop = elements.messageList.scrollHeight;
 
     return {
+        row,
+        bubble,
         answerText,
         thinkingPanel,
         thinkingBody: thinkingPanel.querySelector('.thinking-body'),
-        imageList
+        imageList,
+        expandBtn: actionBar.expandBtn
     };
+}
+
+function createBubbleActionBar() {
+    const container = document.createElement('div');
+    container.className = 'bubble-actions';
+
+    const expandBtn = document.createElement('button');
+    expandBtn.type = 'button';
+    expandBtn.className = 'bubble-expand-btn';
+    expandBtn.setAttribute('aria-label', '全屏查看');
+    expandBtn.title = '全屏查看';
+    expandBtn.textContent = '⤢';
+
+    container.appendChild(expandBtn);
+
+    return { container, expandBtn };
 }
 
 function renderThinking(thinkingBody, toolsStatus = []) {
@@ -257,6 +317,328 @@ function toggleLoading(show) {
     }
 }
 
+function collectUiImageUrls(uiData) {
+    const urls = [];
+    if (!uiData || typeof uiData !== 'object') return urls;
+
+    if (typeof uiData.image_url === 'string' && uiData.image_url.trim()) {
+        urls.push(uiData.image_url.trim());
+    }
+
+    if (Array.isArray(uiData.img)) {
+        uiData.img.forEach(item => {
+            if (typeof item === 'string' && item.trim()) {
+                urls.push(item.trim());
+            }
+        });
+    }
+
+    return urls;
+}
+
+function escapeHtml(text) {
+    return String(text || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function renderAnswerContent(container, contentText, useMarkdown) {
+    if (!container) return;
+
+    const text = String(contentText || '');
+    if (!text.trim()) {
+        container.classList.remove('is-markdown');
+        container.classList.remove('is-plain');
+        container.innerHTML = '';
+        return;
+    }
+
+    if (!useMarkdown) {
+        container.classList.remove('is-markdown');
+        container.classList.add('is-plain');
+        container.textContent = text;
+        return;
+    }
+
+    try {
+        if (window.marked && typeof window.marked.parse === 'function') {
+            const rawHtml = window.marked.parse(text, { breaks: true, gfm: true });
+            container.classList.remove('is-plain');
+            container.classList.add('is-markdown');
+            if (window.DOMPurify && typeof window.DOMPurify.sanitize === 'function') {
+                container.innerHTML = `<article class="md-renderer">${window.DOMPurify.sanitize(rawHtml)}</article>`;
+            } else {
+                container.innerHTML = `<article class="md-renderer">${rawHtml}</article>`;
+            }
+            return;
+        }
+    } catch (err) {
+        console.warn('Markdown 渲染失败，已降级为纯文本:', err);
+    }
+
+    container.classList.remove('is-markdown');
+    container.classList.add('is-plain');
+    container.innerHTML = `<pre style="white-space:pre-wrap;margin:0;">${escapeHtml(text)}</pre>`;
+}
+
+function injectPreviewStyles() {
+    // 样式已迁移到 index.html，保留空函数以兼容现有调用。
+}
+
+function openMessageFullscreen(rowElement) {
+    if (!rowElement) return;
+
+    state.messageFullscreen.visible = true;
+    elements.messageFullscreenBody.innerHTML = '';
+
+    const clonedRow = rowElement.cloneNode(true);
+    const actionBars = clonedRow.querySelectorAll('.bubble-actions');
+    actionBars.forEach(node => node.remove());
+
+    elements.messageFullscreenBody.appendChild(clonedRow);
+    elements.messageFullscreenMask.classList.add('show');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeMessageFullscreen() {
+    state.messageFullscreen.visible = false;
+    elements.messageFullscreenMask.classList.remove('show');
+    elements.messageFullscreenBody.innerHTML = '';
+    document.body.style.overflow = state.preview.visible ? 'hidden' : '';
+}
+
+function initMessageFullscreen() {
+    const mask = document.createElement('section');
+    mask.className = 'msg-fullscreen-mask';
+    mask.innerHTML = `
+        <div class="msg-fullscreen-card">
+            <button type="button" class="msg-fullscreen-close" aria-label="关闭">×</button>
+            <div class="msg-fullscreen-body"></div>
+        </div>
+    `;
+    document.body.appendChild(mask);
+
+    elements.messageFullscreenMask = mask;
+    elements.messageFullscreenBody = mask.querySelector('.msg-fullscreen-body');
+    elements.messageFullscreenCloseBtn = mask.querySelector('.msg-fullscreen-close');
+
+    elements.messageFullscreenCloseBtn.addEventListener('click', closeMessageFullscreen);
+    elements.messageFullscreenMask.addEventListener('click', (e) => {
+        if (e.target === elements.messageFullscreenMask) {
+            closeMessageFullscreen();
+        }
+    });
+}
+
+function normalizePreviewIndex(index, length) {
+    if (length <= 0) return 0;
+    return (index + length) % length;
+}
+
+function clampPreviewScale(scale) {
+    return Math.min(state.preview.maxScale, Math.max(state.preview.minScale, scale));
+}
+
+function centerPreviewStage() {
+    if (!elements.previewStage) return;
+    const stage = elements.previewStage;
+    stage.scrollLeft = Math.max(0, (stage.scrollWidth - stage.clientWidth) / 2);
+    stage.scrollTop = Math.max(0, (stage.scrollHeight - stage.clientHeight) / 2);
+}
+
+function updatePreviewCounter() {
+    const total = state.preview.urls.length;
+    const current = total > 0 ? state.preview.index + 1 : 0;
+    const scalePercent = Math.round(state.preview.scale * 100);
+    elements.previewCounter.textContent = `${current} / ${total} · ${scalePercent}%`;
+}
+
+function updatePreviewNavState() {
+    const single = state.preview.urls.length <= 1;
+    elements.previewPrevBtn.style.display = single ? 'none' : 'inline-flex';
+    elements.previewNextBtn.style.display = single ? 'none' : 'inline-flex';
+}
+
+function applyPreviewScale(scale, shouldCenter = false) {
+    if (!elements.previewImage || !elements.previewImage.naturalWidth || !elements.previewImage.naturalHeight) {
+        return;
+    }
+
+    state.preview.scale = clampPreviewScale(scale);
+    const width = elements.previewImage.naturalWidth * state.preview.scale;
+    const height = elements.previewImage.naturalHeight * state.preview.scale;
+    elements.previewImage.style.width = `${width}px`;
+    elements.previewImage.style.height = `${height}px`;
+
+    if (shouldCenter) {
+        centerPreviewStage();
+    }
+    updatePreviewCounter();
+}
+
+function zoomPreviewBy(step) {
+    if (!state.preview.visible) return;
+    applyPreviewScale(state.preview.scale + step);
+}
+
+function fitPreviewScale(shouldCenter = true) {
+    if (!elements.previewImage || !elements.previewStage || !elements.previewImage.naturalWidth || !elements.previewImage.naturalHeight) {
+        return;
+    }
+
+    const stageWidth = Math.max(1, elements.previewStage.clientWidth - 16);
+    const stageHeight = Math.max(1, elements.previewStage.clientHeight - 16);
+    const widthScale = stageWidth / elements.previewImage.naturalWidth;
+    const heightScale = stageHeight / elements.previewImage.naturalHeight;
+    const fitScale = Math.min(widthScale, heightScale);
+
+    applyPreviewScale(fitScale, shouldCenter);
+}
+
+function resetPreviewScale(shouldCenter = true) {
+    state.preview.scale = 1;
+    if (elements.previewImage.naturalWidth) {
+        applyPreviewScale(1, shouldCenter);
+    } else {
+        updatePreviewCounter();
+    }
+}
+
+function renderPreviewImage() {
+    if (!state.preview.visible || state.preview.urls.length === 0) return;
+
+    const idx = normalizePreviewIndex(state.preview.index, state.preview.urls.length);
+    state.preview.index = idx;
+    state.preview.scale = 1;
+    elements.previewImage.style.width = 'auto';
+    elements.previewImage.style.height = 'auto';
+    elements.previewImage.src = state.preview.urls[idx];
+    updatePreviewNavState();
+    updatePreviewCounter();
+}
+
+function closeImagePreview() {
+    state.preview.visible = false;
+    elements.previewMask.classList.remove('show');
+    elements.previewImage.src = '';
+    state.preview.urls = [];
+    state.preview.index = 0;
+    state.preview.scale = 1;
+    document.body.style.overflow = '';
+}
+
+function switchPreviewImage(step) {
+    if (!state.preview.visible || state.preview.urls.length <= 1) return;
+    state.preview.index = normalizePreviewIndex(state.preview.index + step, state.preview.urls.length);
+    renderPreviewImage();
+}
+
+function openImagePreview(urls, startIndex = 0) {
+    if (!Array.isArray(urls) || urls.length === 0) return;
+
+    state.preview.urls = urls.slice();
+    state.preview.index = normalizePreviewIndex(startIndex, state.preview.urls.length);
+    state.preview.scale = 1;
+    state.preview.visible = true;
+
+    renderPreviewImage();
+    elements.previewMask.classList.add('show');
+    document.body.style.overflow = 'hidden';
+}
+
+function initImagePreview() {
+    injectPreviewStyles();
+
+    const mask = document.createElement('section');
+    mask.className = 'img-preview-mask';
+    mask.innerHTML = `
+        <div class="img-preview-main">
+            <div class="img-preview-zoom">
+                <button class="img-preview-zoom-out" aria-label="缩小">−</button>
+                <button class="img-preview-zoom-reset" aria-label="还原">1:1</button>
+                <button class="img-preview-zoom-in" aria-label="放大">+</button>
+            </div>
+            <button class="img-preview-close" aria-label="关闭预览">×</button>
+            <div class="img-preview-stage">
+                <button class="img-preview-btn img-preview-prev" aria-label="上一张">‹</button>
+                <img class="img-preview-image" alt="图片预览" />
+                <button class="img-preview-btn img-preview-next" aria-label="下一张">›</button>
+            </div>
+            <div class="img-preview-counter">1 / 1</div>
+        </div>
+    `;
+    document.body.appendChild(mask);
+
+    elements.previewMask = mask;
+    elements.previewStage = mask.querySelector('.img-preview-stage');
+    elements.previewImage = mask.querySelector('.img-preview-image');
+    elements.previewCounter = mask.querySelector('.img-preview-counter');
+    elements.previewPrevBtn = mask.querySelector('.img-preview-prev');
+    elements.previewNextBtn = mask.querySelector('.img-preview-next');
+    elements.previewCloseBtn = mask.querySelector('.img-preview-close');
+    elements.previewZoomInBtn = mask.querySelector('.img-preview-zoom-in');
+    elements.previewZoomOutBtn = mask.querySelector('.img-preview-zoom-out');
+    elements.previewZoomResetBtn = mask.querySelector('.img-preview-zoom-reset');
+
+    elements.previewCloseBtn.addEventListener('click', closeImagePreview);
+    elements.previewPrevBtn.addEventListener('click', () => switchPreviewImage(-1));
+    elements.previewNextBtn.addEventListener('click', () => switchPreviewImage(1));
+    elements.previewZoomInBtn.addEventListener('click', () => zoomPreviewBy(state.preview.scaleStep));
+    elements.previewZoomOutBtn.addEventListener('click', () => zoomPreviewBy(-state.preview.scaleStep));
+    elements.previewZoomResetBtn.addEventListener('click', () => resetPreviewScale(true));
+
+    elements.previewImage.addEventListener('load', () => {
+        fitPreviewScale(true);
+    });
+
+    elements.previewStage.addEventListener('wheel', (e) => {
+        if (!state.preview.visible) return;
+        e.preventDefault();
+        zoomPreviewBy(e.deltaY < 0 ? state.preview.scaleStep : -state.preview.scaleStep);
+    }, { passive: false });
+
+    elements.previewMask.addEventListener('click', (e) => {
+        if (e.target === elements.previewMask) {
+            closeImagePreview();
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (!state.preview.visible) return;
+        if (e.key === 'Escape') {
+            closeImagePreview();
+            return;
+        }
+        if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            switchPreviewImage(-1);
+            return;
+        }
+        if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            switchPreviewImage(1);
+            return;
+        }
+        if (e.key === '+' || e.key === '=') {
+            e.preventDefault();
+            zoomPreviewBy(state.preview.scaleStep);
+            return;
+        }
+        if (e.key === '-' || e.key === '_') {
+            e.preventDefault();
+            zoomPreviewBy(-state.preview.scaleStep);
+            return;
+        }
+        if (e.key === '0') {
+            e.preventDefault();
+            resetPreviewScale(true);
+        }
+    });
+}
+
 async function callAgentAPI(userText) {
     try {
         if (!CONFIG.APP_ID || !CONFIG.SECRET_KEY) {
@@ -289,12 +671,14 @@ async function callAgentAPI(userText) {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let botResponseText = '';
+        let hasMarkdownContent = false;
         let fullDataBuffer = '';
         let latestToolsStatus = [];
         let hasImage = false;
 
         const botView = createBotRichMessage();
         const renderedImages = new Set();
+        const renderedImageUrls = [];
 
         while (true) {
             const { done, value } = await reader.read();
@@ -323,7 +707,10 @@ async function callAgentAPI(userText) {
                         const contentArr = data.data.message.content;
 
                         contentArr.forEach(item => {
-                            if (item?.dataType === 'markdown' || item?.dataType === 'text') {
+                            if (item?.dataType === 'markdown') {
+                                hasMarkdownContent = true;
+                                botResponseText += item?.data?.text || '';
+                            } else if (item?.dataType === 'text') {
                                 botResponseText += item?.data?.text || '';
                             }
 
@@ -333,21 +720,30 @@ async function callAgentAPI(userText) {
                             }
 
                             if (item?.dataType === 'uiData') {
-                                const imageUrl = item?.data?.image_url;
-                                if (imageUrl && !renderedImages.has(imageUrl)) {
+                                const imageUrls = collectUiImageUrls(item?.data);
+                                imageUrls.forEach(imageUrl => {
+                                    if (renderedImages.has(imageUrl)) return;
                                     renderedImages.add(imageUrl);
+                                    renderedImageUrls.push(imageUrl);
                                     hasImage = true;
 
                                     const img = document.createElement('img');
                                     img.src = imageUrl;
-                                    img.alt = item?.data?.description || '智能体生成图片';
+                                    img.alt = item?.data?.description || item?.data?.tag || '智能体生成图片';
                                     img.loading = 'lazy';
+                                    img.addEventListener('click', () => {
+                                        const startIndex = renderedImageUrls.indexOf(imageUrl);
+                                        openImagePreview(renderedImageUrls, startIndex < 0 ? 0 : startIndex);
+                                    });
                                     botView.imageList.appendChild(img);
-                                }
+                                });
                             }
                         });
 
-                        botView.answerText.textContent = botResponseText;
+                        renderAnswerContent(botView.answerText, botResponseText, false);
+                        botView.expandBtn.onclick = () => {
+                            openMessageFullscreen(botView.row);
+                        };
 
                         if (latestToolsStatus.length > 0) {
                             botView.thinkingPanel.classList.add('show');
@@ -360,6 +756,10 @@ async function callAgentAPI(userText) {
                     console.error('JSON解析错误', e);
                 }
             }
+        }
+
+        if (botResponseText.trim()) {
+            renderAnswerContent(botView.answerText, botResponseText, hasMarkdownContent);
         }
 
         if (!botResponseText.trim() && !hasImage) {
@@ -408,4 +808,12 @@ elements.tokenInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') handleTokenSubmit();
 });
 
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && state.messageFullscreen.visible) {
+        closeMessageFullscreen();
+    }
+});
+
+initMessageFullscreen();
+initImagePreview();
 initAuth();
