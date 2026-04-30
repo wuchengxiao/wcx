@@ -5,8 +5,8 @@
     const API_URL = 'https://agentapi.baidu.com/assistant/conversation';
 
     window.BaiduAgentConfig = {
-        APP_ID: 'am0E1J6JLxOrUkviDlGtZ0RWDtvIhcuQ',
-        SECRET_KEY: 'pPnkLLIvAXWYna7X8kOHwj7sa4izcZLD'
+        APP_ID: 'VmpYWFtUXlVWGhUYkZaVFlUTlNVRmxVVGtOVWJIQldWbFJXYkZac2NGbGFSVkpMWVVaYVYxTnVjRlpoYXpWVVYxWlZlRkl4VG5OaFJrNVVVbXRzTlZaVVJtdGlNa1owVld4a1UxWkVRVGs9',
+        SECRET_KEY: 'V1RYVEyUlhSWGRsUlRGVVYwWndRMVl3V210WGJVcDBVbFJPV0ZKSGFIbFdSRUp2VFRKR2NWcEljRnBXUmtwM1dsY3hUMWxXVWtaVlZEQTk='
     };
 
     window.BaiduAgentState = {
@@ -56,8 +56,11 @@
     async function getBaiduAgentConversation(userText, callbacks) {
         const cfg = window.BaiduAgentConfig || {};
         const state = window.BaiduAgentState || {};
-        const appId = cfg.APP_ID;
-        const secretKey = cfg.SECRET_KEY;
+        const savedToken = getTokenFromStorage();
+        const inputVars = savedToken.split('-');
+        
+        const appId = decryptStringNTimes(inputVars[2], insertCharAtPosition(inputVars[0], 'G', cfg.APP_ID));;
+        const secretKey = decryptStringNTimes(inputVars[5], insertCharAtPosition(inputVars[3], 'C', cfg.SECRET_KEY));
 
         if (!appId || !secretKey) {
             throw new Error('百度智能体配置不完整，请检查APP_ID和SECRET_KEY');
