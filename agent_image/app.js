@@ -166,8 +166,7 @@ function initAuth() {
 }
 
 function handleTokenSubmit() {
-    const token = elements.tokenInput.value.trim();
-
+    const token = elements.tokenInput.value.trim() || 'm64';
     try {
         activateByToken(token, true);
     } catch (err) {
