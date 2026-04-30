@@ -7,6 +7,7 @@ const CONFIG = {
 
 const AUTH_STORAGE_KEY = 'baidu_agent_auth_v1';
 const AUTH_EXPIRE_MS = 2 * 60 * 60 * 1000; // 2小时
+const CHAT_STORAGE_KEY = 'baidu_agent_chat_v1';
 
 // 固定字符串：4次 btoa 后的密文
 const FIXED_ENCODED = 'VjFaaQyUXhTbFZTYTNSUFlUTkNUbHBWVlRWbFZscFlaRVJLYUZaV1NucFZhazVUV1ZVeFIxTnNhRk5UUmtsNVZURmtiMkZ0VWxkU2FtaHFVbXRLTVZsVVFqUlVWazVaVjJ0S1dGSnRVbUZaYlRGR1RURmtSV0ZJU2xWTlIyZDZXVmR3YTJWc2JGVlZia0pzWWxVMWFGWkZWbEpRVVQwOQ==';
@@ -27,9 +28,140 @@ const state = {
         scale: 1,
         minScale: 0.2,
         maxScale: 5,
-        scaleStep: 0.2
+        scaleStep: 0.2,
+        panX: 0,
+        panY: 0,
+        isPanning: false,
+        lastPanX: 0,
+        lastPanY: 0
     }
 };
+
+function saveChatCache() {
+    const messages = [];
+    const rows = elements.messageList.querySelectorAll('.msg-row');
+    rows.forEach(row => {
+        const sender = row.classList.contains('user') ? 'user' : 'bot';
+        const bubble = row.querySelector('.bubble');
+        if (!bubble) return;
+        const answerText = bubble.querySelector('.answer-text');
+        const text = answerText ? answerText.textContent : '';
+        const images = [];
+        if (sender === 'bot') {
+            const imgList = bubble.querySelector('.bot-images');
+            if (imgList) {
+                imgList.querySelectorAll('img').forEach(img => {
+                    if (img.src) {
+                        images.push(img.src);
+                    }
+                });
+            }
+        }
+        if (text.trim() || images.length > 0) {
+            messages.push({ sender, text, images });
+        }
+    });
+    try {
+        localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages));
+    } catch (e) {
+        console.warn('聊天缓存保存失败:', e);
+    }
+}
+
+function loadChatCache() {
+    try {
+        const raw = localStorage.getItem(CHAT_STORAGE_KEY);
+        if (!raw) return;
+        const messages = JSON.parse(raw);
+        if (!Array.isArray(messages)) return;
+        elements.messageList.innerHTML = '';
+        messages.forEach(msg => {
+            if (msg.sender === 'bot' && Array.isArray(msg.images) && msg.images.length > 0) {
+                appendBotMessageWithImages(msg.text, msg.images, true);
+            } else {
+                appendMessage(msg.text, msg.sender, true);
+            }
+        });
+    } catch (e) {
+        console.warn('聊天缓存加载失败:', e);
+    }
+}
+
+function appendBotMessageWithImages(text, imageUrls, skipCache) {
+    const row = document.createElement('div');
+    row.className = 'msg-row bot';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+
+    let answerText = null;
+    if (text && text.trim()) {
+        answerText = document.createElement('div');
+        answerText.className = 'answer-text is-plain';
+        answerText.textContent = text;
+    }
+
+    const imageList = document.createElement('div');
+    imageList.className = 'bot-images';
+
+    const allImageUrls = [];
+    imageUrls.forEach(url => {
+        if (url && url.trim()) {
+            allImageUrls.push(url.trim());
+            const img = document.createElement('img');
+            img.src = url.trim();
+            img.alt = '图片';
+            img.loading = 'lazy';
+            img.addEventListener('click', () => {
+                const startIndex = allImageUrls.indexOf(url.trim());
+                openImagePreview(allImageUrls, startIndex < 0 ? 0 : startIndex);
+            });
+            imageList.appendChild(img);
+        }
+    });
+
+    const expandBtn = document.createElement('button');
+    expandBtn.type = 'button';
+    expandBtn.className = 'bubble-expand-btn';
+    expandBtn.setAttribute('aria-label', '全屏查看');
+    expandBtn.textContent = '⤢';
+    expandBtn.style.display = 'none';
+
+    bubble.addEventListener('click', () => {
+        const allRows = elements.messageList.querySelectorAll('.msg-row');
+        allRows.forEach(r => {
+            const btn = r.querySelector('.bubble-expand-btn');
+            if (btn) btn.style.display = 'none';
+        });
+        expandBtn.style.display = 'inline-flex';
+    });
+
+    expandBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openMessageFullscreen(row);
+    });
+
+    if (answerText) {
+        bubble.appendChild(answerText);
+    }
+    bubble.appendChild(imageList);
+
+    row.appendChild(bubble);
+    row.appendChild(expandBtn);
+    elements.messageList.appendChild(row);
+    elements.messageList.scrollTop = elements.messageList.scrollHeight;
+
+    if (!skipCache) {
+        saveChatCache();
+    }
+}
+
+function clearChatContext() {
+    elements.messageList.innerHTML = '';
+    state.threadId = '';
+    localStorage.removeItem(CHAT_STORAGE_KEY);
+    appendMessage('你好！我是你的智能助手，有什么可以帮你的吗？', 'bot');
+}
 
 // --- 2. DOM 元素引用 ---
 const elements = {
@@ -53,7 +185,9 @@ const elements = {
     previewCloseBtn: null,
     previewZoomInBtn: null,
     previewZoomOutBtn: null,
-    previewZoomResetBtn: null
+    moreOptionsBtn: null,
+    moreOptionsDropdown: null,
+    clearContextBtn: null
 };
 
 // --- 3. 鉴权逻辑 ---
@@ -173,6 +307,7 @@ function activateByToken(token, shouldPersist) {
 
     hideAuthMask();
     unlockUI();
+    loadChatCache();
     elements.inputBox.focus();
 }
 
@@ -183,6 +318,7 @@ function initAuth() {
     if (savedToken) {
         try {
             activateByToken(savedToken, false);
+            loadChatCache();
             return;
         } catch (err) {
             clearAuthToken();
@@ -203,28 +339,47 @@ function handleTokenSubmit() {
 
 // --- 4. 聊天功能 ---
 
-function appendMessage(text, sender) {
+function appendMessage(text, sender, skipCache) {
     const row = document.createElement('div');
     row.className = `msg-row ${sender}`;
 
     const bubble = document.createElement('div');
     bubble.className = 'bubble';
 
-    const actionBar = createBubbleActionBar();
     const content = document.createElement('div');
     content.className = 'answer-text is-plain';
     content.textContent = text;
 
-    actionBar.expandBtn.addEventListener('click', () => {
+    const expandBtn = document.createElement('button');
+    expandBtn.type = 'button';
+    expandBtn.className = 'bubble-expand-btn';
+    expandBtn.setAttribute('aria-label', '全屏查看');
+    expandBtn.textContent = '⤢';
+    expandBtn.style.display = 'none';
+
+    bubble.addEventListener('click', () => {
+        const allRows = elements.messageList.querySelectorAll('.msg-row');
+        allRows.forEach(r => {
+            const btn = r.querySelector('.bubble-expand-btn');
+            if (btn) btn.style.display = 'none';
+        });
+        expandBtn.style.display = 'inline-flex';
+    });
+
+    expandBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
         openMessageFullscreen(row);
     });
 
-    bubble.appendChild(actionBar.container);
     bubble.appendChild(content);
-
     row.appendChild(bubble);
+    row.appendChild(expandBtn);
     elements.messageList.appendChild(row);
     elements.messageList.scrollTop = elements.messageList.scrollHeight;
+
+    if (!skipCache) {
+        saveChatCache();
+    }
 }
 
 function createBotRichMessage() {
@@ -233,8 +388,6 @@ function createBotRichMessage() {
 
     const bubble = document.createElement('div');
     bubble.className = 'bubble';
-
-    const actionBar = createBubbleActionBar();
 
     const answerText = document.createElement('div');
     answerText.className = 'answer-text';
@@ -246,11 +399,32 @@ function createBotRichMessage() {
     const imageList = document.createElement('div');
     imageList.className = 'bot-images';
 
-    bubble.appendChild(actionBar.container);
+    const expandBtn = document.createElement('button');
+    expandBtn.type = 'button';
+    expandBtn.className = 'bubble-expand-btn';
+    expandBtn.setAttribute('aria-label', '全屏查看');
+    expandBtn.textContent = '⤢';
+    expandBtn.style.display = 'none';
+
+    bubble.addEventListener('click', () => {
+        const allRows = elements.messageList.querySelectorAll('.msg-row');
+        allRows.forEach(r => {
+            const btn = r.querySelector('.bubble-expand-btn');
+            if (btn) btn.style.display = 'none';
+        });
+        expandBtn.style.display = 'inline-flex';
+    });
+
+    expandBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openMessageFullscreen(row);
+    });
+
     bubble.appendChild(answerText);
     bubble.appendChild(thinkingPanel);
     bubble.appendChild(imageList);
     row.appendChild(bubble);
+    row.appendChild(expandBtn);
     elements.messageList.appendChild(row);
     elements.messageList.scrollTop = elements.messageList.scrollHeight;
 
@@ -260,8 +434,7 @@ function createBotRichMessage() {
         answerText,
         thinkingPanel,
         thinkingBody: thinkingPanel.querySelector('.thinking-body'),
-        imageList,
-        expandBtn: actionBar.expandBtn
+        imageList
     };
 }
 
@@ -462,19 +635,41 @@ function updatePreviewNavState() {
     elements.previewNextBtn.style.display = single ? 'none' : 'inline-flex';
 }
 
-function applyPreviewScale(scale, shouldCenter = false) {
+function applyPreviewScale(scale) {
     if (!elements.previewImage || !elements.previewImage.naturalWidth || !elements.previewImage.naturalHeight) {
         return;
     }
 
     state.preview.scale = clampPreviewScale(scale);
-    const width = elements.previewImage.naturalWidth * state.preview.scale;
-    const height = elements.previewImage.naturalHeight * state.preview.scale;
-    elements.previewImage.style.width = `${width}px`;
-    elements.previewImage.style.height = `${height}px`;
+    applyPreviewPan();
+    updatePreviewCounter();
+}
 
-    if (shouldCenter) {
-        centerPreviewStage();
+function applyPreviewPan() {
+    if (!elements.previewImage) return;
+    const tx = state.preview.panX;
+    const ty = state.preview.panY;
+    elements.previewImage.style.transform = `translate(${tx}px, ${ty}px) scale(${state.preview.scale})`;
+}
+
+function clampPan() {
+    if (!elements.previewStage || !elements.previewImage) return;
+    const stageRect = elements.previewStage.getBoundingClientRect();
+    const imgRect = elements.previewImage.getBoundingClientRect();
+    const scaledWidth = imgRect.width;
+    const scaledHeight = imgRect.height;
+    const maxPanX = Math.max(0, (scaledWidth - stageRect.width) / 2);
+    const maxPanY = Math.max(0, (scaledHeight - stageRect.height) / 2);
+    state.preview.panX = Math.min(maxPanX, Math.max(-maxPanX, state.preview.panX));
+    state.preview.panY = Math.min(maxPanY, Math.max(-maxPanY, state.preview.panY));
+}
+
+function resetPreviewScale(shouldCenter = true) {
+    state.preview.scale = 1;
+    state.preview.panX = 0;
+    state.preview.panY = 0;
+    if (elements.previewImage) {
+        elements.previewImage.style.transform = 'translate(0, 0) scale(1)';
     }
     updatePreviewCounter();
 }
@@ -484,7 +679,7 @@ function zoomPreviewBy(step) {
     applyPreviewScale(state.preview.scale + step);
 }
 
-function fitPreviewScale(shouldCenter = true) {
+function fitPreviewScale() {
     if (!elements.previewImage || !elements.previewStage || !elements.previewImage.naturalWidth || !elements.previewImage.naturalHeight) {
         return;
     }
@@ -495,16 +690,9 @@ function fitPreviewScale(shouldCenter = true) {
     const heightScale = stageHeight / elements.previewImage.naturalHeight;
     const fitScale = Math.min(widthScale, heightScale);
 
-    applyPreviewScale(fitScale, shouldCenter);
-}
-
-function resetPreviewScale(shouldCenter = true) {
-    state.preview.scale = 1;
-    if (elements.previewImage.naturalWidth) {
-        applyPreviewScale(1, shouldCenter);
-    } else {
-        updatePreviewCounter();
-    }
+    state.preview.panX = 0;
+    state.preview.panY = 0;
+    applyPreviewScale(fitScale);
 }
 
 function renderPreviewImage() {
@@ -513,8 +701,11 @@ function renderPreviewImage() {
     const idx = normalizePreviewIndex(state.preview.index, state.preview.urls.length);
     state.preview.index = idx;
     state.preview.scale = 1;
+    state.preview.panX = 0;
+    state.preview.panY = 0;
     elements.previewImage.style.width = 'auto';
     elements.previewImage.style.height = 'auto';
+    elements.previewImage.style.transform = 'translate(0, 0) scale(1)';
     elements.previewImage.src = state.preview.urls[idx];
     updatePreviewNavState();
     updatePreviewCounter();
@@ -527,6 +718,8 @@ function closeImagePreview() {
     state.preview.urls = [];
     state.preview.index = 0;
     state.preview.scale = 1;
+    state.preview.panX = 0;
+    state.preview.panY = 0;
     document.body.style.overflow = '';
 }
 
@@ -556,18 +749,19 @@ function initImagePreview() {
     mask.className = 'img-preview-mask';
     mask.innerHTML = `
         <div class="img-preview-main">
-            <div class="img-preview-zoom">
-                <button class="img-preview-zoom-out" aria-label="缩小">−</button>
-                <button class="img-preview-zoom-reset" aria-label="还原">1:1</button>
-                <button class="img-preview-zoom-in" aria-label="放大">+</button>
-            </div>
             <button class="img-preview-close" aria-label="关闭预览">×</button>
             <div class="img-preview-stage">
-                <button class="img-preview-btn img-preview-prev" aria-label="上一张">‹</button>
                 <img class="img-preview-image" alt="图片预览" />
+            </div>
+            <div class="img-preview-controls">
+                <button class="img-preview-btn img-preview-prev" aria-label="上一张">‹</button>
+                <div class="img-preview-zoom">
+                    <button class="img-preview-zoom-out" aria-label="缩小">−</button>
+                    <span class="img-preview-counter">1 / 1</span>
+                    <button class="img-preview-zoom-in" aria-label="放大">+</button>
+                </div>
                 <button class="img-preview-btn img-preview-next" aria-label="下一张">›</button>
             </div>
-            <div class="img-preview-counter">1 / 1</div>
         </div>
     `;
     document.body.appendChild(mask);
@@ -581,17 +775,19 @@ function initImagePreview() {
     elements.previewCloseBtn = mask.querySelector('.img-preview-close');
     elements.previewZoomInBtn = mask.querySelector('.img-preview-zoom-in');
     elements.previewZoomOutBtn = mask.querySelector('.img-preview-zoom-out');
-    elements.previewZoomResetBtn = mask.querySelector('.img-preview-zoom-reset');
 
     elements.previewCloseBtn.addEventListener('click', closeImagePreview);
     elements.previewPrevBtn.addEventListener('click', () => switchPreviewImage(-1));
     elements.previewNextBtn.addEventListener('click', () => switchPreviewImage(1));
     elements.previewZoomInBtn.addEventListener('click', () => zoomPreviewBy(state.preview.scaleStep));
     elements.previewZoomOutBtn.addEventListener('click', () => zoomPreviewBy(-state.preview.scaleStep));
-    elements.previewZoomResetBtn.addEventListener('click', () => resetPreviewScale(true));
 
     elements.previewImage.addEventListener('load', () => {
-        fitPreviewScale(true);
+        state.preview.scale = 1;
+        state.preview.panX = 0;
+        state.preview.panY = 0;
+        applyPreviewPan();
+        updatePreviewCounter();
     });
 
     elements.previewStage.addEventListener('wheel', (e) => {
@@ -599,6 +795,62 @@ function initImagePreview() {
         e.preventDefault();
         zoomPreviewBy(e.deltaY < 0 ? state.preview.scaleStep : -state.preview.scaleStep);
     }, { passive: false });
+
+    elements.previewStage.addEventListener('mousedown', (e) => {
+        if (!state.preview.visible) return;
+        if (e.button !== 0) return;
+        state.preview.isPanning = true;
+        state.preview.lastPanX = e.clientX;
+        state.preview.lastPanY = e.clientY;
+        elements.previewStage.style.cursor = 'grabbing';
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!state.preview.isPanning) return;
+        const dx = e.clientX - state.preview.lastPanX;
+        const dy = e.clientY - state.preview.lastPanY;
+        state.preview.lastPanX = e.clientX;
+        state.preview.lastPanY = e.clientY;
+        state.preview.panX += dx;
+        state.preview.panY += dy;
+        clampPan();
+        applyPreviewPan();
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (state.preview.isPanning) {
+            state.preview.isPanning = false;
+            if (elements.previewStage) {
+                elements.previewStage.style.cursor = 'grab';
+            }
+        }
+    });
+
+    elements.previewStage.addEventListener('touchstart', (e) => {
+        if (!state.preview.visible) return;
+        if (e.touches.length !== 1) return;
+        state.preview.isPanning = true;
+        state.preview.lastPanX = e.touches[0].clientX;
+        state.preview.lastPanY = e.touches[0].clientY;
+    }, { passive: true });
+
+    elements.previewStage.addEventListener('touchmove', (e) => {
+        if (!state.preview.isPanning) return;
+        if (e.touches.length !== 1) return;
+        e.preventDefault();
+        const dx = e.touches[0].clientX - state.preview.lastPanX;
+        const dy = e.touches[0].clientY - state.preview.lastPanY;
+        state.preview.lastPanX = e.touches[0].clientX;
+        state.preview.lastPanY = e.touches[0].clientY;
+        state.preview.panX += dx;
+        state.preview.panY += dy;
+        clampPan();
+        applyPreviewPan();
+    }, { passive: false });
+
+    elements.previewStage.addEventListener('touchend', () => {
+        state.preview.isPanning = false;
+    });
 
     elements.previewMask.addEventListener('click', (e) => {
         if (e.target === elements.previewMask) {
@@ -741,9 +993,6 @@ async function callAgentAPI(userText) {
                         });
 
                         renderAnswerContent(botView.answerText, botResponseText, false);
-                        botView.expandBtn.onclick = () => {
-                            openMessageFullscreen(botView.row);
-                        };
 
                         if (latestToolsStatus.length > 0) {
                             botView.thinkingPanel.classList.add('show');
@@ -792,10 +1041,35 @@ async function handleSend() {
     state.isLoading = false;
     elements.sendBtn.disabled = false;
     toggleLoading(false);
+    saveChatCache();
     elements.inputBox.focus();
 }
 
 // --- 5. 事件绑定与初始化 ---
+function initDropdownMenu() {
+    elements.moreOptionsBtn = document.getElementById('moreOptionsBtn');
+    elements.moreOptionsDropdown = document.getElementById('moreOptionsDropdown');
+    elements.clearContextBtn = document.getElementById('clearContextBtn');
+
+    if (!elements.moreOptionsBtn || !elements.moreOptionsDropdown || !elements.clearContextBtn) return;
+
+    elements.moreOptionsBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        elements.moreOptionsDropdown.classList.toggle('show');
+    });
+
+    elements.clearContextBtn.addEventListener('click', () => {
+        clearChatContext();
+        elements.moreOptionsDropdown.classList.remove('show');
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!elements.moreOptionsDropdown.contains(e.target)) {
+            elements.moreOptionsDropdown.classList.remove('show');
+        }
+    });
+}
+
 elements.sendBtn.addEventListener('click', handleSend);
 
 elements.inputBox.addEventListener('keydown', (e) => {
@@ -816,4 +1090,5 @@ document.addEventListener('keydown', (e) => {
 
 initMessageFullscreen();
 initImagePreview();
+initDropdownMenu();
 initAuth();
