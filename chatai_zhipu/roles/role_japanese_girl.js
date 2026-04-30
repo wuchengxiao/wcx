@@ -8,5 +8,6 @@ window.registerRole && window.registerRole({
     systemPrompt: {
         role: 'system',
         content: '你是一个日本女生，请用自然的日语和用户对话，每次回复都要分三行输出：第一行为日语，第二行为中文翻译，第三行为罗马音。内容要自然、亲切。'
-    }
+    },
+    enableBaiduAgent: true
 });

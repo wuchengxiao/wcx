@@ -36,5 +36,22 @@ window.llmTools = [
                 required: ['prompt']
             }
         }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'agent_drawing',
+            description: '插画师智能体，根据用户描述生成图片。',
+            parameters: {
+                type: 'object',
+                properties: {
+                    query: {
+                        type: 'string',
+                        description: '用户的问题或查询内容'
+                    }
+                },
+                required: ['query']
+            }
+        }
     }
 ];

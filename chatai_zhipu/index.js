@@ -628,8 +628,8 @@ class ChatApp {
             allowedToolNames.push('web_search');
         }
 
-        if (selectedRole && selectedRole.enableImageApi) {
-            allowedToolNames.push('generate_image');
+        if (selectedRole && selectedRole.enableBaiduAgent) {
+            allowedToolNames.push('agent_drawing');
         }
 
         return allTools.filter(tool => {
@@ -655,9 +655,9 @@ class ChatApp {
             instructions.push('- 当用户问题依赖最新资讯、实时信息、网页资料或需要查证时，调用 `web_search`。');
         }
 
-        if (toolNames.includes('generate_image')) {
-            instructions.push('- 当用户明确要求生成图片、插画、海报、配图时，调用 `generate_image`。');
-            instructions.push('- 在拿到 `generate_image` 返回的图片 URL 后，用 Markdown 图片语法 `![生成图片](url)` 展示结果。');
+        if (toolNames.includes('agent_drawing')) {
+            instructions.push('- 当用户明确要求生成图片、插画、海报、配图时，调用 `agent_drawing`。');
+            instructions.push('- 在拿到 `agent_drawing` 返回的图片 URL 后，用 Markdown 图片语法 `![生成图片](url)` 展示结果。');
         }
 
         instructions.push('- 如果不需要工具，就直接正常回答。');
@@ -745,7 +745,11 @@ class ChatApp {
             return '正在联网搜索...';
         }
 
-        if (names.length === 1 && names[0] === 'generate_image') {
+        if (names.length === 1 && names[0] === 'drawing') {
+            return '正在生成图片...';
+        }
+
+        if (names.length === 1 && names[0] === 'agent_drawing') {
             return '正在生成图片...';
         }
 
@@ -757,7 +761,11 @@ class ChatApp {
             return '联网搜索';
         }
 
-        if (toolName === 'generate_image') {
+        if (toolName === 'drawing') {
+            return '图片生成';
+        }
+
+        if (toolName === 'agent_drawing') {
             return '图片生成';
         }
 
@@ -815,6 +823,44 @@ class ChatApp {
                 content: JSON.stringify({
                     url: imageUrl
                 })
+            };
+        }
+
+        if (toolName === 'drawing') {
+            if (!window.getBaiduAgentConversation) {
+                throw new Error('插画智能体功能未加载，请刷新页面后重试。');
+            }
+
+            const query = typeof args.query === 'string' ? args.query.trim() : '';
+            if (!query) {
+                throw new Error('查询内容不能为空');
+            }
+
+            const result = await window.getBaiduAgentConversation(query, {});
+            return {
+                role: 'tool',
+                tool_call_id: toolCall.id || '',
+                name: 'drawing',
+                content: JSON.stringify(result)
+            };
+        }
+
+        if (toolName === 'agent_drawing') {
+            if (!window.getBaiduAgentConversation) {
+                throw new Error('插画智能体功能未加载，请刷新页面后重试。');
+            }
+
+            const query = typeof args.query === 'string' ? args.query.trim() : '';
+            if (!query) {
+                throw new Error('查询内容不能为空');
+            }
+
+            const result = await window.getBaiduAgentConversation(query, {});
+            return {
+                role: 'tool',
+                tool_call_id: toolCall.id || '',
+                name: 'agent_drawing',
+                content: JSON.stringify(result)
             };
         }
 
@@ -1018,7 +1064,11 @@ class ChatApp {
                             // ignore parse failure
                         }
                     }
-                    if (toolName === 'generate_image') {
+                    if (toolName === 'drawing') {
+                        finishLine += '，已拿到图片地址';
+                    }
+
+                    if (toolName === 'agent_drawing') {
                         finishLine += '，已拿到图片地址';
                     }
 
@@ -1040,12 +1090,12 @@ class ChatApp {
                 replyContent = finalPass.replyContent;
 
                 if (!replyContent.trim()) {
-                    const imageToolResult = toolResults.find(item => item && item.name === 'generate_image');
+                    const imageToolResult = toolResults.find(item => item && (item.name === 'drawing' || item.name === 'agent_drawing'));
                     if (imageToolResult) {
                         try {
                             const imagePayload = JSON.parse(imageToolResult.content || '{}');
-                            if (imagePayload && imagePayload.url) {
-                                replyContent = `![AI生成图片](${imagePayload.url})`;
+                            if (imagePayload && imagePayload.images && imagePayload.images.length > 0) {
+                                replyContent = `![AI生成图片](${imagePayload.images[0]})`;
                                 assistantMessage.content = replyContent;
                                 this.saveSessions();
                                 this.updateMessageBubble(assistantMessage.id, replyContent, '');
@@ -1073,13 +1123,55 @@ class ChatApp {
             this.sessionThinkingById[this.currentSessionId] = '';
             this.sessionThinkingMessageIdById[this.currentSessionId] = null;
 
+            const errorMessage = this.getRequestErrorText(e, '请求失败');
+            const canFallback = !this.baiduAgentTried && window.getBaiduAgentConversation;
+
+            if (canFallback && content) {
+                this.baiduAgentTried = true;
+                this.hideTypingIndicator();
+
+                try {
+                    const result = await window.getBaiduAgentConversation(content, {});
+                    if (result && result.text) {
+                        if (assistantMessage) {
+                            assistantMessage.content = result.text;
+                        } else {
+                            assistantMessage = {
+                                id: 'msg_' + (Date.now() + 2),
+                                role: 'assistant',
+                                content: result.text,
+                                time: new Date().toLocaleTimeString('zh-CN', {
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                })
+                            };
+                            session.messages.push(assistantMessage);
+                        }
+                        session.updatedAt = new Date().toISOString();
+                        this.saveSessions();
+                        this.renderSessionList();
+                        if (assistantMessage.id) {
+                            this.updateMessageBubble(assistantMessage.id, assistantMessage.content, '');
+                        } else {
+                            this.renderChat();
+                        }
+                        this.isSending = false;
+                        return;
+                    }
+                } catch (baiduErr) {
+                    console.warn('百度智能体备用调用失败:', baiduErr);
+                }
+            }
+
+            this.baiduAgentTried = false;
+
             if (assistantMessage) {
-                assistantMessage.content = this.getRequestErrorText(e, '请求失败');
+                assistantMessage.content = errorMessage;
             } else {
                 assistantMessage = {
                     id: 'msg_' + (Date.now() + 2),
                     role: 'assistant',
-                    content: this.getRequestErrorText(e, '请求失败'),
+                    content: errorMessage,
                     time: new Date().toLocaleTimeString('zh-CN', {
                         hour: '2-digit',
                         minute: '2-digit'
@@ -1123,6 +1215,10 @@ class ChatApp {
         `;
         container.innerHTML = typingHtml;
         this.scrollToBottom();
+    }
+
+    hideTypingIndicator() {
+        this.renderChat();
     }
 
     // Message Actions

@@ -328,7 +328,8 @@
             intro: persona.intro,
             guide: persona.guide,
             openingLine: persona.openingLine,
-            systemPrompt: buildPersonaPrompt(persona)
+            systemPrompt: buildPersonaPrompt(persona),
+            enableBaiduAgent: true
         });
     });
 })();
