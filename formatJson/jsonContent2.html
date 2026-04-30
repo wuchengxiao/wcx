@@ -3,7 +3,40 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="description" content="在线JSON格式化与校验工具，支持多标签编辑、节点过滤、节点定位、高亮定位、展开折叠、压缩与下载上传。">
+        <meta name="keywords" content="JSON格式化, JSON校验, JSON美化, JSON压缩, JSON在线工具, 节点过滤, 节点定位">
+        <meta name="robots" content="index, follow, max-image-preview:large">
+        <meta name="author" content="JSON Formatter Tool">
+        <link rel="canonical" href="./jsonContent2.html">
+
+        <meta property="og:type" content="website">
+        <meta property="og:locale" content="zh_CN">
+        <meta property="og:title" content="多标签JSON格式化工具">
+        <meta property="og:description" content="支持JSON格式化、压缩、节点过滤与循环定位的在线工具。">
+        <meta property="og:url" content="./jsonContent2.html">
+        <meta property="og:site_name" content="JSON Formatter">
+
+        <meta name="twitter:card" content="summary">
+        <meta name="twitter:title" content="多标签JSON格式化工具">
+        <meta name="twitter:description" content="支持JSON格式化、压缩、节点过滤与循环定位。">
+
         <title>多标签JSON格式化工具</title>
+        <script type="application/ld+json">
+            {
+                "@context": "https://schema.org",
+                "@type": "WebApplication",
+                "name": "多标签JSON格式化工具",
+                "applicationCategory": "DeveloperApplication",
+                "operatingSystem": "Any",
+                "description": "用于JSON格式化、压缩、节点过滤和节点定位的网页工具。",
+                "inLanguage": "zh-CN",
+                "offers": {
+                    "@type": "Offer",
+                    "price": "0",
+                    "priceCurrency": "CNY"
+                }
+            }
+        </script>
         <script src="./formatter_2.3.4/json-formatter.umd.min.js"></script>
         <style>
             /* 保留原有的布局样式 */
@@ -135,12 +168,6 @@
                 background-color: #e0e0e0;
             }
 
-            .search-box {
-                margin-left: auto;
-                padding: 5px;
-                display: flex;
-                gap: 5px;
-            }
 
             /* 优化JSON视图样式 */
             .json-formatter-row {
@@ -255,6 +282,70 @@
             .tab:hover .tab-actions {
                 visibility: visible;
             }
+
+            /* 节点过滤和定位功能样式 */
+            .filter-toolbar {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 5px;
+                align-items: center;
+                padding: 5px 8px;
+                background-color: #f9f9f9;
+                border-bottom: 1px solid #ddd;
+                min-height: 36px;
+                max-height: 72px;
+                overflow-y: auto;
+            }
+
+            .filter-box {
+                display: flex;
+                gap: 5px;
+                align-items: center;
+                flex-shrink: 0;
+            }
+
+            .filter-box label {
+                font-size: 12px;
+                color: #666;
+                white-space: nowrap;
+                flex-shrink: 0;
+            }
+
+            .filter-box input {
+                padding: 4px 8px;
+                border: 1px solid #bbb;
+                border-radius: 3px;
+                font-size: 12px;
+                width: 100px;
+                flex-shrink: 0;
+            }
+
+            .filter-box button {
+                padding: 4px 8px;
+                font-size: 12px;
+                white-space: nowrap;
+                flex-shrink: 0;
+            }
+
+            .locate-status {
+                margin-left: 8px;
+                font-size: 12px;
+                color: #555;
+                white-space: nowrap;
+            }
+
+            .node-highlight {
+                background: #fff9e6 !important;
+                border-left: 3px solid #ffb81c !important;
+                box-shadow: inset 0 0 0 1px #ffb81c !important;
+            }
+
+            .node-highlight-active {
+                background: #ffe0a0 !important;
+                border-left: 3px solid #ff9800 !important;
+                box-shadow: 0 0 5px rgba(255, 152, 0, 0.6) !important;
+            }
+
         </style>
     </head>
     <body>
@@ -282,6 +373,19 @@
                         <button id="downloadBtn">下载</button>
                         <button id="uploadBtn">上传</button>
                     </div>
+                    <div class="filter-toolbar">
+                        <div class="filter-box">
+                            <label>节点过滤：</label>
+                            <input id="nodeFilterInput" type="text" placeholder="输入属性名，如 id" />
+                            <button id="nodeFilterBtn">过滤</button>
+                        </div>
+                        <div class="filter-box">
+                            <label>节点定位：</label>
+                            <input id="nodeLocateInput" type="text" placeholder="输入属性名，如 id" />
+                            <button id="nodeLocateBtn">定位</button>
+                            <span id="locateStatus" class="locate-status">0 / 0</span>
+                        </div>
+                    </div>
                     <div class="editor" id="output"></div>
                 </div>
             </div>
@@ -301,6 +405,11 @@
                 const downloadBtn = document.getElementById('downloadBtn');
                 const uploadBtn = document.getElementById('uploadBtn');
                 const resizeHandle = document.getElementById('resizeHandle');
+                const nodeFilterInput = document.getElementById('nodeFilterInput');
+                const nodeFilterBtn = document.getElementById('nodeFilterBtn');
+                const nodeLocateInput = document.getElementById('nodeLocateInput');
+                const nodeLocateBtn = document.getElementById('nodeLocateBtn');
+                const locateStatus = document.getElementById('locateStatus');
 
                 let tabs = [{
                     id: 0,
@@ -313,6 +422,99 @@
                 let activeTabId = 0;
                 let isDarkTheme = false;
                 let tabIdSeed = Date.now();
+
+                // 获取JSON中指定属性的所有路径
+                function findNodePaths(node, propertyName, currentPath = []) {
+                    const paths = [];
+                    const normalized = propertyName.toLowerCase();
+
+                    function traverse(obj, path) {
+                        if (Array.isArray(obj)) {
+                            obj.forEach((item, index) => {
+                                traverse(item, [...path, `[${index}]`]);
+                            });
+                        } else if (obj && typeof obj === 'object') {
+                            Object.entries(obj).forEach(([key, value]) => {
+                                const keyPath = [...path, key];
+                                // 不区分大小写 + 模糊匹配
+                                if (key.toLowerCase().includes(normalized)) {
+                                    paths.push({
+                                        path: keyPath,
+                                        value: value,
+                                        parentPath: path
+                                    });
+                                }
+                                traverse(value, keyPath);
+                            });
+                        }
+                    }
+
+                    traverse(node, currentPath);
+                    return paths;
+                }
+
+                // 根据路径获取父节点及该节点
+                function getNodeByPath(rootNode, path) {
+                    let current = rootNode;
+                    for (let i = 0; i < path.length; i++) {
+                        const key = path[i];
+                        if (key.startsWith('[') && key.endsWith(']')) {
+                            const index = parseInt(key.slice(1, -1));
+                            current = current[index];
+                        } else {
+                            current = current[key];
+                        }
+                        if (current === undefined) return null;
+                    }
+                    return current;
+                }
+
+                // 保留多个匹配节点及其父链路径
+                function preserveNodeWithParents(rootNode, nodePaths) {
+                    const result = JSON.parse(JSON.stringify(rootNode));
+                    const pathsToKeep = Array.isArray(nodePaths) ? nodePaths : [nodePaths];
+
+                    function isPathInChain(currentPath, targetPath) {
+                        // currentPath 与 targetPath 前缀一致即认为在同一路径链上
+                        const minLen = Math.min(currentPath.length, targetPath.length);
+                        for (let i = 0; i < minLen; i++) {
+                            if (currentPath[i] !== targetPath[i]) return false;
+                        }
+                        return true;
+                    }
+
+                    function shouldKeepPath(currentPath) {
+                        return pathsToKeep.some(targetPath => isPathInChain(currentPath, targetPath));
+                    }
+
+                    function filterNode(node, currentPath) {
+                        if (Array.isArray(node)) {
+                            const filteredArray = [];
+                            node.forEach((item, idx) => {
+                                const itemPath = [...currentPath, `[${idx}]`];
+                                if (shouldKeepPath(itemPath)) {
+                                    filteredArray.push(filterNode(item, itemPath));
+                                }
+                            });
+                            return filteredArray;
+                        }
+
+                        if (node && typeof node === 'object') {
+                            const filtered = {};
+                            Object.entries(node).forEach(([key, value]) => {
+                                const newPath = [...currentPath, key];
+                                if (shouldKeepPath(newPath)) {
+                                    filtered[key] = filterNode(value, newPath);
+                                }
+                            });
+                            return filtered;
+                        }
+
+                        return node;
+                    }
+
+                    return filterNode(result, []);
+                }
 
                 function createTabId() {
                     tabIdSeed += 1;
@@ -488,6 +690,7 @@
                     if (tab) {
                         input.value = tab.input;
                         output.innerHTML = tab.output || '';
+                        locateStatus.textContent = '0 / 0';
 
                         // 重新渲染格式化视图
                         if (tab.formatter) {
@@ -509,6 +712,7 @@
                             tab.jsonData = json;
                             tab.input = input.value;
                             renderFormatter(tab);
+                            locateStatus.textContent = '0 / 0';
                         }
                     } catch (e) {
                         output.innerHTML = `<div style="color:red;padding:10px">JSON格式错误: ${e.message}</div>`;
@@ -521,10 +725,10 @@
                 }
 
                 // 使用json-formatter渲染
-                function renderFormatter(tab) {
+                function renderFormatter(tab, sourceData = tab.jsonData) {
                     output.innerHTML = '';
 
-                    const formatter = new JSONFormatter(tab.jsonData,2,{
+                    const formatter = new JSONFormatter(sourceData,2,{
                         hoverPreviewEnabled: true,
                         hoverPreviewArrayCount: 100,
                         hoverPreviewFieldCount: 5,
@@ -537,6 +741,92 @@
                     tab.output = '';
                     output.appendChild(formatter.render());
                 }
+
+                // 节点过滤功能
+                nodeFilterBtn.addEventListener('click', function() {
+                    const propertyName = nodeFilterInput.value.trim();
+                    const tab = tabs.find(t => t.id === activeTabId);
+                    if (!tab?.jsonData) {
+                        alert('请先格式化有效的JSON数据');
+                        return;
+                    }
+
+                    if (!propertyName) {
+                        renderFormatter(tab);
+                        locateStatus.textContent = '0 / 0';
+                        return;
+                    }
+
+                    // 找到所有匹配的节点路径
+                    const nodePaths = findNodePaths(tab.jsonData, propertyName);
+                    
+                    if (nodePaths.length === 0) {
+                        output.innerHTML = `<div style="padding:10px;color:#666">未找到属性 "${propertyName}"</div>`;
+                        locateStatus.textContent = '0 / 0';
+                        return;
+                    }
+
+                    // 显示所有匹配分支的过滤结果
+                    const filtered = preserveNodeWithParents(tab.jsonData, nodePaths.map(item => item.path));
+                    renderFormatter(tab, filtered);
+                    
+                    // 自动定位到该节点
+                    setTimeout(() => {
+                        highlightAndLocateNode(propertyName, 0);
+                    }, 50);
+                });
+
+                nodeFilterInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        nodeFilterBtn.click();
+                    }
+                });
+
+                // 节点定位功能
+                nodeLocateBtn.addEventListener('click', function() {
+                    const propertyName = nodeLocateInput.value.trim();
+                    if (!propertyName) {
+                        locateStatus.textContent = '0 / 0';
+                        return;
+                    }
+
+                    const tab = tabs.find(t => t.id === activeTabId);
+                    if (!tab?.jsonData) {
+                        alert('请先格式化有效的JSON数据');
+                        return;
+                    }
+
+                    const normalizedInput = propertyName.toLowerCase();
+                    const lastProperty = (output.dataset.nodePropertyName || '').toLowerCase();
+                    const lastIndex = Number.parseInt(output.dataset.currentNodeIndex || '-1', 10);
+                    const lastCount = Number.parseInt(output.dataset.currentNodeCount || '0', 10);
+
+                    // 输入变化时：重新定位（并展开）
+                    if (lastProperty !== normalizedInput) {
+                        if (tab.formatter) {
+                            tab.formatter.openAtDepth(Infinity);
+                        }
+                        highlightAndLocateNode(propertyName, 0);
+                        return;
+                    }
+
+                    // 输入未变化时：不刷新，只跳转到下一个（循环）
+                    let nextIndex = 0;
+                    if (lastCount > 0) {
+                        nextIndex = (Number.isNaN(lastIndex) ? -1 : lastIndex) + 1;
+                        nextIndex = ((nextIndex % lastCount) + lastCount) % lastCount;
+                    }
+
+                    highlightAndLocateNode(propertyName, nextIndex);
+                });
+
+                nodeLocateInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        nodeLocateBtn.click();
+                    }
+                });
 
                 // 压缩JSON
                 minifyBtn.addEventListener('click', function() {
@@ -736,6 +1026,79 @@
 
                     walk(formatter.render());
                     return result;
+                }
+
+                // 高亮和定位节点
+                function highlightAndLocateNode(propertyName, occurrenceIndex = 0) {
+                    // 使用requestAnimationFrame确保DOM已更新
+                    requestAnimationFrame(function() {
+                        // 清除之前的高亮
+                        document.querySelectorAll('.node-highlight, .node-highlight-active').forEach(el => {
+                            el.classList.remove('node-highlight', 'node-highlight-active');
+                        });
+
+                        const normalizeKey = (text) => String(text || '')
+                            .replace(/["'`]/g, '')
+                            .replace(/:$/g, '')
+                            .trim()
+                            .toLowerCase();
+
+                        const targetKeyName = normalizeKey(propertyName);
+
+                        // 找到所有包含该属性名的行
+                        const keyElements = Array.from(output.querySelectorAll('.json-formatter-key')).filter(el => {
+                            // 不区分大小写 + 模糊匹配
+                            return normalizeKey(el.textContent).includes(targetKeyName);
+                        });
+
+                        if (keyElements.length === 0) {
+                            console.log(`未找到属性 "${propertyName}"`);
+                            delete output.dataset.currentNodeIndex;
+                            delete output.dataset.currentNodeCount;
+                            delete output.dataset.nodePropertyName;
+                            locateStatus.textContent = '0 / 0';
+                            return;
+                        }
+
+                        // 获取指定的匹配项（支持循环）
+                        const targetIndex = ((occurrenceIndex % keyElements.length) + keyElements.length) % keyElements.length;
+                        const targetKey = keyElements[targetIndex];
+                        
+                        // 找到包含这个key的行元素
+                        const row = targetKey.closest('.json-formatter-row');
+                        if (!row) {
+                            console.log('未找到行元素');
+                            return;
+                        }
+
+                        // 添加高亮样式
+                        row.classList.add('node-highlight-active');
+                        targetKey.classList.add('node-highlight-active');
+                        
+                        // 也高亮所有匹配的行
+                        keyElements.forEach((el, idx) => {
+                            const r = el.closest('.json-formatter-row');
+                            if (r && idx !== targetIndex) {
+                                r.classList.add('node-highlight');
+                            }
+                            if (idx !== targetIndex) {
+                                el.classList.add('node-highlight');
+                            }
+                        });
+
+                        // 自动滚动到目标节点
+                        row.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'center',
+                            inline: 'nearest'
+                        });
+
+                        // 存储当前定位状态（用于连续点击时循环定位）
+                        output.dataset.currentNodeIndex = String(targetIndex);
+                        output.dataset.currentNodeCount = String(keyElements.length);
+                        output.dataset.nodePropertyName = propertyName;
+                        locateStatus.textContent = `${targetIndex + 1} / ${keyElements.length}`;
+                    });
                 }
 
                 // 初始化时为每个标签添加菜单
