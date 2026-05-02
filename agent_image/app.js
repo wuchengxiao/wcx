@@ -9,7 +9,6 @@ const AUTH_STORAGE_KEY = 'baidu_agent_auth_v1';
 const AUTH_EXPIRE_MS = 2 * 60 * 60 * 1000; // 2小时
 const CHAT_STORAGE_KEY = 'baidu_agent_chat_v1';
 
-// 固定字符串：4次 btoa 后的密文
 const FIXED_ENCODED = 'VjFaaQyUXhTbFZTYTNSUFlUTkNUbHBWVlRWbFZscFlaRVJLYUZaV1NucFZhazVUV1ZVeFIxTnNhRk5UUmtsNVZURmtiMkZ0VWxkU2FtaHFVbXRLTVZsVVFqUlVWazVaVjJ0S1dGSnRVbUZaYlRGR1RURmtSV0ZJU2xWTlIyZDZXVmR3YTJWc2JGVlZia0pzWWxVMWFGWkZWbEpRVVQwOQ==';
 
 const state = {
