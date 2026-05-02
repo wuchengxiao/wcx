@@ -421,6 +421,7 @@ class UMLDrawer {
             case 'use-case':
             case 'actor':
             case 'package':
+            case 'sticky':
                 this.startDrawingShape(x, y);
                 break;
             case 'line':
@@ -749,15 +750,20 @@ class UMLDrawer {
     
     startDrawingShape(x, y) {
         this.isDrawing = true;
+        const isSticky = this.currentTool === 'sticky';
         this.tempElement = {
             type: this.currentTool,
             x: x,
             y: y,
             width: 0,
             height: 0,
-            fill: 'white',
-            stroke: '#333',
-            strokeWidth: 2
+            fill: isSticky ? '#FFEB3B' : 'white',
+            stroke: isSticky ? '#F9A825' : '#333',
+            strokeWidth: 2,
+            text: isSticky ? '便签内容' : '',
+            fontSize: 14,
+            textColor: '#5D4037',
+            textPosition: 'top'
         };
     }
     
@@ -935,7 +941,7 @@ class UMLDrawer {
             
             this.startX = x;
             this.startY = y;
-        } else if (['rectangle', 'ellipse', 'class', 'use-case', 'actor', 'package'].includes(this.tempElement.type)) {
+        } else if (['rectangle', 'ellipse', 'class', 'use-case', 'actor', 'package', 'sticky'].includes(this.tempElement.type)) {
             this.tempElement.width = x - this.tempElement.x;
             this.tempElement.height = y - this.tempElement.y;
         } else if (['line', 'arrow'].includes(this.tempElement.type)) {
@@ -946,7 +952,7 @@ class UMLDrawer {
     
     finishDrawing(x, y) {
         if (this.tempElement) {
-            if (['rectangle', 'ellipse', 'class', 'use-case', 'actor', 'package'].includes(this.tempElement.type)) {
+            if (['rectangle', 'ellipse', 'class', 'use-case', 'actor', 'package', 'sticky'].includes(this.tempElement.type)) {
                 if (this.tempElement.width < 0) {
                     this.tempElement.x += this.tempElement.width;
                     this.tempElement.width = Math.abs(this.tempElement.width);
@@ -977,6 +983,7 @@ class UMLDrawer {
             case 'class':
             case 'package':
             case 'group':
+            case 'sticky':
                 return x >= element.x && x <= element.x + element.width &&
                        y >= element.y && y <= element.y + element.height;
             case 'ellipse':
@@ -1294,6 +1301,36 @@ class UMLDrawer {
                 ctx.fillRect(element.x, element.y, element.width, element.height);
                 ctx.strokeRect(element.x, element.y, element.width, element.height);
                 // 绘制文本
+                if (element.text) {
+                    this.drawElementText(ctx, element);
+                }
+                break;
+                
+            case 'sticky':
+                ctx.fillStyle = element.fill;
+                ctx.strokeStyle = element.stroke;
+                ctx.lineWidth = element.strokeWidth;
+                
+                const triangleSize = Math.min(element.width, element.height) * 0.15;
+                
+                ctx.beginPath();
+                ctx.moveTo(element.x, element.y);
+                ctx.lineTo(element.x + element.width - triangleSize, element.y);
+                ctx.lineTo(element.x + element.width, element.y + triangleSize);
+                ctx.lineTo(element.x + element.width, element.y + element.height);
+                ctx.lineTo(element.x, element.y + element.height);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.moveTo(element.x + element.width - triangleSize, element.y);
+                ctx.lineTo(element.x + element.width - triangleSize, element.y + triangleSize);
+                ctx.lineTo(element.x + element.width, element.y + triangleSize);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                
                 if (element.text) {
                     this.drawElementText(ctx, element);
                 }
