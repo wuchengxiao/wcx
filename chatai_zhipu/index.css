@@ -760,6 +760,35 @@ body {
     border-color: var(--primary);
 }
 
+.input-model-row {
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.input-model-label {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.input-model-select {
+    min-width: 150px;
+    height: 30px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 12px;
+    padding: 0 10px;
+    outline: none;
+}
+
+.input-model-select:focus {
+    border-color: var(--primary);
+}
+
 .input-textarea {
     flex: 1;
     background: transparent;
@@ -995,6 +1024,16 @@ body {
 
     .input-hint {
         display: none;
+    }
+
+    .input-model-row {
+        justify-content: space-between;
+    }
+
+    .input-model-select {
+        flex: 1;
+        min-width: 0;
+        max-width: 220px;
     }
 
     /* iOS Safari: 输入字体小于16px会触发自动缩放 */

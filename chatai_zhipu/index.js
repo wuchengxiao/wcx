@@ -9,6 +9,11 @@ class ChatApp {
                 name: 'GLM-4.7-Flash',
                 icon: '⚡',
                 color: '#f39c12'
+            },
+            'role-agent': {
+                name: 'role-agent',
+                icon: '🧩',
+                color: '#2563eb'
             }
         };
         this.currentModel = 'GLM-4.7';
@@ -376,6 +381,10 @@ class ChatApp {
     }
 
     selectModel(modelId) {
+        if (!this.models[modelId]) {
+            return;
+        }
+
         this.currentModel = modelId;
 
         if (this.currentSessionId) {
@@ -384,13 +393,35 @@ class ChatApp {
         }
 
         this.updateModelDisplay();
-        document.getElementById('modelDropdown').classList.remove('show');
+        const dropdown = document.getElementById('modelDropdown');
+        if (dropdown) {
+            dropdown.classList.remove('show');
+        }
+    }
+
+    handleBottomModelChange(modelId) {
+        this.selectModel(modelId);
     }
 
     updateModelDisplay() {
         const model = this.models[this.currentModel];
-        document.getElementById('currentModelName').textContent = model.name;
-        document.getElementById('currentModelIcon').textContent = model.icon;
+        if (!model) {
+            return;
+        }
+
+        const modelNameEl = document.getElementById('currentModelName');
+        const modelIconEl = document.getElementById('currentModelIcon');
+        const bottomModelSelectEl = document.getElementById('bottomModelSelect');
+
+        if (modelNameEl) {
+            modelNameEl.textContent = model.name;
+        }
+        if (modelIconEl) {
+            modelIconEl.textContent = model.icon;
+        }
+        if (bottomModelSelectEl) {
+            bottomModelSelectEl.value = this.currentModel;
+        }
     }
 
     syncCurrentSessionState() {
@@ -953,6 +984,10 @@ class ChatApp {
         this.isSending = true;
 
         const session = this.sessions[this.currentSessionId];
+        const activeModelId = session && session.model && this.models[session.model]
+            ? session.model
+            : this.currentModel;
+        const useRoleAgentModel = activeModelId === 'role-agent';
         const selectedRole = this.getSessionRole(session);
         const activeRole = this.getActiveRole(session);
 
@@ -983,6 +1018,49 @@ class ChatApp {
         // === 使用真实API流式回复 ===
         let assistantMessage = null;
         try {
+            if (useRoleAgentModel) {
+                assistantMessage = {
+                    id: 'msg_' + (Date.now() + 1),
+                    role: 'assistant',
+                    content: '',
+                    time: new Date().toLocaleTimeString('zh-CN', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    })
+                };
+                session.messages.push(assistantMessage);
+                this.isPersonaPickerOpen = false;
+                this.saveSessions();
+                this.renderChat();
+
+                if (!window.getRoleAgentModelConversation) {
+                    throw new Error('role-agent 模型请求功能未加载，请刷新页面后重试。');
+                }
+
+                const result = await window.getRoleAgentModelConversation(content, {
+                    onUpdate: (text) => {
+                        if (!assistantMessage) {
+                            return;
+                        }
+                        assistantMessage.content = text || '';
+                        this.saveSessions();
+                        this.updateMessageBubble(assistantMessage.id, assistantMessage.content, '');
+                    }
+                });
+
+                const finalText = result && typeof result.text === 'string'
+                    ? result.text.trim()
+                    : '';
+
+                assistantMessage.content = finalText || '【请求失败】接口未返回有效内容';
+                session.updatedAt = new Date().toISOString();
+                this.saveSessions();
+                this.renderSessionList();
+                this.updateMessageBubble(assistantMessage.id, assistantMessage.content, '');
+                this.updateInputPlaceholder();
+                return;
+            }
+
             const token = processinput.processedApiKey;
             const url = processinput.processedUrl;
             const tools = this.getFunctionCallingTools(activeRole);
@@ -1124,7 +1202,7 @@ class ChatApp {
             this.sessionThinkingMessageIdById[this.currentSessionId] = null;
 
             const errorMessage = this.getRequestErrorText(e, '请求失败');
-            const canFallback = !this.baiduAgentTried && window.getBaiduAgentConversation;
+            const canFallback = !useRoleAgentModel && !this.baiduAgentTried && window.getBaiduAgentConversation;
 
             if (canFallback && content) {
                 this.baiduAgentTried = true;

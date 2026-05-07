@@ -107,6 +107,13 @@
                             </button>
                         </div>
                     </div>
+                    <div class="input-model-row">
+                        <span class="input-model-label">基础模型</span>
+                        <select class="input-model-select" id="bottomModelSelect" onchange="chatApp.handleBottomModelChange(this.value)">
+                            <option value="GLM-4.7">GLM-4.7-Flash</option>
+                            <option value="role-agent">role-agent</option>
+                        </select>
+                    </div>
                     <div class="input-hint">按 Enter 发送，Shift + Enter 换行</div>
                 </div>
             </div>
@@ -132,6 +139,7 @@
     <script src="request/requestImage.js"></script>
     <script src="request/webSearch.js"></script>
     <script src="request/agentImage.js"></script>
+    <script src="request/roleAgent.js"></script>
     <script src="llm/tools.js"></script>
     <script src="llm/your_llm_api.js"></script>
     <script src="llm/chat.js"></script>
