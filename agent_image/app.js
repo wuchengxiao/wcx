@@ -1,3 +1,4 @@
+// 2026-05-10
 // --- 1. 配置与状态管理 ---
 const CONFIG = {
     API_URL: 'https://agentapi.baidu.com/assistant/conversation',
@@ -19,20 +20,6 @@ const state = {
         visible: false,
         text: '',
         useMarkdown: false
-    },
-    preview: {
-        visible: false,
-        urls: [],
-        index: 0,
-        scale: 1,
-        minScale: 0.2,
-        maxScale: 5,
-        scaleStep: 0.2,
-        panX: 0,
-        panY: 0,
-        isPanning: false,
-        lastPanX: 0,
-        lastPanY: 0
     }
 };
 
@@ -103,42 +90,17 @@ function appendBotMessageWithImages(text, imageUrls, skipCache) {
     const imageList = document.createElement('div');
     imageList.className = 'bot-images';
 
-    const allImageUrls = [];
     imageUrls.forEach(url => {
         if (url && url.trim()) {
-            allImageUrls.push(url.trim());
             const img = document.createElement('img');
             img.src = url.trim();
             img.alt = '图片';
             img.loading = 'lazy';
-            img.addEventListener('click', () => {
-                const startIndex = allImageUrls.indexOf(url.trim());
-                openImagePreview(allImageUrls, startIndex < 0 ? 0 : startIndex);
-            });
             imageList.appendChild(img);
         }
     });
 
-    const expandBtn = document.createElement('button');
-    expandBtn.type = 'button';
-    expandBtn.className = 'bubble-expand-btn';
-    expandBtn.setAttribute('aria-label', '全屏查看');
-    expandBtn.textContent = '⤢';
-    expandBtn.style.display = 'none';
-
-    bubble.addEventListener('click', () => {
-        const allRows = elements.messageList.querySelectorAll('.msg-row');
-        allRows.forEach(r => {
-            const btn = r.querySelector('.bubble-expand-btn');
-            if (btn) btn.style.display = 'none';
-        });
-        expandBtn.style.display = 'inline-flex';
-    });
-
-    expandBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        openMessageFullscreen(row);
-    });
+    const actions = createActionButtons(row);
 
     if (answerText) {
         bubble.appendChild(answerText);
@@ -146,7 +108,7 @@ function appendBotMessageWithImages(text, imageUrls, skipCache) {
     bubble.appendChild(imageList);
 
     row.appendChild(bubble);
-    row.appendChild(expandBtn);
+    row.appendChild(actions);
     elements.messageList.appendChild(row);
     elements.messageList.scrollTop = elements.messageList.scrollHeight;
 
@@ -175,15 +137,6 @@ const elements = {
     messageFullscreenMask: null,
     messageFullscreenBody: null,
     messageFullscreenCloseBtn: null,
-    previewMask: null,
-    previewStage: null,
-    previewImage: null,
-    previewCounter: null,
-    previewPrevBtn: null,
-    previewNextBtn: null,
-    previewCloseBtn: null,
-    previewZoomInBtn: null,
-    previewZoomOutBtn: null,
     moreOptionsBtn: null,
     moreOptionsDropdown: null,
     clearContextBtn: null
@@ -338,6 +291,121 @@ function handleTokenSubmit() {
 
 // --- 4. 聊天功能 ---
 
+function createActionButtons(row) {
+    const actions = document.createElement('div');
+    actions.className = 'bubble-actions';
+
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'bubble-action-btn copy-btn';
+    copyBtn.setAttribute('aria-label', '复制内容');
+    copyBtn.title = '复制内容';
+    copyBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        copyMessageContent(row);
+    });
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'bubble-action-btn delete-btn';
+    deleteBtn.setAttribute('aria-label', '删除消息');
+    deleteBtn.title = '删除消息';
+    deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteMessage(row);
+    });
+
+    const expandBtn = document.createElement('button');
+    expandBtn.type = 'button';
+    expandBtn.className = 'bubble-action-btn expand-btn';
+    expandBtn.setAttribute('aria-label', '全屏查看');
+    expandBtn.title = '全屏查看';
+    expandBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openMessageFullscreen(row);
+    });
+
+    actions.appendChild(copyBtn);
+    actions.appendChild(deleteBtn);
+    actions.appendChild(expandBtn);
+
+    return actions;
+}
+
+function deleteMessage(rowElement) {
+    if (!rowElement || !confirm('确定要删除这条消息吗？')) return;
+    
+    rowElement.remove();
+    saveChatCache();
+    
+    const remainingRows = elements.messageList.querySelectorAll('.msg-row');
+    if (remainingRows.length === 0) {
+        appendMessage('你好！我是你的智能助手，有什么可以帮你的吗？', 'bot');
+    }
+}
+
+function copyMessageContent(rowElement) {
+    if (!rowElement) return;
+
+    const bubble = rowElement.querySelector('.bubble');
+    if (!bubble) return;
+
+    let content = '';
+    
+    const textContent = bubble.querySelector('.answer-text');
+    if (textContent) {
+        content = textContent.textContent || '';
+    }
+
+    const images = bubble.querySelectorAll('.bot-images img');
+    if (images.length > 0) {
+        const imageUrls = Array.from(images).map(img => img.src).join('\n');
+        if (content) content += '\n\n';
+        content += imageUrls;
+    }
+
+    if (!content.trim()) {
+        content = bubble.textContent || '';
+    }
+
+    navigator.clipboard.writeText(content.trim()).then(() => {
+        showCopyToast();
+    }).catch(() => {
+        const textarea = document.createElement('textarea');
+        textarea.value = content.trim();
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        showCopyToast();
+    });
+}
+
+function showCopyToast() {
+    const toast = document.createElement('div');
+    toast.className = 'copy-toast';
+    toast.textContent = '已复制到剪贴板';
+    toast.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.75);
+        color: #fff;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-size: 14px;
+        z-index: 9999;
+        animation: fadeInUp 0.3s ease;
+    `;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.animation = 'fadeOutDown 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+    }, 1500);
+}
+
 function appendMessage(text, sender, skipCache) {
     const row = document.createElement('div');
     row.className = `msg-row ${sender}`;
@@ -349,30 +417,11 @@ function appendMessage(text, sender, skipCache) {
     content.className = 'answer-text is-plain';
     content.textContent = text;
 
-    const expandBtn = document.createElement('button');
-    expandBtn.type = 'button';
-    expandBtn.className = 'bubble-expand-btn';
-    expandBtn.setAttribute('aria-label', '全屏查看');
-    expandBtn.textContent = '⤢';
-    expandBtn.style.display = 'none';
-
-    bubble.addEventListener('click', () => {
-        const allRows = elements.messageList.querySelectorAll('.msg-row');
-        allRows.forEach(r => {
-            const btn = r.querySelector('.bubble-expand-btn');
-            if (btn) btn.style.display = 'none';
-        });
-        expandBtn.style.display = 'inline-flex';
-    });
-
-    expandBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        openMessageFullscreen(row);
-    });
+    const actions = createActionButtons(row);
 
     bubble.appendChild(content);
     row.appendChild(bubble);
-    row.appendChild(expandBtn);
+    row.appendChild(actions);
     elements.messageList.appendChild(row);
     elements.messageList.scrollTop = elements.messageList.scrollHeight;
 
@@ -398,32 +447,13 @@ function createBotRichMessage() {
     const imageList = document.createElement('div');
     imageList.className = 'bot-images';
 
-    const expandBtn = document.createElement('button');
-    expandBtn.type = 'button';
-    expandBtn.className = 'bubble-expand-btn';
-    expandBtn.setAttribute('aria-label', '全屏查看');
-    expandBtn.textContent = '⤢';
-    expandBtn.style.display = 'none';
-
-    bubble.addEventListener('click', () => {
-        const allRows = elements.messageList.querySelectorAll('.msg-row');
-        allRows.forEach(r => {
-            const btn = r.querySelector('.bubble-expand-btn');
-            if (btn) btn.style.display = 'none';
-        });
-        expandBtn.style.display = 'inline-flex';
-    });
-
-    expandBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        openMessageFullscreen(row);
-    });
+    const actions = createActionButtons(row);
 
     bubble.appendChild(answerText);
     bubble.appendChild(thinkingPanel);
     bubble.appendChild(imageList);
     row.appendChild(bubble);
-    row.appendChild(expandBtn);
+    row.appendChild(actions);
     elements.messageList.appendChild(row);
     elements.messageList.scrollTop = elements.messageList.scrollHeight;
 
@@ -435,22 +465,6 @@ function createBotRichMessage() {
         thinkingBody: thinkingPanel.querySelector('.thinking-body'),
         imageList
     };
-}
-
-function createBubbleActionBar() {
-    const container = document.createElement('div');
-    container.className = 'bubble-actions';
-
-    const expandBtn = document.createElement('button');
-    expandBtn.type = 'button';
-    expandBtn.className = 'bubble-expand-btn';
-    expandBtn.setAttribute('aria-label', '全屏查看');
-    expandBtn.title = '全屏查看';
-    expandBtn.textContent = '⤢';
-
-    container.appendChild(expandBtn);
-
-    return { container, expandBtn };
 }
 
 function renderThinking(thinkingBody, toolsStatus = []) {
@@ -579,7 +593,7 @@ function closeMessageFullscreen() {
     state.messageFullscreen.visible = false;
     elements.messageFullscreenMask.classList.remove('show');
     elements.messageFullscreenBody.innerHTML = '';
-    document.body.style.overflow = state.preview.visible ? 'hidden' : '';
+    document.body.style.overflow = '';
 }
 
 function initMessageFullscreen() {
@@ -587,7 +601,10 @@ function initMessageFullscreen() {
     mask.className = 'msg-fullscreen-mask';
     mask.innerHTML = `
         <div class="msg-fullscreen-card">
-            <button type="button" class="msg-fullscreen-close" aria-label="关闭">×</button>
+            <div class="msg-fullscreen-header">
+                <span class="msg-fullscreen-title">消息详情</span>
+                <button type="button" class="msg-fullscreen-close" aria-label="关闭">×</button>
+            </div>
             <div class="msg-fullscreen-body"></div>
         </div>
     `;
@@ -605,290 +622,7 @@ function initMessageFullscreen() {
     });
 }
 
-function normalizePreviewIndex(index, length) {
-    if (length <= 0) return 0;
-    return (index + length) % length;
-}
 
-function clampPreviewScale(scale) {
-    return Math.min(state.preview.maxScale, Math.max(state.preview.minScale, scale));
-}
-
-function centerPreviewStage() {
-    if (!elements.previewStage) return;
-    const stage = elements.previewStage;
-    stage.scrollLeft = Math.max(0, (stage.scrollWidth - stage.clientWidth) / 2);
-    stage.scrollTop = Math.max(0, (stage.scrollHeight - stage.clientHeight) / 2);
-}
-
-function updatePreviewCounter() {
-    const total = state.preview.urls.length;
-    const current = total > 0 ? state.preview.index + 1 : 0;
-    const scalePercent = Math.round(state.preview.scale * 100);
-    elements.previewCounter.textContent = `${current} / ${total} · ${scalePercent}%`;
-}
-
-function updatePreviewNavState() {
-    const single = state.preview.urls.length <= 1;
-    elements.previewPrevBtn.style.display = single ? 'none' : 'inline-flex';
-    elements.previewNextBtn.style.display = single ? 'none' : 'inline-flex';
-}
-
-function applyPreviewScale(scale) {
-    if (!elements.previewImage || !elements.previewImage.naturalWidth || !elements.previewImage.naturalHeight) {
-        return;
-    }
-
-    state.preview.scale = clampPreviewScale(scale);
-    applyPreviewPan();
-    updatePreviewCounter();
-}
-
-function applyPreviewPan() {
-    if (!elements.previewImage) return;
-    const tx = state.preview.panX;
-    const ty = state.preview.panY;
-    elements.previewImage.style.transform = `translate(${tx}px, ${ty}px) scale(${state.preview.scale})`;
-}
-
-function clampPan() {
-    if (!elements.previewStage || !elements.previewImage) return;
-    const stageRect = elements.previewStage.getBoundingClientRect();
-    const imgRect = elements.previewImage.getBoundingClientRect();
-    const scaledWidth = imgRect.width;
-    const scaledHeight = imgRect.height;
-    const maxPanX = Math.max(0, (scaledWidth - stageRect.width) / 2);
-    const maxPanY = Math.max(0, (scaledHeight - stageRect.height) / 2);
-    state.preview.panX = Math.min(maxPanX, Math.max(-maxPanX, state.preview.panX));
-    state.preview.panY = Math.min(maxPanY, Math.max(-maxPanY, state.preview.panY));
-}
-
-function resetPreviewScale(shouldCenter = true) {
-    state.preview.scale = 1;
-    state.preview.panX = 0;
-    state.preview.panY = 0;
-    if (elements.previewImage) {
-        elements.previewImage.style.transform = 'translate(0, 0) scale(1)';
-    }
-    updatePreviewCounter();
-}
-
-function zoomPreviewBy(step) {
-    if (!state.preview.visible) return;
-    applyPreviewScale(state.preview.scale + step);
-}
-
-function fitPreviewScale() {
-    if (!elements.previewImage || !elements.previewStage || !elements.previewImage.naturalWidth || !elements.previewImage.naturalHeight) {
-        return;
-    }
-
-    const stageWidth = Math.max(1, elements.previewStage.clientWidth - 16);
-    const stageHeight = Math.max(1, elements.previewStage.clientHeight - 16);
-    const widthScale = stageWidth / elements.previewImage.naturalWidth;
-    const heightScale = stageHeight / elements.previewImage.naturalHeight;
-    const fitScale = Math.min(widthScale, heightScale);
-
-    state.preview.panX = 0;
-    state.preview.panY = 0;
-    applyPreviewScale(fitScale);
-}
-
-function renderPreviewImage() {
-    if (!state.preview.visible || state.preview.urls.length === 0) return;
-
-    const idx = normalizePreviewIndex(state.preview.index, state.preview.urls.length);
-    state.preview.index = idx;
-    state.preview.scale = 1;
-    state.preview.panX = 0;
-    state.preview.panY = 0;
-    elements.previewImage.style.width = 'auto';
-    elements.previewImage.style.height = 'auto';
-    elements.previewImage.style.transform = 'translate(0, 0) scale(1)';
-    elements.previewImage.src = state.preview.urls[idx];
-    updatePreviewNavState();
-    updatePreviewCounter();
-}
-
-function closeImagePreview() {
-    state.preview.visible = false;
-    elements.previewMask.classList.remove('show');
-    elements.previewImage.src = '';
-    state.preview.urls = [];
-    state.preview.index = 0;
-    state.preview.scale = 1;
-    state.preview.panX = 0;
-    state.preview.panY = 0;
-    document.body.style.overflow = '';
-}
-
-function switchPreviewImage(step) {
-    if (!state.preview.visible || state.preview.urls.length <= 1) return;
-    state.preview.index = normalizePreviewIndex(state.preview.index + step, state.preview.urls.length);
-    renderPreviewImage();
-}
-
-function openImagePreview(urls, startIndex = 0) {
-    if (!Array.isArray(urls) || urls.length === 0) return;
-
-    state.preview.urls = urls.slice();
-    state.preview.index = normalizePreviewIndex(startIndex, state.preview.urls.length);
-    state.preview.scale = 1;
-    state.preview.visible = true;
-
-    renderPreviewImage();
-    elements.previewMask.classList.add('show');
-    document.body.style.overflow = 'hidden';
-}
-
-function initImagePreview() {
-    injectPreviewStyles();
-
-    const mask = document.createElement('section');
-    mask.className = 'img-preview-mask';
-    mask.innerHTML = `
-        <div class="img-preview-main">
-            <button class="img-preview-close" aria-label="关闭预览">×</button>
-            <div class="img-preview-stage">
-                <img class="img-preview-image" alt="图片预览" />
-            </div>
-            <div class="img-preview-controls">
-                <button class="img-preview-btn img-preview-prev" aria-label="上一张">‹</button>
-                <div class="img-preview-zoom">
-                    <button class="img-preview-zoom-out" aria-label="缩小">−</button>
-                    <span class="img-preview-counter">1 / 1</span>
-                    <button class="img-preview-zoom-in" aria-label="放大">+</button>
-                </div>
-                <button class="img-preview-btn img-preview-next" aria-label="下一张">›</button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(mask);
-
-    elements.previewMask = mask;
-    elements.previewStage = mask.querySelector('.img-preview-stage');
-    elements.previewImage = mask.querySelector('.img-preview-image');
-    elements.previewCounter = mask.querySelector('.img-preview-counter');
-    elements.previewPrevBtn = mask.querySelector('.img-preview-prev');
-    elements.previewNextBtn = mask.querySelector('.img-preview-next');
-    elements.previewCloseBtn = mask.querySelector('.img-preview-close');
-    elements.previewZoomInBtn = mask.querySelector('.img-preview-zoom-in');
-    elements.previewZoomOutBtn = mask.querySelector('.img-preview-zoom-out');
-
-    elements.previewCloseBtn.addEventListener('click', closeImagePreview);
-    elements.previewPrevBtn.addEventListener('click', () => switchPreviewImage(-1));
-    elements.previewNextBtn.addEventListener('click', () => switchPreviewImage(1));
-    elements.previewZoomInBtn.addEventListener('click', () => zoomPreviewBy(state.preview.scaleStep));
-    elements.previewZoomOutBtn.addEventListener('click', () => zoomPreviewBy(-state.preview.scaleStep));
-
-    elements.previewImage.addEventListener('load', () => {
-        state.preview.scale = 1;
-        state.preview.panX = 0;
-        state.preview.panY = 0;
-        applyPreviewPan();
-        updatePreviewCounter();
-    });
-
-    elements.previewStage.addEventListener('wheel', (e) => {
-        if (!state.preview.visible) return;
-        e.preventDefault();
-        zoomPreviewBy(e.deltaY < 0 ? state.preview.scaleStep : -state.preview.scaleStep);
-    }, { passive: false });
-
-    elements.previewStage.addEventListener('mousedown', (e) => {
-        if (!state.preview.visible) return;
-        if (e.button !== 0) return;
-        state.preview.isPanning = true;
-        state.preview.lastPanX = e.clientX;
-        state.preview.lastPanY = e.clientY;
-        elements.previewStage.style.cursor = 'grabbing';
-    });
-
-    document.addEventListener('mousemove', (e) => {
-        if (!state.preview.isPanning) return;
-        const dx = e.clientX - state.preview.lastPanX;
-        const dy = e.clientY - state.preview.lastPanY;
-        state.preview.lastPanX = e.clientX;
-        state.preview.lastPanY = e.clientY;
-        state.preview.panX += dx;
-        state.preview.panY += dy;
-        clampPan();
-        applyPreviewPan();
-    });
-
-    document.addEventListener('mouseup', () => {
-        if (state.preview.isPanning) {
-            state.preview.isPanning = false;
-            if (elements.previewStage) {
-                elements.previewStage.style.cursor = 'grab';
-            }
-        }
-    });
-
-    elements.previewStage.addEventListener('touchstart', (e) => {
-        if (!state.preview.visible) return;
-        if (e.touches.length !== 1) return;
-        state.preview.isPanning = true;
-        state.preview.lastPanX = e.touches[0].clientX;
-        state.preview.lastPanY = e.touches[0].clientY;
-    }, { passive: true });
-
-    elements.previewStage.addEventListener('touchmove', (e) => {
-        if (!state.preview.isPanning) return;
-        if (e.touches.length !== 1) return;
-        e.preventDefault();
-        const dx = e.touches[0].clientX - state.preview.lastPanX;
-        const dy = e.touches[0].clientY - state.preview.lastPanY;
-        state.preview.lastPanX = e.touches[0].clientX;
-        state.preview.lastPanY = e.touches[0].clientY;
-        state.preview.panX += dx;
-        state.preview.panY += dy;
-        clampPan();
-        applyPreviewPan();
-    }, { passive: false });
-
-    elements.previewStage.addEventListener('touchend', () => {
-        state.preview.isPanning = false;
-    });
-
-    elements.previewMask.addEventListener('click', (e) => {
-        if (e.target === elements.previewMask) {
-            closeImagePreview();
-        }
-    });
-
-    document.addEventListener('keydown', (e) => {
-        if (!state.preview.visible) return;
-        if (e.key === 'Escape') {
-            closeImagePreview();
-            return;
-        }
-        if (e.key === 'ArrowLeft') {
-            e.preventDefault();
-            switchPreviewImage(-1);
-            return;
-        }
-        if (e.key === 'ArrowRight') {
-            e.preventDefault();
-            switchPreviewImage(1);
-            return;
-        }
-        if (e.key === '+' || e.key === '=') {
-            e.preventDefault();
-            zoomPreviewBy(state.preview.scaleStep);
-            return;
-        }
-        if (e.key === '-' || e.key === '_') {
-            e.preventDefault();
-            zoomPreviewBy(-state.preview.scaleStep);
-            return;
-        }
-        if (e.key === '0') {
-            e.preventDefault();
-            resetPreviewScale(true);
-        }
-    });
-}
 
 async function callAgentAPI(userText) {
     try {
@@ -982,10 +716,6 @@ async function callAgentAPI(userText) {
                                     img.src = imageUrl;
                                     img.alt = item?.data?.description || item?.data?.tag || '智能体生成图片';
                                     img.loading = 'lazy';
-                                    img.addEventListener('click', () => {
-                                        const startIndex = renderedImageUrls.indexOf(imageUrl);
-                                        openImagePreview(renderedImageUrls, startIndex < 0 ? 0 : startIndex);
-                                    });
                                     botView.imageList.appendChild(img);
                                 });
                             }
@@ -1088,6 +818,5 @@ document.addEventListener('keydown', (e) => {
 });
 
 initMessageFullscreen();
-initImagePreview();
 initDropdownMenu();
 initAuth();
