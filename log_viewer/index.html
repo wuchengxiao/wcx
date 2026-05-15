@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Log Viewer</title>
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+<div class="app">
+  <div class="toolbar" id="toolbar">
+    <label title="Upload log file"><input id="fileInput" type="file" accept="text/*" style="display:none"/></label>
+    <button id="btnUpload">上传文件</button>
+    <button id="btnPaste">粘贴/格式化</button>
+    <button id="btnToggleView">显示为 HTML</button>
+    <div class="spacer"></div>
+    <label>搜索: <input id="searchInput" placeholder="关键字或正则" style="width:180px"/></label>
+    <label><input type="checkbox" id="caseChk"/> 区分大小写</label>
+    <button id="btnPrev">上一条</button>
+    <button id="btnNext">下一条</button>
+    <label>行号: <input id="gotoLine" style="width:70px"/></label>
+    <button id="btnGoto">跳转</button>
+    <button id="btnHideToolbar">隐藏工具栏</button>
+    <span class="status" id="status"></span>
+  </div>
+
+  <div class="content">
+    <div class="wrapper" id="contentWrapper">
+      <textarea id="editor" placeholder="将日志粘贴到此处，或使用 上传 文件 按钮导入..." spellcheck="false"></textarea>
+      <div id="renderedView" class="rendered" style="display:none"></div>
+    </div>
+    <div style="padding:8px;border-top:1px solid #ddd;background:#fff;display:flex;gap:8px;align-items:center">
+      <div>高亮关键字:</div>
+      <div class="keyword-list" id="keywordList"></div>
+      <div style="flex:1"></div>
+      <button id="btnAddFromSelection">用选区添加</button>
+      <input id="newKw" placeholder="新关键字" style="width:160px"/>
+      <input id="newColor" type="color" value="#ff5555"/>
+      <button id="btnAddKw">添加</button>
+    </div>
+  </div>
+
+  <button id="btnShowToolbar" class="floating-show" style="display:none">显示工具栏</button>
+</div>
+
+<script src="index.js"></script>
+</body>
+</html>
