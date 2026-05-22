@@ -42,6 +42,83 @@
         return urls;
     }
 
+    function collectRoleAgentVideoCards(uiData) {
+        const videos = [];
+        if (!uiData || typeof uiData !== 'object') return videos;
+
+        const resultList = uiData && uiData.results && Array.isArray(uiData.results.result)
+            ? uiData.results.result
+            : [];
+
+        resultList.forEach(item => {
+            if (!item || typeof item !== 'object') return;
+
+            const rawUrl = typeof item.url === 'string' ? item.url.trim() : '';
+            const rawTitle = typeof item.title === 'string' ? item.title.trim() : '';
+            const rawPoster = item.video_info && typeof item.video_info.poster === 'string'
+                ? item.video_info.poster.trim()
+                : '';
+            const durationText = item.video_info && typeof item.video_info.duration_time === 'string'
+                ? item.video_info.duration_time.trim()
+                : '';
+            const authorName = item.author_info && typeof item.author_info.author_name === 'string'
+                ? item.author_info.author_name.trim()
+                : '';
+
+            const isVideo = item.is_video === true || item.type === 2;
+            if (!isVideo) return;
+            if (!rawUrl && !rawPoster) return;
+
+            videos.push({
+                title: rawTitle || '视频推荐',
+                url: rawUrl,
+                poster: rawPoster,
+                duration: durationText,
+                author: authorName
+            });
+        });
+
+        return videos;
+    }
+
+    function escapeRoleAgentHtml(text) {
+        return String(text || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function buildRoleAgentVideoCardMarkdown(video) {
+        const safeTitle = escapeRoleAgentHtml(video && video.title ? video.title : '视频推荐');
+        const safeUrl = escapeRoleAgentHtml(video && video.url ? video.url : (video && video.poster ? video.poster : ''));
+        const safePoster = escapeRoleAgentHtml(video && video.poster ? video.poster : '');
+        const safeDuration = escapeRoleAgentHtml(video && video.duration ? video.duration : '');
+        const safeAuthor = escapeRoleAgentHtml(video && video.author ? video.author : '');
+
+        const metaParts = [];
+        if (safeDuration) metaParts.push(`⏱ ${safeDuration}`);
+        if (safeAuthor) metaParts.push(`👤 ${safeAuthor}`);
+        const metaText = metaParts.join('&nbsp;&nbsp;•&nbsp;&nbsp;');
+
+        const posterHtml = safePoster
+            ? `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="display:block;text-decoration:none;">
+    <img src="${safePoster}" alt="${safeTitle}" style="display:block;width:100%;height:auto;border-radius:12px;object-fit:cover;max-height:220px;background:#0f172a;" />
+</a>`
+            : '';
+
+        return `
+<div style="border:1px solid rgba(148,163,184,.35);border-radius:14px;padding:12px;margin:10px 0;background:linear-gradient(180deg,rgba(30,41,59,.08),rgba(15,23,42,.03));box-shadow:0 4px 14px rgba(15,23,42,.12);">
+  ${posterHtml}
+  <div style="margin-top:${posterHtml ? '10px' : '0'};font-size:16px;font-weight:700;line-height:1.45;">
+    <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;">🎬 ${safeTitle}</a>
+  </div>
+  ${metaText ? `<div style="margin-top:8px;font-size:12px;opacity:.85;line-height:1.5;">${metaText}</div>` : ''}
+</div>
+`;
+    }
+
     async function getRoleAgentModelConversation(userText, callbacks) {
         const cfg = window.RoleAgentModelConfig || {};
         const state = window.RoleAgentModelState || {};
@@ -102,6 +179,8 @@
             let hasMarkdownContent = false;
             let renderedImageUrls = [];
             const renderedImageUrlSet = new Set();
+            let renderedVideoCards = [];
+            const renderedVideoKeySet = new Set();
 
             if (callbacks && typeof callbacks.onStart === 'function') {
                 callbacks.onStart();
@@ -138,6 +217,26 @@
                                 } else if (item && item.dataType === 'text') {
                                     botResponseText += (item.data && item.data.text) || '';
                                 } else if (item && item.dataType === 'uiData') {
+                                    const videoCards = collectRoleAgentVideoCards(item.data);
+                                    videoCards.forEach(video => {
+                                        const videoKey = `${video.url}|${video.poster}|${video.title}`;
+                                        if (renderedVideoKeySet.has(videoKey)) return;
+
+                                        renderedVideoKeySet.add(videoKey);
+                                        renderedVideoCards.push(video);
+                                        hasMarkdownContent = true;
+
+                                        if (botResponseText && !botResponseText.endsWith('\n')) {
+                                            botResponseText += '\n';
+                                        }
+
+                                        botResponseText += buildRoleAgentVideoCardMarkdown(video);
+
+                                        if (callbacks && typeof callbacks.onVideo === 'function') {
+                                            callbacks.onVideo(video);
+                                        }
+                                    });
+
                                     const imageUrls = collectRoleAgentImageUrls(item.data);
                                     const imageAlt = item && item.data && (item.data.description || item.data.tag)
                                         ? String(item.data.description || item.data.tag).trim()
@@ -178,6 +277,8 @@
                     hasMarkdown: hasMarkdownContent,
                     images: renderedImageUrls,
                     hasImage: renderedImageUrls.length > 0,
+                    videos: renderedVideoCards,
+                    hasVideo: renderedVideoCards.length > 0,
                     threadId: state.threadId
                 });
             }
@@ -187,6 +288,8 @@
                 hasMarkdown: hasMarkdownContent,
                 images: renderedImageUrls,
                 hasImage: renderedImageUrls.length > 0,
+                videos: renderedVideoCards,
+                hasVideo: renderedVideoCards.length > 0,
                 threadId: state.threadId
             };
         } catch (err) {
