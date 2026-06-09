@@ -38,6 +38,29 @@
 
   function showStatus(msg, warn){status.textContent = msg || ''; if(warn) status.classList.add('warning'); else status.classList.remove('warning')}
 
+  function formatPastedLog(raw){
+    if(!raw) return '';
+    let text = String(raw).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+    // 如果是被 JSON 包裹的一整段字符串，先去掉外层引号
+    if((text.startsWith('"') && text.endsWith('"')) || (text.startsWith("'") && text.endsWith("'"))){
+      text = text.slice(1,-1);
+    }
+
+    // 当真实换行极少但包含大量转义换行时，按转义符还原
+    const realLineBreakCount = (text.match(/\n/g) || []).length;
+    const escapedLineBreakCount = (text.match(/\\n/g) || []).length;
+    if(realLineBreakCount <= 1 && escapedLineBreakCount > 0){
+      text = text
+        .replace(/\\r\\n/g, '\n')
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, '\n')
+        .replace(/\\t/g, '\t');
+    }
+
+    return text;
+  }
+
   function setView(mode){viewMode = mode; if(mode==='render'){editor.style.display='none';renderedView.style.display='block';btnToggleView.textContent='编辑模式';renderLines();}else{editor.style.display='block';renderedView.style.display='none';btnToggleView.textContent='显示为 HTML';}}
 
   function renderLines(){
@@ -121,7 +144,26 @@
   });
 
   btnPaste.addEventListener('click',()=>{
-    navigator.clipboard.readText().then(t=>{ if(!t) return; editor.value = t; showStatus('已从剪贴板粘贴'); if(viewMode==='render') renderLines(); }).catch(()=>{ showStatus('无法访问剪贴板，请手动粘贴', true)});
+    navigator.clipboard.readText().then(t=>{
+      if(!t) return;
+      editor.value = formatPastedLog(t);
+      showStatus('已从剪贴板粘贴并格式化');
+      if(viewMode==='render') renderLines();
+    }).catch(()=>{ showStatus('无法访问剪贴板，请手动粘贴', true)});
+  });
+
+  editor.addEventListener('paste',(e)=>{
+    const text = e.clipboardData && e.clipboardData.getData('text');
+    if(!text) return;
+    e.preventDefault();
+    const formatted = formatPastedLog(text);
+
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    editor.setRangeText(formatted, start, end, 'end');
+
+    showStatus('已粘贴并格式化换行');
+    if(viewMode==='render') renderLines();
   });
 
   btnToggleView.addEventListener('click',()=>{ setView(viewMode==='edit'?'render':'edit'); });
