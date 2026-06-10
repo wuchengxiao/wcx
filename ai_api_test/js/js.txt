@@ -1,0 +1,1149 @@
+/* ============================================================
+   AI Chat – Complete Front Logic
+   Supports: OpenAI-compatible / Baidu Agent / Zhipu
+   百度智能体图片显示完整支持
+   ============================================================ */
+(function () {
+'use strict';
+
+/* ==================== CONSTANTS ==================== */
+const DEMO = { user: 'demo', pass: '123456', nick: '演示用户', uid: 'demo_001' };
+const PFX  = 'aichat_';
+const MAX_T = 99999999;
+
+const PRESETS = {
+  openai:        { apiType: 'openai', url: 'https://api.openai.com/v1',                            model: 'gpt-4o' },
+  deepseek:      { apiType: 'openai', url: 'https://api.deepseek.com/v1',                           model: 'deepseek-chat' },
+  qwen:          { apiType: 'openai', url: 'https://dashscope.aliyuncs.com/compatible-mode/v1',     model: 'qwen-plus' },
+  moonshot:      { apiType: 'openai', url: 'https://api.moonshot.cn/v1',                            model: 'moonshot-v1-8k' },
+  siliconflow:   { apiType: 'openai', url: 'https://api.siliconflow.cn/v1',                         model: 'deepseek-ai/DeepSeek-V3' },
+  zhipu:         { apiType: 'openai', url: 'https://open.bigmodel.cn/api/paas/v4',                  model: 'glm-4-flash' },
+  'baidu-agent': { apiType: 'baidu' }
+};
+
+const OPENAI_ERR = {
+  401: 'API Key 无效或已过期，请在设置中检查认证信息',
+  403: '没有访问权限，请确认 API Key 是否有该模型的使用权限',
+  404: 'API 地址不正确，请在设置中核对 Base URL',
+  429: '请求过于频繁或额度不足，请稍后再试',
+  500: '服务端内部错误，请稍后重试',
+  502: '网关错误，服务可能正在维护',
+  503: '服务暂时不可用，请稍后重试'
+};
+
+const BAIDU_ERR = {
+  0:    '成功',
+  11:   'App ID 无效，请在设置中检查',
+  13:   'Secret Key 无效或已过期，请在设置中检查',
+  18:   '请求过于频繁，请稍后再试',
+  19:   '百度智能体调用额度不足',
+  1000: '请求参数错误，请检查消息内容',
+  1001: '百度智能体不存在或已下线'
+};
+
+/* ==================== STORE ==================== */
+const S = {
+  _g(k, d) { try { return JSON.parse(localStorage.getItem(PFX + k)) ?? d; } catch { return d; } },
+  _s(k, v) { localStorage.setItem(PFX + k, JSON.stringify(v)); },
+  user()         { return this._g('user', null); },
+  setUser(u)     { this._s('user', u); },
+  convs()        { return this._g('convs', []); },
+  setConvs(c)    { this._s('convs', c); },
+  settings()     { return this._g('settings', {
+    apiType: 'openai', apiUrl: '', apiKey: '', modelName: '',
+    baiduAppId: '', baiduSecretKey: '', baiduOpenId: '',
+    corsProxy: '', ctxWindow: 20, sysPrompt: '你是一个有用的AI助手。', theme: 'dark'
+  }); },
+  setSettings(s) { this._s('settings', s); },
+  clear()        { Object.keys(localStorage).filter(k => k.startsWith(PFX)).forEach(k => localStorage.removeItem(k)); }
+};
+
+/* ==================== DOM ==================== */
+let $ = {};
+let convId    = null;
+let streaming = false;
+let abortCtrl = null;
+
+function cacheDom() {
+  [
+    'loginPage','app','loginForm','loginUser','loginPass','loginErr','btnDemo',
+    'sidebar','sidebarOverlay','btnNewChat','btnCloseSide','btnMenu','searchInput','convList','btnOpenSet',
+    'mainContent','topbar','topTitle','modelDisp','btnModel','btnTokens','btnUser',
+    'welcomeScreen','apiHint','btnGotoSet','chatArea','msgList',
+    'inputArea','ctxBar','ctxCnt','ctxMax','msgInput','btnSend','btnStop','charCnt',
+    'setModal','sPreset','sApiType','openaiFields','baiduFields',
+    'sApiUrl','sApiKey','sModel','sProxy','sBaiduAppId','sBaiduSecretKey','sBaiduOpenId',
+    'sCtx','sPrompt','btnSaveSet','btnExport','btnImport','btnClear','fileImport',
+    'cfmModal','cfmTitle','cfmMsg','cfmOk','cfmCancel','toasts'
+  ].forEach(id => $[id] = document.getElementById(id));
+}
+
+/* ==================== TOAST / CONFIRM ==================== */
+function toast(msg, type = 'info', ms = 3500) {
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  $.toasts.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); }, ms);
+}
+
+let cfmResolve;
+function confirmDlg(title, msg) {
+  return new Promise(res => {
+    cfmResolve = res;
+    $.cfmTitle.textContent = title;
+    $.cfmMsg.textContent = msg;
+    $.cfmModal.style.display = '';
+  });
+}
+
+/* ==================== THEME ==================== */
+function applyTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  const mc = document.getElementById('themeColor');
+  if (mc) mc.content = t === 'light' ? '#faf8f5' : '#0d0d0d';
+  const hl = document.getElementById('hljsTheme');
+  if (hl) hl.href = t === 'light'
+    ? 'https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-light.min.css'
+    : 'https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-dark.min.css';
+  document.querySelectorAll('.theme-btn').forEach(b => b.classList.toggle('active', b.dataset.t === t));
+}
+
+/* ==================== MARKDOWN + IMAGE ==================== */
+function initMarked() {
+  if (typeof marked === 'undefined') return;
+
+  const renderer = {
+    code({ text, lang }) {
+      let highlighted = text;
+      if (typeof hljs !== 'undefined') {
+        try {
+          highlighted = lang && hljs.getLanguage(lang)
+            ? hljs.highlight(text, { language: lang }).value
+            : hljs.highlightAuto(text).value;
+        } catch {}
+      }
+      return `<div class="code-wrap"><div class="code-head"><span>${lang || 'code'}</span>` +
+        `<button class="code-copy" onclick="navigator.clipboard.writeText(this.closest('.code-wrap').querySelector('code').textContent)` +
+        `.then(()=>{this.textContent='✓ 已复制';setTimeout(()=>{this.textContent='复制'},1500)})">复制</button></div>` +
+        `<pre><code class="hljs language-${lang || ''}">${highlighted}</code></pre></div>`;
+    },
+
+    /* ★★★ 关键：自定义图片渲染，绑定 lightbox 点击事件 ★★★ */
+    image({ href, title, text }) {
+      const alt = esc(text || '百度智能体图片');
+      const t   = title ? ` title="${esc(title)}"` : '';
+      return `<img class="chat-img" src="${esc(href)}" alt="${alt}"${t} loading="lazy" ` +
+        `onclick="window.AIChat.openLightbox(this.src)" onerror="this.alt='图片加载失败';this.style.opacity=0.5;this.style.cursor='default'">`;
+    }
+  };
+
+  marked.use({ renderer, breaks: true, gfm: true });
+}
+
+function renderMd(text) {
+  if (typeof marked !== 'undefined') return marked.parse(text);
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+}
+
+/* ==================== LIGHTBOX ★★★ ==================== */
+window.AIChat = window.AIChat || {};
+
+window.AIChat.openLightbox = function (src) {
+  /* 如果已有则关闭 */
+  const existing = document.querySelector('.img-lightbox');
+  if (existing) { existing.remove(); return; }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'img-lightbox';
+  overlay.innerHTML =
+    `<img src="${src}" alt="查看大图">` +
+    `<button class="img-lightbox-close" aria-label="关闭">✕</button>` +
+    `<span class="img-lightbox-tip">点击任意位置关闭 · Esc 键关闭</span>`;
+
+  /* 点击关闭 */
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay || e.target.classList.contains('img-lightbox-close') || e.target.classList.contains('img-lightbox-tip')) {
+      overlay.remove();
+    }
+  });
+
+  /* 阻止图片本身的点击冒泡（避免点击图片也关闭） */
+  overlay.querySelector('img').addEventListener('click', e => e.stopPropagation());
+
+  document.body.appendChild(overlay);
+};
+
+/* ==================== UTILS ==================== */
+function estTokens(text) {
+  if (!text) return 0;
+  const cjk = (text.match(/[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/g) || []).length;
+  return Math.ceil(cjk * 1.5 + (text.length - cjk) * 0.25);
+}
+
+function uid()  { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function timeStr(ts) {
+  if (!ts) return '';
+  return new Date(ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+}
+function getConfiguredType() {
+  const cfg = S.settings();
+  if (cfg.apiType === 'baidu') return cfg.baiduAppId && cfg.baiduSecretKey ? 'ok' : 'missing';
+  return cfg.apiUrl && cfg.apiKey && cfg.modelName ? 'ok' : 'missing';
+}
+function getModelLabel() {
+  const cfg = S.settings();
+  if (cfg.apiType === 'baidu') return '百度智能体';
+  return cfg.modelName || '未配置';
+}
+
+/* ==================== API: OPENAI COMPATIBLE ==================== */
+async function openaiSend(messages, cfg, cbs) {
+  abortCtrl = new AbortController();
+  let url = cfg.apiUrl.replace(/\/+$/, '') + '/chat/completions';
+  if (cfg.corsProxy) url = cfg.corsProxy.replace(/\/+$/, '') + '/' + url;
+
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.apiKey}` },
+      body: JSON.stringify({ model: cfg.modelName, messages, stream: true }),
+      signal: abortCtrl.signal
+    });
+
+    if (!resp.ok) {
+      let hint = OPENAI_ERR[resp.status] || `请求失败 (HTTP ${resp.status})`;
+      try { const j = JSON.parse(await resp.text()); if (j.error?.message) hint += '：' + j.error.message; } catch {}
+      cbs.onError('api', hint);
+      return;
+    }
+
+    const ct = resp.headers.get('content-type') || '';
+
+    if (!ct.includes('text/event-stream') && ct.includes('application/json')) {
+      const data = await resp.json();
+      const content = data.choices?.[0]?.message?.content || '';
+      if (content) cbs.onChunk(content);
+      cbs.onDone();
+      return;
+    }
+
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop() || '';
+      for (const line of lines) {
+        const trim = line.trim();
+        if (!trim || !trim.startsWith('data:')) continue;
+        const payload = trim.slice(5).trim();
+        if (payload === '[DONE]') { cbs.onDone(); return; }
+        try {
+          const delta = JSON.parse(payload).choices?.[0]?.delta?.content;
+          if (delta) cbs.onChunk(delta);
+        } catch {}
+      }
+    }
+    cbs.onDone();
+  } catch (err) {
+    handleFetchError(err, cbs);
+  }
+}
+
+/* ==================== API: BAIDU AGENT ==================== */
+
+/**
+ * ★★★ 核心：解析百度智能体返回数据 ★★★
+ *
+ * 百度 SSE 实际格式：
+ * data:{"status":0,"message":"succ","logid":"...","data":{"message":{"content":[
+ *   {"dataType":"markdown","isFinished":false,"data":{"showType":"append","text":"你好","type":"txt"}},
+ *   {"dataType":"image","isFinished":true,"data":{"url":"https://xxx.png","type":"img"}}
+ * ],"threadId":"...","endTurn":false,"msgId":"..."}}}
+ *
+ * 返回: { texts:[], images:[], finished:bool, error:string|null }
+ */
+function parseBaiduPayload(payload) {
+  const result = { texts: [], images: [], finished: false, error: null };
+
+  /* 顶层 status 错误 */
+  if (payload.status !== undefined && payload.status !== 0) {
+    const msg = BAIDU_ERR[payload.status] || `百度智能体错误 (status: ${payload.status})`;
+    result.error = msg + (payload.message ? '：' + payload.message : '');
+    return result;
+  }
+
+  const msgNode = payload.data?.message;
+  if (!msgNode) return result;
+
+  /* endTurn 判断 */
+  if (msgNode.endTurn) result.finished = true;
+
+  const contentArr = msgNode.content;
+  if (!Array.isArray(contentArr)) return result;
+
+  for (const item of contentArr) {
+    if (item.isFinished) result.finished = true;
+
+    const d  = item.data || {};
+    const dt = (item.dataType || '').toLowerCase();
+    const t  = (d.type       || '').toLowerCase();
+
+    /* ★★★ 判断类型：dataType 或 data.type 均可 ★★★ */
+    const isText  = (dt === 'markdown' || dt === 'text'  || t === 'txt' || t === 'text');
+    const isImage = (dt === 'image'    || dt === 'pic'   || t === 'img' || t === 'image' || t === 'pic');
+
+    if (isImage) {
+      /* ★★★ 提取图片 URL，兼容多种字段名 ★★★ */
+      const imgUrl = d.url || d.picUrl || d.src || d.imageUrl || d.originalUrl || d.pic || '';
+      if (imgUrl) result.images.push(imgUrl);
+    } else if (isText) {
+      if (d.text) result.texts.push(d.text);
+    } else {
+      /* 未知类型回退 */
+      if (d.text) result.texts.push(d.text);
+      const fallbackImg = d.url || d.picUrl || d.src || '';
+      if (fallbackImg) result.images.push(fallbackImg);
+    }
+  }
+
+  return result;
+}
+
+async function baiduSend(latestUserText, convId_, cfg, cbs) {
+  abortCtrl = new AbortController();
+
+  let url = `https://agentapi.baidu.com/assistant/conversation?appId=${encodeURIComponent(cfg.baiduAppId)}&secretKey=${encodeURIComponent(cfg.baiduSecretKey)}`;
+  if (cfg.corsProxy) url = cfg.corsProxy.replace(/\/+$/, '') + '/' + url;
+
+  const openId = cfg.baiduOpenId || ('web_' + (convId_ || 'user'));
+
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: {
+          content: {
+            type: 'text',
+            value: { showText: latestUserText }
+          }
+        },
+        source: cfg.baiduAppId,
+        from: 'openapi',
+        openId: openId
+      }),
+      signal: abortCtrl.signal
+    });
+
+    if (!resp.ok) {
+      let hint = `请求失败 (HTTP ${resp.status})`;
+      if (resp.status === 401) hint = 'App ID 或 Secret Key 认证失败，请在设置中检查';
+      else if (resp.status === 403) hint = '没有访问权限，请确认智能体是否已发布';
+      else if (resp.status === 404) hint = '接口地址不存在，请确认 App ID 是否正确';
+      else if (resp.status === 429) hint = '请求过于频繁或额度不足，请稍后再试';
+      else if (resp.status >= 500) hint = '百度服务端错误，请稍后重试';
+      try { const j = JSON.parse(await resp.text()); if (j.errmsg) hint += '：' + j.errmsg; } catch {}
+      cbs.onError('api', hint);
+      return;
+    }
+
+    const rawText = await resp.text();
+    const lines   = rawText.split('\n').filter(l => l.trim());
+    const isSSE   = lines.some(l => l.trim().startsWith('data:'));
+
+    if (isSSE) {
+      /* ★★★ SSE 流式解析 ★★★ */
+      let hasContent = false;
+      let hasError   = false;
+      let finished   = false;
+      const seenImages = new Set();
+
+      for (const line of lines) {
+        if (finished || hasError) break;
+        const trim = line.trim();
+        if (!trim) continue;
+
+        let jsonStr = trim;
+        if (trim.startsWith('data:')) jsonStr = trim.slice(5).trim();
+        if (!jsonStr) continue;
+
+        let payload;
+        try { payload = JSON.parse(jsonStr); } catch { continue; }
+
+        const parsed = parseBaiduPayload(payload);
+
+        if (parsed.error && !hasContent) {
+          cbs.onError('api', parsed.error);
+          hasError = true;
+          break;
+        }
+
+        /* ★★★ 逐块输出文本 ★★★ */
+        for (const txt of parsed.texts) {
+          cbs.onChunk(txt);
+          hasContent = true;
+        }
+
+        /* ★★★ 输出图片：转为 Markdown 图片语法，由 marked 渲染为 <img class="chat-img"> ★★★ */
+        for (const imgUrl of parsed.images) {
+          if (!seenImages.has(imgUrl)) {
+            seenImages.add(imgUrl);
+            cbs.onChunk(`\n\n![百度智能体图片](${imgUrl})\n\n`);
+            hasContent = true;
+          }
+        }
+
+        if (parsed.finished) finished = true;
+      }
+
+      if (!hasError) {
+        if (!hasContent) cbs.onError('api', '百度智能体返回了空内容，请检查智能体配置');
+        else cbs.onDone();
+      }
+
+    } else {
+      /* 非流式 JSON */
+      let data;
+      try { data = JSON.parse(rawText); } catch {
+        cbs.onError('api', '百度智能体返回了无法解析的响应');
+        return;
+      }
+
+      const parsed = parseBaiduPayload(data);
+      if (parsed.error) { cbs.onError('api', parsed.error); return; }
+
+      if (!parsed.texts.length && !parsed.images.length) {
+        cbs.onError('api', '百度智能体返回了空内容，请检查智能体配置\n\n```\n' + JSON.stringify(data, null, 2) + '\n```');
+        return;
+      }
+
+      let full = parsed.texts.join('');
+      for (const imgUrl of parsed.images) {
+        full += `\n\n![百度智能体图片](${imgUrl})\n\n`;
+      }
+      await simulateStream(full, cbs);
+    }
+
+  } catch (err) {
+    handleFetchError(err, cbs);
+  }
+}
+
+function simulateStream(text, cbs) {
+  return new Promise(resolve => {
+    let i = 0;
+    const chunkSize = 3;
+    const delay = 18;
+    function tick() {
+      if (abortCtrl?.signal?.aborted) { cbs.onDone(); resolve(); return; }
+      if (i >= text.length) { cbs.onDone(); resolve(); return; }
+      cbs.onChunk(text.slice(i, i + chunkSize));
+      i += chunkSize;
+      setTimeout(tick, delay);
+    }
+    tick();
+  });
+}
+
+/* ==================== SHARED ERROR HANDLER ==================== */
+function handleFetchError(err, cbs) {
+  if (err.name === 'AbortError') { cbs.onDone(); return; }
+  const msg = err.message || '';
+  if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('network') || msg.includes('Load failed')) {
+    cbs.onError('network', '网络连接失败。可能原因：\n1. 网络不稳定或已断开\n2. 浏览器跨域限制（请在设置中配置 CORS 代理）\n3. API 地址不正确');
+  } else {
+    cbs.onError('unknown', '请求出错：' + msg);
+  }
+}
+
+function stopStream() { if (abortCtrl) { abortCtrl.abort(); abortCtrl = null; } }
+
+/* ==================== BUILD HISTORY ==================== */
+function buildHistory(conv, settings) {
+  const msgs = [];
+  if (settings.sysPrompt) msgs.push({ role: 'system', content: settings.sysPrompt });
+  const hist = (conv.messages || []).filter(m => m.role === 'user' || m.role === 'assistant');
+  const max  = settings.ctxWindow || 20;
+  const pairs = [];
+  for (let i = hist.length - 1; i >= 0 && pairs.length < max; i--) {
+    if (hist[i].role === 'assistant') {
+      const um = hist[i - 1];
+      if (um && um.role === 'user') { pairs.unshift([um, hist[i]]); i--; }
+    }
+  }
+  pairs.forEach(([u, a]) => {
+    msgs.push({ role: 'user', content: u.content });
+    msgs.push({ role: 'assistant', content: a.content });
+  });
+  return msgs;
+}
+
+/* ==================== CONVERSATION HELPERS ==================== */
+function getConv(id) { return S.convs().find(c => c.id === id); }
+function updateConv(id, fn) {
+  const convs = S.convs();
+  const i = convs.findIndex(c => c.id === id);
+  if (i < 0) return;
+  fn(convs[i]);
+  S.setConvs(convs);
+}
+
+/* ==================== RENDER CONVERSATION LIST ==================== */
+function renderConvList(filter) {
+  const convs    = S.convs().filter(c => !c.archived);
+  const q        = (filter || '').toLowerCase();
+  const filtered = q ? convs.filter(c =>
+    c.title.toLowerCase().includes(q) ||
+    (c.messages || []).some(m => m.content.toLowerCase().includes(q))
+  ) : convs;
+
+  const pinned = filtered.filter(c => c.pinned);
+  const rest   = filtered.filter(c => !c.pinned);
+  const groups = {};
+  const now       = new Date();
+  const today     = now.toDateString();
+  const yesterday = new Date(now - 86400000).toDateString();
+
+  rest.forEach(c => {
+    const d  = new Date(c.updatedAt || c.createdAt);
+    const ds = d.toDateString();
+    let label;
+    if (ds === today)           label = '今天';
+    else if (ds === yesterday)  label = '昨天';
+    else if (now - d < 7 * 86400000) label = '本周';
+    else label = '更早';
+    (groups[label] = groups[label] || []).push(c);
+  });
+
+  let html = '';
+  if (!filtered.length) {
+    html = '<div class="conv-empty">暂无对话</div>';
+  } else {
+    if (pinned.length) {
+      html += '<div class="conv-group-label">📌 置顶</div>';
+      pinned.forEach(c => { html += convItemHTML(c); });
+    }
+    ['今天', '昨天', '本周', '更早'].forEach(label => {
+      if (!groups[label]?.length) return;
+      html += `<div class="conv-group-label">${label}</div>`;
+      groups[label].forEach(c => { html += convItemHTML(c); });
+    });
+  }
+  $.convList.innerHTML = html;
+
+  $.convList.querySelectorAll('.conv-item').forEach(el => {
+    const id = el.dataset.id;
+    el.addEventListener('click', e => {
+      if (e.target.closest('.conv-actions')) return;
+      switchConv(id);
+    });
+    el.querySelector('.btn-pin')?.addEventListener('click', () => togglePin(id));
+    el.querySelector('.btn-del')?.addEventListener('click', () => deleteConv(id));
+    el.querySelector('.btn-ren')?.addEventListener('click', () => renameConv(id));
+  });
+}
+
+function convItemHTML(c) {
+  const active = c.id === convId ? ' active' : '';
+  const pin    = c.pinned ? '<span class="conv-pin">📌</span>' : '';
+  return `<div class="conv-item${active}" data-id="${c.id}">
+    ${pin}<span class="conv-title">${esc(c.title || '新对话')}</span>
+    <span class="conv-actions">
+      <button class="btn-icon btn-pin" title="置顶">📌</button>
+      <button class="btn-icon btn-ren" title="重命名">✏️</button>
+      <button class="btn-icon btn-del" title="删除">🗑</button>
+    </span>
+  </div>`;
+}
+
+/* ==================== RENDER MESSAGES ==================== */
+function renderMessages(conv) {
+  if (!conv || !conv.messages.length) {
+    $.chatArea.style.display      = 'none';
+    $.welcomeScreen.style.display = '';
+    return;
+  }
+  $.welcomeScreen.style.display = 'none';
+  $.chatArea.style.display      = '';
+  $.msgList.innerHTML = conv.messages.map(msgHTML).join('');
+  hlAll();
+  scrollBottom();
+}
+
+function msgHTML(m) {
+  if (m.role === 'user') {
+    return `<div class="msg msg-user" data-id="${m.id}">
+      <div class="msg-avatar"><span class="avatar-sm" style="width:28px;height:28px;font-size:11px">演</span></div>
+      <div class="msg-body">
+        <div class="msg-bubble">${esc(m.content).replace(/\n/g, '<br>')}</div>
+        <div class="msg-meta"><span>${timeStr(m.ts)}</span></div>
+      </div>
+    </div>`;
+  }
+
+  if (m.role === 'error') {
+    return `<div class="msg-err">
+      <div class="err-title">⚠ 出错了</div>
+      <div>${esc(m.content)}</div>
+      ${m.hint ? `<div class="err-hint">${esc(m.hint)}</div>` : ''}
+    </div>`;
+  }
+
+  /* assistant — renderMd 会把 ![alt](url) 渲染为 <img class="chat-img"> */
+  const content = m.content ? renderMd(m.content) : '';
+  const tk    = m.tokens ? `≈${m.tokens} tokens` : '';
+  const model = m.model  ? `<span class="model-tag">${esc(m.model)}</span>` : '';
+  return `<div class="msg msg-ai" data-id="${m.id}">
+    <div class="msg-avatar">AI</div>
+    <div class="msg-body">
+      <div class="msg-bubble">${content}</div>
+      <div class="msg-actions">
+        <button class="btn-icon rate-good${m.rating === 'good' ? ' active-good' : ''}" title="👍">👍</button>
+        <button class="btn-icon rate-bad${m.rating === 'bad' ? ' active-bad' : ''}" title="👎">👎</button>
+        <button class="btn-icon msg-copy" title="复制">📋</button>
+        <button class="btn-icon msg-retry" title="重新生成">🔄</button>
+      </div>
+      <div class="msg-meta">${model}<span>${timeStr(m.ts)}</span>${tk ? `<span>${tk}</span>` : ''}</div>
+    </div>
+  </div>`;
+}
+
+function hlAll() {
+  if (typeof hljs === 'undefined') return;
+  $.msgList.querySelectorAll('code.hljs:not(.hljs-done)').forEach(el => {
+    try { hljs.highlightElement(el); } catch {}
+    el.classList.add('hljs-done');
+  });
+}
+
+function scrollBottom() {
+  requestAnimationFrame(() => { $.chatArea.scrollTop = $.chatArea.scrollHeight; });
+}
+
+/* ==================== MESSAGE ACTIONS ==================== */
+function bindMsgActions() {
+  $.msgList.addEventListener('click', e => {
+    const msgEl = e.target.closest('.msg-ai');
+    if (!msgEl) return;
+    const mid  = msgEl.dataset.id;
+    const conv = getConv(convId);
+    if (!conv) return;
+    const msg = conv.messages.find(m => m.id === mid);
+    if (!msg) return;
+
+    if (e.target.closest('.rate-good')) {
+      msg.rating = msg.rating === 'good' ? null : 'good';
+    } else if (e.target.closest('.rate-bad')) {
+      msg.rating = msg.rating === 'bad' ? null : 'bad';
+    } else if (e.target.closest('.msg-copy')) {
+      navigator.clipboard.writeText(msg.content).then(() => toast('已复制到剪贴板', 'success'));
+      return;
+    } else if (e.target.closest('.msg-retry')) {
+      retryFrom(mid);
+      return;
+    } else {
+      return;
+    }
+    S.setConvs(S.convs());
+    renderMessages(getConv(convId));
+  });
+}
+
+/* ==================== SEND / STREAM ==================== */
+function sendMessage(text) {
+  if (!text.trim() || streaming) return;
+  const cfg = S.settings();
+
+  if (cfg.apiType === 'baidu') {
+    if (!cfg.baiduAppId || !cfg.baiduSecretKey) {
+      toast('请先在设置中配置百度智能体的 App ID 和 Secret Key', 'warn');
+      openSettings();
+      return;
+    }
+  } else {
+    if (!cfg.apiUrl || !cfg.apiKey || !cfg.modelName) {
+      toast('请先在设置中配置 API 地址、Key 和模型名称', 'warn');
+      openSettings();
+      return;
+    }
+  }
+
+  let conv = getConv(convId);
+  if (!conv) { newConv(); conv = getConv(convId); }
+
+  const userMsg = { id: uid(), role: 'user', content: text.trim(), ts: Date.now() };
+  conv.messages.push(userMsg);
+  if (conv.messages.length === 1) conv.title = text.trim().slice(0, 30);
+  conv.updatedAt = Date.now();
+  S.setConvs(S.convs());
+  renderConvList($.searchInput.value);
+  renderMessages(conv);
+  doStream(conv);
+}
+
+function doStream(conv) {
+  const cfg = S.settings();
+  streaming = true;
+  toggleStreamUI(true);
+
+  const modelLabel = cfg.apiType === 'baidu' ? '百度智能体' : cfg.modelName;
+  const aiMsg = { id: uid(), role: 'assistant', content: '', ts: Date.now(), model: modelLabel, tokens: 0 };
+  conv.messages.push(aiMsg);
+  S.setConvs(S.convs());
+
+  renderMessages(conv);
+  const bubble = $.msgList.querySelector(`.msg[data-id="${aiMsg.id}"] .msg-bubble`);
+  if (bubble) bubble.innerHTML = '<div class="loading-dots"><span></span><span></span><span></span></div>';
+
+  let started = false;
+
+  const cbs = {
+    onChunk(delta) {
+      if (!started) {
+        started = true;
+        if (bubble) { bubble.innerHTML = ''; bubble.classList.add('stream-cursor'); }
+      }
+      aiMsg.content += delta;
+      /* ★★★ 每次 chunk 后重新 renderMd，这样图片会实时渲染出来 ★★★ */
+      if (bubble) bubble.innerHTML = renderMd(aiMsg.content) + '<span class="stream-cursor"></span>';
+      hlAll();
+      scrollBottom();
+    },
+    onDone() {
+      streaming = false;
+      toggleStreamUI(false);
+      if (bubble) {
+        bubble.classList.remove('stream-cursor');
+        bubble.innerHTML = renderMd(aiMsg.content || '(空回复)');
+      }
+      aiMsg.tokens = estTokens(aiMsg.content);
+      aiMsg.ts     = Date.now();
+      conv.updatedAt = Date.now();
+      S.setConvs(S.convs());
+      renderConvList($.searchInput.value);
+      hlAll();
+      scrollBottom();
+      updateCtxBar(conv);
+      updateTokenDisplay();
+    },
+    onError(type, msg) {
+      streaming = false;
+      toggleStreamUI(false);
+      const idx = conv.messages.findIndex(m => m.id === aiMsg.id);
+      if (idx >= 0) conv.messages.splice(idx, 1);
+      let hint = '';
+      if (type === 'network') hint = '可在设置中配置 CORS 代理解决跨域问题';
+      else if (type === 'config') hint = '点击左上角菜单 → 设置 → 填写 API 信息';
+      conv.messages.push({ id: uid(), role: 'error', content: msg, hint });
+      conv.updatedAt = Date.now();
+      S.setConvs(S.convs());
+      renderMessages(conv);
+      toast(msg, 'error', 6000);
+    }
+  };
+
+  /* 按 API 类型路由 */
+  if (cfg.apiType === 'baidu') {
+    const lastUser = [...conv.messages].reverse().find(m => m.role === 'user');
+    baiduSend(lastUser?.content || '', conv.id, cfg, cbs);
+  } else {
+    const history = buildHistory(conv, cfg);
+    const lastUser = [...conv.messages].reverse().find(m => m.role === 'user');
+    if (lastUser) history.push({ role: 'user', content: lastUser.content });
+    openaiSend(history, cfg, cbs);
+  }
+}
+
+function retryFrom(msgId) {
+  const conv = getConv(convId);
+  if (!conv || streaming) return;
+  const idx = conv.messages.findIndex(m => m.id === msgId);
+  if (idx < 0) return;
+  conv.messages.splice(idx, 1);
+  while (idx < conv.messages.length && conv.messages[idx]?.role === 'error') conv.messages.splice(idx, 1);
+  S.setConvs(S.convs());
+  renderMessages(conv);
+  doStream(conv);
+}
+
+function toggleStreamUI(on) {
+  $.btnSend.style.display = on ? 'none' : '';
+  $.btnStop.style.display = on ? ''    : 'none';
+  $.msgInput.disabled     = on;
+}
+
+/* ==================== CTX BAR / TOKEN ==================== */
+function updateCtxBar(conv) {
+  const s   = S.settings();
+  const max = s.ctxWindow || 20;
+  const msgs = (conv?.messages || []).filter(m => m.role !== 'error');
+  const used = Math.min(msgs.filter(m => m.role === 'assistant').length, max);
+  $.ctxCnt.textContent = used;
+  $.ctxMax.textContent = max;
+  $.ctxBar.style.display = conv?.messages?.length ? '' : 'none';
+}
+
+function updateTokenDisplay() {
+  const total = (S.convs() || []).reduce((sum, c) =>
+    sum + (c.messages || []).reduce((s, m) => s + (m.tokens || 0), 0), 0);
+  $.btnTokens.textContent = '∞';
+  $.btnTokens.title = `已使用 ≈${total.toLocaleString()} tokens · 额度无限`;
+}
+
+/* ==================== SIDEBAR ==================== */
+function toggleSide(show) {
+  $.sidebar.classList.toggle('open', show);
+  $.sidebarOverlay.classList.toggle('show', show);
+}
+
+/* ==================== CONVERSATION CRUD ==================== */
+function newConv() {
+  const c = { id: uid(), title: '新对话', messages: [], createdAt: Date.now(), updatedAt: Date.now(), pinned: false, archived: false };
+  const convs = S.convs();
+  convs.unshift(c);
+  S.setConvs(convs);
+  convId = c.id;
+  renderConvList();
+  showChat();
+  $.msgInput.focus();
+}
+
+function switchConv(id) {
+  convId = id;
+  const conv = getConv(id);
+  $.topTitle.textContent = conv?.title || 'AI Chat';
+  renderConvList($.searchInput.value);
+  renderMessages(conv);
+  updateCtxBar(conv);
+  toggleSide(false);
+}
+
+async function deleteConv(id) {
+  const ok = await confirmDlg('删除对话', '确定要删除这个对话吗？此操作不可撤销。');
+  if (!ok) return;
+  S.setConvs(S.convs().filter(c => c.id !== id));
+  if (convId === id) { convId = null; showWelcome(); }
+  renderConvList();
+  toast('对话已删除', 'success');
+}
+
+function togglePin(id) {
+  updateConv(id, c => { c.pinned = !c.pinned; });
+  renderConvList($.searchInput.value);
+}
+
+function renameConv(id) {
+  const conv = getConv(id);
+  if (!conv) return;
+  const name = prompt('重命名对话：', conv.title);
+  if (name !== null && name.trim()) {
+    updateConv(id, c => { c.title = name.trim(); });
+    renderConvList($.searchInput.value);
+    if (id === convId) $.topTitle.textContent = name.trim();
+  }
+}
+
+/* ==================== SHOW / HIDE ==================== */
+function showWelcome() {
+  $.welcomeScreen.style.display = '';
+  $.chatArea.style.display      = 'none';
+  $.topTitle.textContent = 'AI Chat';
+  updateApiHint();
+}
+
+function showChat() {
+  $.welcomeScreen.style.display = 'none';
+  $.chatArea.style.display      = '';
+  const conv = getConv(convId);
+  $.topTitle.textContent = conv?.title || 'AI Chat';
+  updateCtxBar(conv);
+}
+
+function updateApiHint() {
+  $.apiHint.style.display = getConfiguredType() === 'missing' ? '' : 'none';
+}
+
+/* ==================== SETTINGS ==================== */
+function openSettings() {
+  const s = S.settings();
+  $.sApiType.value        = s.apiType || 'openai';
+  $.sPreset.value         = '';
+  $.sApiUrl.value         = s.apiUrl || '';
+  $.sApiKey.value         = s.apiKey || '';
+  $.sModel.value          = s.modelName || '';
+  $.sBaiduAppId.value     = s.baiduAppId || '';
+  $.sBaiduSecretKey.value = s.baiduSecretKey || '';
+  $.sBaiduOpenId.value    = s.baiduOpenId || '';
+  $.sProxy.value          = s.corsProxy || '';
+  $.sCtx.value            = s.ctxWindow || 20;
+  $.sPrompt.value         = s.sysPrompt || '';
+  applyTheme(s.theme || 'dark');
+  toggleApiFields(s.apiType || 'openai');
+  $.setModal.style.display = '';
+}
+
+function closeSettings() { $.setModal.style.display = 'none'; }
+
+function toggleApiFields(type) {
+  const isOpenAI = type !== 'baidu';
+  $.openaiFields.style.display = isOpenAI ? '' : 'none';
+  $.baiduFields.style.display  = isOpenAI ? 'none' : '';
+}
+
+function saveSettings() {
+  const s = {
+    apiType:        $.sApiType.value,
+    apiUrl:         $.sApiUrl.value.trim(),
+    apiKey:         $.sApiKey.value.trim(),
+    modelName:      $.sModel.value.trim(),
+    baiduAppId:     $.sBaiduAppId.value.trim(),
+    baiduSecretKey: $.sBaiduSecretKey.value.trim(),
+    baiduOpenId:    $.sBaiduOpenId.value.trim(),
+    corsProxy:      $.sProxy.value.trim(),
+    ctxWindow:      Math.max(1, Math.min(50, parseInt($.sCtx.value) || 20)),
+    sysPrompt:      $.sPrompt.value.trim(),
+    theme:          document.querySelector('.theme-btn.active')?.dataset.t || 'dark'
+  };
+  S.setSettings(s);
+  applyTheme(s.theme);
+  updateModelDisp();
+  updateApiHint();
+  const conv = getConv(convId);
+  updateCtxBar(conv);
+  closeSettings();
+  toast('设置已保存', 'success');
+}
+
+function updateModelDisp() {
+  $.modelDisp.textContent = getModelLabel();
+}
+
+/* ==================== EXPORT / IMPORT / CLEAR ==================== */
+function exportData() {
+  const data = { conversations: S.convs(), settings: S.settings(), exportedAt: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = `aichat-export-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('数据已导出', 'success');
+}
+
+function importData(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (data.conversations) {
+        const existing = S.convs();
+        const ids = new Set(existing.map(c => c.id));
+        let count = 0;
+        data.conversations.forEach(c => { if (!ids.has(c.id)) { existing.push(c); count++; } });
+        S.setConvs(existing);
+        renderConvList();
+        toast(`成功导入 ${count} 个对话`, 'success');
+      }
+      if (data.settings) {
+        S.setSettings({ ...S.settings(), ...data.settings });
+        updateModelDisp();
+      }
+    } catch { toast('导入失败：文件格式不正确', 'error'); }
+  };
+  reader.readAsText(file);
+}
+
+async function clearAll() {
+  const ok = await confirmDlg('清除所有数据', '将删除所有对话和设置，此操作不可撤销。确定继续？');
+  if (!ok) return;
+  S.clear();
+  convId = null;
+  initDefaultData();
+  renderConvList();
+  showWelcome();
+  updateModelDisp();
+  updateTokenDisplay();
+  toast('所有数据已清除', 'success');
+}
+
+/* ==================== INIT DEFAULT DATA ==================== */
+function initDefaultData() {
+  if (!S.user()) S.setUser({ uid: DEMO.uid, nick: DEMO.nick, tokens: MAX_T });
+  if (!S.convs().length) {
+    const now = Date.now();
+    S.setConvs([{
+      id: uid(), title: '欢迎使用 AI Chat', messages: [
+        { id: uid(), role: 'user',      content: '你好，请介绍一下你自己', ts: now - 2000 },
+        { id: uid(), role: 'assistant', content: '你好！我是 AI Chat 智能助手。\n\n支持以下模型接入：\n- OpenAI / DeepSeek / 通义千问 / Moonshot / SiliconFlow / 智谱 GLM（OpenAI 兼容接口）\n- 百度智能体（独立接口，支持图文混合回复）\n\n使用前请先点击左下角 **设置** 配置模型 API。', ts: now - 1000, model: 'system', tokens: 120 }
+      ],
+      createdAt: now - 2000, updatedAt: now - 1000, pinned: true, archived: false
+    }]);
+  }
+  if (!S.settings().apiType) {
+    S.setSettings({ ...S.settings(), apiType: 'openai', apiUrl: '', apiKey: '', modelName: '',
+      baiduAppId: '', baiduSecretKey: '', baiduOpenId: '', corsProxy: '', ctxWindow: 20,
+      sysPrompt: '你是一个有用的AI助手。', theme: 'dark' });
+  }
+}
+
+/* ==================== KEYBOARD (iOS) ==================== */
+function setupKeyboard() {
+  if (!window.visualViewport) return;
+  const onResize = () => {
+    const diff = window.innerHeight - window.visualViewport.height;
+    document.body.classList.toggle('keyboard-open', diff > 100);
+    $.inputArea.style.bottom = diff > 100 ? diff + 'px' : '';
+    scrollBottom();
+  };
+  window.visualViewport.addEventListener('resize', onResize);
+  window.visualViewport.addEventListener('scroll', onResize);
+}
+
+/* ==================== EVENTS ==================== */
+function bindEvents() {
+  $.loginForm.addEventListener('submit', e => { e.preventDefault(); doLogin($.loginUser.value, $.loginPass.value); });
+  $.btnDemo.addEventListener('click', () => {
+    $.loginUser.value = DEMO.user;
+    $.loginPass.value = DEMO.pass;
+    doLogin(DEMO.user, DEMO.pass);
+  });
+
+  $.btnMenu.addEventListener('click',    () => toggleSide(true));
+  $.btnCloseSide.addEventListener('click', () => toggleSide(false));
+  $.sidebarOverlay.addEventListener('click', () => toggleSide(false));
+  $.btnNewChat.addEventListener('click', newConv);
+  $.searchInput.addEventListener('input', () => renderConvList($.searchInput.value));
+  $.btnOpenSet.addEventListener('click', openSettings);
+
+  $.btnModel.addEventListener('click', openSettings);
+  $.btnGotoSet?.addEventListener('click', openSettings);
+
+  $.msgInput.addEventListener('input', () => {
+    autoResize();
+    $.charCnt.textContent = `${$.msgInput.value.length.toLocaleString()} / 32,000`;
+    $.btnSend.disabled = !$.msgInput.value.trim();
+  });
+  $.msgInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if ($.msgInput.value.trim() && !streaming) sendMessage($.msgInput.value);
+    }
+  });
+  $.btnSend.addEventListener('click', () => { if ($.msgInput.value.trim()) sendMessage($.msgInput.value); });
+  $.btnStop.addEventListener('click', stopStream);
+
+  document.querySelectorAll('.suggest-card').forEach(el => {
+    el.addEventListener('click', () => {
+      if (!convId) newConv();
+      $.msgInput.value = el.dataset.prompt;
+      autoResize();
+      $.msgInput.focus();
+      $.btnSend.disabled = false;
+    });
+  });
+
+  $.setModal.querySelector('.modal-x').addEventListener('click', closeSettings);
+  $.setModal.querySelector('.modal-cancel').addEventListener('click', closeSettings);
+  $.setModal.querySelector('.modal-bg').addEventListener('click', closeSettings);
+  $.btnSaveSet.addEventListener('click', saveSettings);
+
+  $.sApiType.addEventListener('change', () => toggleApiFields($.sApiType.value));
+
+  $.sPreset.addEventListener('change', () => {
+    const key = $.sPreset.value;
+    const p = PRESETS[key];
+    if (!p) return;
+    $.sApiType.value = p.apiType || 'openai';
+    toggleApiFields(p.apiType || 'openai');
+    if (p.url)   $.sApiUrl.value = p.url;
+    if (p.model) $.sModel.value  = p.model;
+  });
+
+  document.querySelectorAll('.theme-btn').forEach(b => {
+    b.addEventListener('click', () => applyTheme(b.dataset.t));
+  });
+
+  document.querySelectorAll('.toggle-pwd').forEach(b => {
+    b.addEventListener('click', () => {
+      const inp = document.getElementById(b.dataset.for);
+      if (inp) inp.type = inp.type === 'password' ? 'text' : 'password';
+    });
+  });
+
+  $.btnExport.addEventListener('click', exportData);
+  $.btnImport.addEventListener('click', () => $.fileImport.click());
+  $.fileImport.addEventListener('change', e => {
+    if (e.target.files[0]) importData(e.target.files[0]);
+    e.target.value = '';
+  });
+  $.btnClear.addEventListener('click', clearAll);
+
+  $.cfmOk.addEventListener('click',     () => { $.cfmModal.style.display = 'none'; if (cfmResolve) cfmResolve(true); });
+  $.cfmCancel.addEventListener('click', () => { $.cfmModal.style.display = 'none'; if (cfmResolve) cfmResolve(false); });
+
+  bindMsgActions();
+  setupKeyboard();
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      if ($.setModal.style.display !== 'none') closeSettings();
+      if ($.cfmModal.style.display !== 'none') { $.cfmModal.style.display = 'none'; if (cfmResolve) cfmResolve(false); }
+      const lb = document.querySelector('.img-lightbox');
+      if (lb) lb.remove();
+    }
+  });
+}
+
+function autoResize() {
+  const el = $.msgInput;
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+}
+
+/* ==================== LOGIN ==================== */
+function doLogin(user, pass) {
+  $.loginErr.textContent = '';
+  if (user === DEMO.user && pass === DEMO.pass) {
+    S.setUser({ uid: DEMO.uid, nick: DEMO.nick, tokens: MAX_T });
+    enterApp();
+  } else {
+    $.loginErr.textContent = '账号或密码错误，请重试';
+    $.loginPass.value = '';
+    $.loginPass.focus();
+  }
+}
+
+function enterApp() {
+  $.loginPage.style.display = 'none';
+  $.app.style.display       = '';
+  initDefaultData();
+  const convs = S.convs();
+  if (convs.length) { convId = convs[0].id; switchConv(convId); }
+  else { showWelcome(); }
+  updateModelDisp();
+  updateTokenDisplay();
+  renderConvList();
+  updateApiHint();
+  $.msgInput.focus();
+}
+
+/* ==================== INIT ==================== */
+function init() {
+  cacheDom();
+  initMarked();
+  bindEvents();
+  applyTheme(S.settings().theme || 'dark');
+  if (S.user()) enterApp();
+  else { $.loginPage.style.display = ''; $.app.style.display = 'none'; }
+}
+
+document.addEventListener('DOMContentLoaded', init);
+
+})();
