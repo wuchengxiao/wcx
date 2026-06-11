@@ -127,7 +127,7 @@ function initMarked() {
   }
 
   const renderer = {
-    code({ text, lang }) {
+    code(text, lang) {
       let highlighted = text;
       if (typeof hljs !== 'undefined') {
         try {
