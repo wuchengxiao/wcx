@@ -276,6 +276,8 @@ class ChatApp {
         this.sessionThinkingById[id] = '';
         this.sessionThinkingMessageIdById[id] = null;
         this.currentSessionId = id;
+        // 清除之前的搜索结果（不落盘）
+        this.currentWebSearchResults = null;
         this.isPersonaPickerOpen = true;
         this.syncCurrentSessionState();
         this.saveCurrentSessionId();
@@ -292,6 +294,8 @@ class ChatApp {
 
     switchSession(id) {
         this.currentSessionId = id;
+        // 清除之前的搜索结果（不落盘）
+        this.currentWebSearchResults = null;
         this.isPersonaPickerOpen = false;
         this.syncCurrentSessionState();
         this.saveCurrentSessionId();
@@ -651,8 +655,8 @@ class ChatApp {
         }
 
         const allTools = Array.isArray(window.llmTools) ? window.llmTools : [];
-        const enableWebSearch = document.getElementById('enableWebSearch');
-        const allowWebSearch = !enableWebSearch || !!enableWebSearch.checked;
+        const webSearchToggle = document.getElementById('webSearchToggle');
+        const allowWebSearch = !webSearchToggle || !!webSearchToggle.checked;
         const allowedToolNames = [];
 
         if (allowWebSearch) {
@@ -667,6 +671,14 @@ class ChatApp {
             const name = tool && tool.function ? tool.function.name : '';
             return allowedToolNames.includes(name);
         });
+    }
+
+    handleWebSearchToggle(checked) {
+        this.webSearchEnabled = !!checked;
+        const webSearchToggle = document.getElementById('webSearchToggle');
+        if (webSearchToggle) {
+            webSearchToggle.checked = !!checked;
+        }
     }
 
     buildToolInstructionMessage(tools) {
@@ -1061,26 +1073,76 @@ class ChatApp {
                 return;
             }
 
+            // 检查是否启用联网查询，如果启用则先执行搜索
+            const webSearchToggle = document.getElementById('webSearchToggle');
+            const isWebSearchEnabled = webSearchToggle && webSearchToggle.checked;
+            let webSearchContext = null;
+            // 临时存储搜索结果用于显示（不落盘）
+            this.currentWebSearchResults = null;
+
+            if (isWebSearchEnabled && window.requestWebSearch) {
+                try {
+                    assistantMessage = {
+                        id: 'msg_' + (Date.now() + 1),
+                        role: 'assistant',
+                        content: '',
+                        time: new Date().toLocaleTimeString('zh-CN', {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        })
+                    };
+                    session.messages.push(assistantMessage);
+                    this.saveSessions();
+                    this.renderChat();
+
+                    const searchResults = await window.requestWebSearch(content);
+                    if (Array.isArray(searchResults) && searchResults.length > 0) {
+                        webSearchContext = searchResults.map((item, index) => {
+                            return `[${index + 1}] ${item.title || '无标题'}\n来源: ${item.url || '无链接'}\n摘要: ${item.content || '无内容'}`;
+                        }).join('\n\n');
+                        // 存储搜索结果用于显示（不落盘）
+                        this.currentWebSearchResults = searchResults;
+                    }
+                } catch (searchErr) {
+                    console.error('联网查询失败:', searchErr);
+                    this.showToast('联网查询失败: ' + (searchErr.message || '未知错误'));
+                }
+            }
+
             const token = processinput.processedApiKey;
             const url = processinput.processedUrl;
-            const tools = this.getFunctionCallingTools(activeRole);
+            // 当启用联网查询时，不再传递 tools，避免重复调用
+            const tools = isWebSearchEnabled ? [] : this.getFunctionCallingTools(activeRole);
             const toolInstructionMessage = this.buildToolInstructionMessage(tools);
+            
+            // 构建消息，如果有联网查询结果则添加到上下文
+            const webSearchSystemMessage = webSearchContext ? {
+                role: 'system',
+                content: `以下是联网查询的相关信息，请结合这些信息回答用户问题：\n\n${webSearchContext}`
+            } : null;
+            
             const messages = [
                 ...(activeRole && activeRole.systemPrompt ? [activeRole.systemPrompt] : []),
                 ...(toolInstructionMessage ? [toolInstructionMessage] : []),
+                ...(webSearchSystemMessage ? [webSearchSystemMessage] : []),
                 ...session.messages.map(m => ({ role: m.role, content: m.content }))
             ];
 
-            assistantMessage = {
-                id: 'msg_' + (Date.now() + 1),
-                role: 'assistant',
-                content: '',
-                time: new Date().toLocaleTimeString('zh-CN', {
-                    hour: '2-digit',
-                    minute: '2-digit'
-                })
-            };
-            session.messages.push(assistantMessage);
+            // 如果之前创建了 assistantMessage 用于显示联网查询状态，更新它
+            if (assistantMessage && assistantMessage.content === '正在联网查询...') {
+                assistantMessage.content = '';
+            } else {
+                assistantMessage = {
+                    id: 'msg_' + (Date.now() + 1),
+                    role: 'assistant',
+                    content: '',
+                    time: new Date().toLocaleTimeString('zh-CN', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    })
+                };
+                session.messages.push(assistantMessage);
+            }
             this.sessionThinkingById[this.currentSessionId] = '';
             this.sessionThinkingMessageIdById[this.currentSessionId] = assistantMessage.id;
             this.isPersonaPickerOpen = false;
@@ -1622,7 +1684,9 @@ class ChatApp {
         if (!session || session.messages.length === 0)
             return '';
 
-        return session.messages.map(msg => {
+        const searchResultsHtml = this.renderWebSearchResultsHtml();
+
+        return searchResultsHtml + session.messages.map(msg => {
             const isUser = msg.role === 'user';
             const isCollapsed = !!msg.collapsed;
             const html = marked.parse(msg.content);
@@ -1675,6 +1739,96 @@ class ChatApp {
             `;
         }
         ).join('');
+    }
+
+    renderWebSearchResultsHtml() {
+        const results = this.currentWebSearchResults;
+        if (!Array.isArray(results) || results.length === 0) {
+            return '';
+        }
+
+        const maxDisplayLines = 3;
+        const isTruncated = results.length > maxDisplayLines;
+        const displayResults = isTruncated ? results.slice(0, maxDisplayLines) : results;
+
+        const resultsHtml = displayResults.map((item, index) => {
+            const title = this.escapeHtml(item.title || '无标题');
+            const url = this.escapeHtml(item.url || '');
+            const content = this.escapeHtml(item.content || '无内容');
+            const publishedDate = item.published_date ? this.escapeHtml(item.published_date) : '';
+
+            return `
+                <div class="search-result-item">
+                    <div class="search-result-title">
+                        ${index + 1}. ${title}
+                        ${publishedDate ? `<span class="search-result-date">${publishedDate}</span>` : ''}
+                    </div>
+                    ${url ? `<div class="search-result-url">${url}</div>` : ''}
+                    <div class="search-result-content">${content}</div>
+                </div>
+            `;
+        }).join('');
+
+        const remainingCount = results.length - maxDisplayLines;
+
+        return `
+            <div class="web-search-container" id="webSearchContainer">
+                <div class="web-search-header">
+                    <span class="web-search-icon">🔍</span>
+                    <span class="web-search-title">联网查询结果</span>
+                    <span class="web-search-count">共 ${results.length} 条</span>
+                </div>
+                <div class="web-search-content" id="webSearchContent">
+                    ${resultsHtml}
+                </div>
+                ${isTruncated ? `
+                    <div class="web-search-footer">
+                        <button class="web-search-expand-btn" onclick="chatApp.toggleWebSearchExpand()">
+                            展开查看全部（还有 ${remainingCount} 条）
+                        </button>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
+
+    toggleWebSearchExpand() {
+        const container = document.getElementById('webSearchContainer');
+        if (container) {
+            container.classList.toggle('expanded');
+            const btn = container.querySelector('.web-search-expand-btn');
+            const results = this.currentWebSearchResults;
+            const maxDisplayLines = 3;
+            
+            if (container.classList.contains('expanded')) {
+                const allResultsHtml = results.map((item, index) => {
+                    const title = this.escapeHtml(item.title || '无标题');
+                    const url = this.escapeHtml(item.url || '');
+                    const content = this.escapeHtml(item.content || '无内容');
+                    const publishedDate = item.published_date ? this.escapeHtml(item.published_date) : '';
+
+                    return `
+                        <div class="search-result-item">
+                            <div class="search-result-title">
+                                ${index + 1}. ${title}
+                                ${publishedDate ? `<span class="search-result-date">${publishedDate}</span>` : ''}
+                            </div>
+                            ${url ? `<div class="search-result-url">${url}</div>` : ''}
+                            <div class="search-result-content">${content}</div>
+                        </div>
+                    `;
+                }).join('');
+                const contentEl = document.getElementById('webSearchContent');
+                if (contentEl) {
+                    contentEl.innerHTML = allResultsHtml;
+                }
+                if (btn) {
+                    btn.textContent = '收起';
+                }
+            } else {
+                this.renderChat();
+            }
+        }
     }
 
     updateMessageBubble(messageId, content, reasoning = '', toolTrace) {
