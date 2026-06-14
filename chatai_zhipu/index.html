@@ -12,6 +12,36 @@
     <script src="request/constants.js"></script>
     <link href="login/login.css" rel="stylesheet">
     <link href="index.css" rel="stylesheet">
+    <style>
+        .input-model-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding: 8px 0;
+        }
+        
+        .web-search-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: var(--text-secondary, #999);
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .web-search-toggle input[type="checkbox"] {
+            cursor: pointer;
+            width: 16px;
+            height: 16px;
+            margin: 0;
+        }
+        
+        .web-search-toggle .toggle-label {
+            cursor: pointer;
+        }
+    </style>
 </head>
 <body>
     <div class="app" id="app">
