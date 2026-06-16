@@ -1720,13 +1720,17 @@ class UMLDrawer {
     }
     
     downloadDiagram() {
+        const exportBounds = this.getExportBounds();
         const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = this.canvas.width;
-        tempCanvas.height = this.canvas.height;
+        tempCanvas.width = exportBounds.width;
+        tempCanvas.height = exportBounds.height;
         const tempCtx = tempCanvas.getContext('2d');
         
         tempCtx.fillStyle = '#ffffff';
         tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+        tempCtx.save();
+        tempCtx.translate(-exportBounds.minX, -exportBounds.minY);
         
         const elements = this.diagrams[this.currentDiagram].elements;
         elements.forEach(element => {
@@ -1736,6 +1740,7 @@ class UMLDrawer {
                 this.drawElement(tempCtx, element);
             }
         });
+        tempCtx.restore();
         
         tempCanvas.toBlob((blob) => {
             const url = URL.createObjectURL(blob);
@@ -1747,6 +1752,58 @@ class UMLDrawer {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         });
+    }
+
+    getExportBounds() {
+        const diagram = this.diagrams[this.currentDiagram];
+        const elements = diagram.elements || [];
+
+        // 最小导出尺寸：当前可见画布尺寸
+        const minWidth = this.canvas.width;
+        const minHeight = this.canvas.height;
+
+        // 如果没有元素，直接按可见区域导出
+        if (elements.length === 0) {
+            return {
+                minX: 0,
+                minY: 0,
+                width: minWidth,
+                height: minHeight
+            };
+        }
+
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+
+        elements.forEach(element => {
+            const bounds = this.getElementBounds(element);
+            minX = Math.min(minX, bounds.x);
+            minY = Math.min(minY, bounds.y);
+            maxX = Math.max(maxX, bounds.x + bounds.width);
+            maxY = Math.max(maxY, bounds.y + bounds.height);
+        });
+
+        // 为线条端点、箭头、选择描边预留少量边距
+        const padding = 20;
+        minX -= padding;
+        minY -= padding;
+        maxX += padding;
+        maxY += padding;
+
+        const contentWidth = Math.max(1, Math.ceil(maxX - minX));
+        const contentHeight = Math.max(1, Math.ceil(maxY - minY));
+
+        const width = Math.max(minWidth, contentWidth);
+        const height = Math.max(minHeight, contentHeight);
+
+        return {
+            minX,
+            minY,
+            width,
+            height
+        };
     }
     
     clearDiagram() {
