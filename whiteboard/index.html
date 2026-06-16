@@ -179,6 +179,14 @@
                     </div>
                 </div>
                 <div class="tool-group">
+                    <h4>自定义图形</h4>
+                    <div class="custom-shape-actions-row">
+                        <button id="create-custom-shape" class="create-custom-shape-btn" aria-label="将当前选中元素组合并保存为自定义图形">组合为图形</button>
+                        <button id="ungroup-shape" class="ungroup-shape-btn" aria-label="拆分当前选中的组合图形">拆分图形</button>
+                    </div>
+                    <div id="custom-shapes-list" class="custom-shapes-list" role="group" aria-label="自定义图形列表"></div>
+                </div>
+                <div class="tool-group">
                     <h4>操作</h4>
                     <div class="tools" role="group" aria-label="操作工具">
                         <button class="tool" data-tool="select" aria-label="选择工具">
@@ -215,6 +223,25 @@
 
                 <div class="canvas-container">
                     <canvas id="canvas" width="1200" height="800" role="img" aria-label="UML绘图画布"></canvas>
+
+                    <div class="zoom-controls" aria-label="画布缩放控制">
+                        <button id="zoom-out" class="zoom-btn" aria-label="缩小画布" title="缩小">
+                            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <line x1="8" y1="11" x2="14" y2="11" stroke="currentColor" stroke-width="2"/>
+                                <line x1="16.65" y1="16.65" x2="21" y2="21" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                        </button>
+                        <button id="zoom-reset" class="zoom-btn zoom-rate" aria-label="重置缩放比例" title="重置缩放">100%</button>
+                        <button id="zoom-in" class="zoom-btn" aria-label="放大画布" title="放大">
+                            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <line x1="11" y1="8" x2="11" y2="14" stroke="currentColor" stroke-width="2"/>
+                                <line x1="8" y1="11" x2="14" y2="11" stroke="currentColor" stroke-width="2"/>
+                                <line x1="16.65" y1="16.65" x2="21" y2="21" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                        </button>
+                    </div>
 
                     <div id="floating-buttons" class="floating-buttons" aria-label="移动端工具按钮">
                         <button id="btn-tools" class="floating-btn" aria-label="打开工具面板">

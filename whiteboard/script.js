@@ -37,15 +37,28 @@ class UMLDrawer {
         this.isDraggingCanvas = false;
         this.canvasDragStartX = 0;
         this.canvasDragStartY = 0;
+        this.resizeSnapshot = null;
+        this.viewZoom = 1;
+        this.minViewZoom = 0.25;
+        this.maxViewZoom = 4;
+        this.customShapes = [];
+        this.currentCustomShapeId = null;
+        this.customShapesStorageKey = 'uml_drawer_custom_shapes_v1';
+        this.customShapeCounterStorageKey = 'uml_drawer_custom_shapes_counter_v1';
+        this.customShapeNameCounter = 1;
+        this.elementIdCounter = 1;
+        this.snapThreshold = 18;
         
         this.init();
     }
     
     init() {
         this.resizeCanvas();
+        this.loadCustomShapes();
         this.setupEventListeners();
         this.setupToolListeners();
         this.setupDiagramListeners();
+        this.renderCustomShapeList();
         this.currentTool = 'select';
         this.render();
     }
@@ -103,6 +116,7 @@ class UMLDrawer {
         this.canvas.addEventListener('mouseup', this.handleMouseUp.bind(this));
         this.canvas.addEventListener('mouseleave', this.handleMouseUp.bind(this));
         this.canvas.addEventListener('dblclick', this.handleDoubleClick.bind(this));
+        this.canvas.addEventListener('wheel', this.handleWheel.bind(this), { passive: false });
         
         this.canvas.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
         this.canvas.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false });
@@ -184,6 +198,10 @@ class UMLDrawer {
         element.fontSize = parseInt(document.getElementById('prop-font-size').value) || 14;
         element.textColor = document.getElementById('prop-text-color').value;
         element.textPosition = document.getElementById('prop-text-position').value;
+
+        if (element.id) {
+            this.syncAttachedArrowsForElementIds(new Set([element.id]));
+        }
         
         this.hidePropertyDialog();
         this.render();
@@ -196,8 +214,8 @@ class UMLDrawer {
     
     getCanvasCoordinates(clientX, clientY) {
         const rect = this.canvas.getBoundingClientRect();
-        const x = (clientX - rect.left) / this.canvasScale - this.canvasOffsetX;
-        const y = (clientY - rect.top) / this.canvasScale - this.canvasOffsetY;
+        const x = (clientX - rect.left) / (this.canvasScale * this.viewZoom) - this.canvasOffsetX;
+        const y = (clientY - rect.top) / (this.canvasScale * this.viewZoom) - this.canvasOffsetY;
         return { x, y };
     }
     
@@ -212,6 +230,8 @@ class UMLDrawer {
                 tool.classList.add('active');
                 // 设置当前工具
                 this.currentTool = tool.dataset.tool;
+                this.currentCustomShapeId = null;
+                this.renderCustomShapeList();
                 
                 // 更新画布光标样式
                 const canvas = document.getElementById('canvas');
@@ -254,7 +274,12 @@ class UMLDrawer {
             'btn-delete': this.deleteSelectedElements.bind(this),
             'btn-tools': this.toggleToolsPanel.bind(this),
             'btn-select': this.setSelectTool.bind(this),
-            'btn-property': this.showPropertyForSelected.bind(this)
+            'btn-property': this.showPropertyForSelected.bind(this),
+            'create-custom-shape': this.createCustomShapeFromSelection.bind(this),
+            'ungroup-shape': this.ungroupSelectedForEdit.bind(this),
+            'zoom-in': this.zoomIn.bind(this),
+            'zoom-out': this.zoomOut.bind(this),
+            'zoom-reset': this.resetZoom.bind(this)
         };
         
         for (const [id, handler] of Object.entries(elements)) {
@@ -264,6 +289,11 @@ class UMLDrawer {
             } else {
                 console.warn(`Element with id '${id}' not found`);
             }
+        }
+
+        const customShapesList = document.getElementById('custom-shapes-list');
+        if (customShapesList) {
+            customShapesList.addEventListener('click', this.handleCustomShapeListClick.bind(this));
         }
     }
     
@@ -276,9 +306,11 @@ class UMLDrawer {
     
     setSelectTool() {
         this.currentTool = 'select';
+        this.currentCustomShapeId = null;
         const tools = document.querySelectorAll('.tool');
         tools.forEach(t => t.classList.remove('active'));
         document.querySelector('[data-tool="select"]').classList.add('active');
+        this.renderCustomShapeList();
         
         const btn = document.getElementById('btn-select');
         btn.classList.add('active');
@@ -302,6 +334,258 @@ class UMLDrawer {
             bottomToolbar.style.display = 'none';
         }
     }
+
+    handleWheel(e) {
+        e.preventDefault();
+        const factor = e.deltaY < 0 ? 1.12 : 0.88;
+        this.zoomAtClientPoint(e.clientX, e.clientY, factor);
+    }
+
+    zoomAtClientPoint(clientX, clientY, factor) {
+        const rect = this.canvas.getBoundingClientRect();
+        const screenX = clientX - rect.left;
+        const screenY = clientY - rect.top;
+
+        const oldZoom = this.viewZoom;
+        const newZoom = Math.max(this.minViewZoom, Math.min(this.maxViewZoom, oldZoom * factor));
+        if (Math.abs(newZoom - oldZoom) < 0.0001) return;
+
+        const worldX = screenX / (this.canvasScale * oldZoom) - this.canvasOffsetX;
+        const worldY = screenY / (this.canvasScale * oldZoom) - this.canvasOffsetY;
+
+        this.viewZoom = newZoom;
+        this.canvasOffsetX = screenX / (this.canvasScale * newZoom) - worldX;
+        this.canvasOffsetY = screenY / (this.canvasScale * newZoom) - worldY;
+
+        this.updateZoomRateDisplay();
+        this.render();
+    }
+
+    zoomIn() {
+        const rect = this.canvas.getBoundingClientRect();
+        this.zoomAtClientPoint(rect.left + rect.width / 2, rect.top + rect.height / 2, 1.2);
+    }
+
+    zoomOut() {
+        const rect = this.canvas.getBoundingClientRect();
+        this.zoomAtClientPoint(rect.left + rect.width / 2, rect.top + rect.height / 2, 0.8);
+    }
+
+    resetZoom() {
+        this.viewZoom = 1;
+        this.canvasOffsetX = 0;
+        this.canvasOffsetY = 0;
+        this.updateZoomRateDisplay();
+        this.render();
+    }
+
+    updateZoomRateDisplay() {
+        const zoomBtn = document.getElementById('zoom-reset');
+        if (!zoomBtn) return;
+        zoomBtn.textContent = `${Math.round(this.viewZoom * 100)}%`;
+    }
+
+    loadCustomShapes() {
+        try {
+            const raw = localStorage.getItem(this.customShapesStorageKey);
+            if (!raw) {
+                this.customShapes = [];
+            } else {
+                const parsed = JSON.parse(raw);
+                this.customShapes = Array.isArray(parsed) ? parsed : [];
+            }
+
+            const counterRaw = localStorage.getItem(this.customShapeCounterStorageKey);
+            const parsedCounter = parseInt(counterRaw, 10);
+
+            if (!Number.isNaN(parsedCounter) && parsedCounter >= 1) {
+                this.customShapeNameCounter = parsedCounter;
+            } else {
+                this.customShapeNameCounter = this.customShapes.length + 1;
+            }
+        } catch (error) {
+            console.warn('加载自定义图形失败:', error);
+            this.customShapes = [];
+            this.customShapeNameCounter = 1;
+        }
+    }
+
+    saveCustomShapes() {
+        try {
+            localStorage.setItem(this.customShapesStorageKey, JSON.stringify(this.customShapes));
+            localStorage.setItem(this.customShapeCounterStorageKey, String(this.customShapeNameCounter));
+        } catch (error) {
+            console.warn('保存自定义图形失败:', error);
+        }
+    }
+
+    getNextCustomShapeName() {
+        const name = `自定义组件_${this.customShapeNameCounter}`;
+        this.customShapeNameCounter += 1;
+        return name;
+    }
+
+    renderCustomShapeList() {
+        const list = document.getElementById('custom-shapes-list');
+        if (!list) return;
+
+        if (this.customShapes.length === 0) {
+            list.innerHTML = '<div class="custom-shape-name" style="color:#999;padding:4px 2px;">暂无自定义图形</div>';
+            return;
+        }
+
+        list.innerHTML = this.customShapes.map(shape => {
+            const activeClass = this.currentTool === 'custom-shape' && this.currentCustomShapeId === shape.id ? 'active' : '';
+            return `
+                <button class="custom-shape-item ${activeClass}" data-shape-id="${shape.id}" title="点击放置该图形">
+                    <span class="custom-shape-name">${shape.name || '自定义图形'} (${Math.round(shape.width)}×${Math.round(shape.height)})</span>
+                    <span class="custom-shape-actions">
+                        <span class="custom-shape-rename" data-action="rename-shape" data-shape-id="${shape.id}" title="重命名">✎</span>
+                        <span class="custom-shape-delete" data-action="delete-shape" data-shape-id="${shape.id}" title="删除">×</span>
+                    </span>
+                </button>
+            `;
+        }).join('');
+    }
+
+    handleCustomShapeListClick(e) {
+        const deleteBtn = e.target.closest('[data-action="delete-shape"]');
+        if (deleteBtn) {
+            const shapeId = deleteBtn.dataset.shapeId;
+            this.deleteCustomShape(shapeId);
+            return;
+        }
+
+        const renameBtn = e.target.closest('[data-action="rename-shape"]');
+        if (renameBtn) {
+            const shapeId = renameBtn.dataset.shapeId;
+            this.renameCustomShape(shapeId);
+            return;
+        }
+
+        const item = e.target.closest('.custom-shape-item');
+        if (!item) return;
+
+        this.currentTool = 'custom-shape';
+        this.currentCustomShapeId = item.dataset.shapeId;
+
+        const tools = document.querySelectorAll('.tool');
+        tools.forEach(t => t.classList.remove('active'));
+
+        this.renderCustomShapeList();
+    }
+
+    deleteCustomShape(shapeId) {
+        this.customShapes = this.customShapes.filter(shape => shape.id !== shapeId);
+        if (this.currentCustomShapeId === shapeId) {
+            this.currentCustomShapeId = null;
+            this.currentTool = 'select';
+            const selectTool = document.querySelector('[data-tool="select"]');
+            if (selectTool) {
+                document.querySelectorAll('.tool').forEach(t => t.classList.remove('active'));
+                selectTool.classList.add('active');
+            }
+        }
+        this.saveCustomShapes();
+        this.renderCustomShapeList();
+    }
+
+    renameCustomShape(shapeId) {
+        const target = this.customShapes.find(shape => shape.id === shapeId);
+        if (!target) return;
+
+        const nextName = prompt('请输入新的组件名称：', target.name || '');
+        if (nextName === null) return;
+
+        const finalName = nextName.trim();
+        if (!finalName) {
+            alert('名称不能为空。');
+            return;
+        }
+
+        target.name = finalName;
+        this.saveCustomShapes();
+        this.renderCustomShapeList();
+    }
+
+    createCustomShapeFromSelection() {
+        const diagram = this.diagrams[this.currentDiagram];
+        const selected = diagram.selectedElements;
+
+        if (selected.length < 2) {
+            alert('请先使用选择工具选中至少2个元素，再进行组合。');
+            return;
+        }
+
+        const groupedElement = this.groupSelectedElements();
+        if (!groupedElement) return;
+
+        const shape = this.createCustomShapeFromGroup(groupedElement);
+        this.customShapes.push(shape);
+        this.saveCustomShapes();
+        this.currentCustomShapeId = shape.id;
+        this.currentTool = 'custom-shape';
+
+        document.querySelectorAll('.tool').forEach(t => t.classList.remove('active'));
+        this.renderCustomShapeList();
+    }
+
+    ungroupSelectedForEdit() {
+        const diagram = this.diagrams[this.currentDiagram];
+        const hasGroupSelected = diagram.selectedElements.some(el => el.type === 'group');
+        if (!hasGroupSelected) {
+            alert('请先选中一个组合图形，再执行拆分。');
+            return;
+        }
+        this.ungroupSelectedElements();
+    }
+
+    createCustomShapeFromGroup(group) {
+        const normalizedElements = group.elements.map(element => {
+            const clone = this.cloneElement(element);
+            this.translateElement(clone, -group.x, -group.y);
+            return clone;
+        });
+
+        return {
+            id: `custom-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            name: this.getNextCustomShapeName(),
+            width: group.width,
+            height: group.height,
+            elements: normalizedElements
+        };
+    }
+
+    placeCustomShape(x, y) {
+        const shape = this.customShapes.find(item => item.id === this.currentCustomShapeId);
+        if (!shape) return;
+
+        const startX = x - shape.width / 2;
+        const startY = y - shape.height / 2;
+        const elements = shape.elements.map(element => {
+            const clone = this.cloneElement(element);
+            this.translateElement(clone, startX, startY);
+            return clone;
+        });
+
+        const group = {
+            type: 'group',
+            x: startX,
+            y: startY,
+            width: shape.width,
+            height: shape.height,
+            elements,
+            fill: 'rgba(76, 175, 80, 0.1)',
+            stroke: '#4CAF50',
+            strokeWidth: 2,
+            name: shape.name
+        };
+
+        const diagram = this.diagrams[this.currentDiagram];
+        this.addElementToDiagram(diagram, group);
+        diagram.selectedElements = [group];
+        this.render();
+    }
     
     showHelp() {
         document.getElementById('help-dialog').classList.add('show');
@@ -321,7 +605,7 @@ class UMLDrawer {
         }
         
         if (e.key === 'g' && this.ctrlPressed) {
-            this.groupSelectedElements();
+            this.createCustomShapeFromSelection();
             e.preventDefault();
         }
         
@@ -365,7 +649,7 @@ class UMLDrawer {
                         y: p.y + offsetY
                     }));
                 }
-                diagram.elements.push(newElement);
+                this.addElementToDiagram(diagram, newElement);
             });
             
             diagram.selectedElements = [];
@@ -431,6 +715,9 @@ class UMLDrawer {
             case 'text':
                 this.addText(x, y);
                 break;
+            case 'custom-shape':
+                this.placeCustomShape(x, y);
+                break;
             case 'delete':
                 this.deleteElement(x, y);
                 break;
@@ -442,8 +729,8 @@ class UMLDrawer {
     
     handleMouseMove(e) {
         if (this.isDraggingCanvas) {
-            const dx = (e.clientX - this.canvasDragStartX) / this.canvasScale;
-            const dy = (e.clientY - this.canvasDragStartY) / this.canvasScale;
+            const dx = (e.clientX - this.canvasDragStartX) / (this.canvasScale * this.viewZoom);
+            const dy = (e.clientY - this.canvasDragStartY) / (this.canvasScale * this.viewZoom);
             this.canvasOffsetX += dx;
             this.canvasOffsetY += dy;
             this.canvasDragStartX = e.clientX;
@@ -497,6 +784,7 @@ class UMLDrawer {
         this.isResizing = false;
         this.tempElement = null;
         this.resizeHandle = null;
+        this.resizeSnapshot = null;
         
         if (this.selectionBox) {
             this.finishSelectionBox();
@@ -516,6 +804,9 @@ class UMLDrawer {
                 this.isResizing = true;
                 this.resizeHandle = handle;
                 this.tempElement = selectedElements[0];
+                this.resizeSnapshot = {
+                    element: this.cloneElement(selectedElements[0])
+                };
                 return;
             }
         }
@@ -611,6 +902,14 @@ class UMLDrawer {
         const handle = this.resizeHandle;
         
         if (!element || !handle) return;
+
+        if (element.type === 'group') {
+            this.handleGroupResize(element, handle, x, y);
+            if (element.id) {
+                this.syncAttachedArrowsForElementIds(new Set([element.id]));
+            }
+            return;
+        }
         
         switch (handle) {
             case 'se':
@@ -666,6 +965,77 @@ class UMLDrawer {
                 element.height = y - element.y;
                 break;
         }
+
+        if (element.id) {
+            this.syncAttachedArrowsForElementIds(new Set([element.id]));
+        }
+    }
+
+    handleGroupResize(group, handle, x, y) {
+        const snapshot = this.resizeSnapshot?.element;
+        if (!snapshot) return;
+
+        const oldX = snapshot.x;
+        const oldY = snapshot.y;
+        const oldW = snapshot.width;
+        const oldH = snapshot.height;
+
+        let newX = oldX;
+        let newY = oldY;
+        let newW = oldW;
+        let newH = oldH;
+
+        switch (handle) {
+            case 'se':
+                newW = x - oldX;
+                newH = y - oldY;
+                break;
+            case 'e':
+                newW = x - oldX;
+                break;
+            case 's':
+                newH = y - oldY;
+                break;
+            case 'nw':
+                newX = x;
+                newY = y;
+                newW = oldX + oldW - x;
+                newH = oldY + oldH - y;
+                break;
+            case 'n':
+                newY = y;
+                newH = oldY + oldH - y;
+                break;
+            case 'ne':
+                newY = y;
+                newW = x - oldX;
+                newH = oldY + oldH - y;
+                break;
+            case 'w':
+                newX = x;
+                newW = oldX + oldW - x;
+                break;
+            case 'sw':
+                newX = x;
+                newW = oldX + oldW - x;
+                newH = y - oldY;
+                break;
+        }
+
+        const minSize = 20;
+        if (newW < minSize || newH < minSize) {
+            return;
+        }
+
+        const oldBounds = { x: oldX, y: oldY, width: oldW, height: oldH };
+        const newBounds = { x: newX, y: newY, width: newW, height: newH };
+        const transformed = this.transformElementGeometry(snapshot, oldBounds, newBounds);
+
+        group.x = transformed.x;
+        group.y = transformed.y;
+        group.width = transformed.width;
+        group.height = transformed.height;
+        group.elements = transformed.elements;
     }
     
     updateSelectionBox(x, y) {
@@ -747,6 +1117,214 @@ class UMLDrawer {
                 };
         }
     }
+
+    ensureElementId(element) {
+        if (!element.id) {
+            element.id = `el-${this.elementIdCounter++}`;
+        }
+        return element.id;
+    }
+
+    assignNewElementId(element) {
+        element.id = `el-${this.elementIdCounter++}`;
+        return element.id;
+    }
+
+    ensureDiagramElementIds(diagram) {
+        diagram.elements.forEach(element => this.ensureElementId(element));
+    }
+
+    addElementToDiagram(diagram, element) {
+        this.assignNewElementId(element);
+        diagram.elements.push(element);
+        return element;
+    }
+
+    findElementById(diagram, elementId) {
+        return diagram.elements.find(el => el.id === elementId) || null;
+    }
+
+    getElementAnchorPoints(element) {
+        const bounds = this.getElementBounds(element);
+        const x = bounds.x;
+        const y = bounds.y;
+        const w = bounds.width;
+        const h = bounds.height;
+
+        return {
+            tl: { x, y },
+            t: { x: x + w / 2, y },
+            tr: { x: x + w, y },
+            r: { x: x + w, y: y + h / 2 },
+            br: { x: x + w, y: y + h },
+            b: { x: x + w / 2, y: y + h },
+            bl: { x, y: y + h },
+            l: { x, y: y + h / 2 }
+        };
+    }
+
+    getNearestSnapTarget(x, y) {
+        const diagram = this.diagrams[this.currentDiagram];
+        this.ensureDiagramElementIds(diagram);
+
+        let best = null;
+
+        diagram.elements.forEach(element => {
+            if (['line', 'arrow', 'pen'].includes(element.type)) return;
+
+            const anchors = this.getElementAnchorPoints(element);
+            Object.entries(anchors).forEach(([anchorKey, point]) => {
+                const dx = point.x - x;
+                const dy = point.y - y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance <= this.snapThreshold && (!best || distance < best.distance)) {
+                    best = {
+                        elementId: element.id,
+                        anchorKey,
+                        x: point.x,
+                        y: point.y,
+                        distance
+                    };
+                }
+            });
+        });
+
+        return best;
+    }
+
+    applyAttachmentToArrowEnd(arrow, endpoint, attachment) {
+        if (!attachment) return;
+        const key = endpoint === 'start' ? 'sourceAttachment' : 'targetAttachment';
+        const xKey = endpoint === 'start' ? 'x1' : 'x2';
+        const yKey = endpoint === 'start' ? 'y1' : 'y2';
+
+        arrow[key] = {
+            elementId: attachment.elementId,
+            anchorKey: attachment.anchorKey
+        };
+        arrow[xKey] = attachment.x;
+        arrow[yKey] = attachment.y;
+    }
+
+    updateArrowEndpointFromAttachment(arrow, endpoint, diagram) {
+        const key = endpoint === 'start' ? 'sourceAttachment' : 'targetAttachment';
+        const xKey = endpoint === 'start' ? 'x1' : 'x2';
+        const yKey = endpoint === 'start' ? 'y1' : 'y2';
+        const attachment = arrow[key];
+
+        if (!attachment) return;
+        const targetElement = this.findElementById(diagram, attachment.elementId);
+        if (!targetElement) {
+            arrow[key] = null;
+            return;
+        }
+
+        const anchors = this.getElementAnchorPoints(targetElement);
+        const point = anchors[attachment.anchorKey];
+        if (!point) {
+            arrow[key] = null;
+            return;
+        }
+
+        arrow[xKey] = point.x;
+        arrow[yKey] = point.y;
+    }
+
+    syncAttachedArrowsForElementIds(elementIds) {
+        if (!elementIds || elementIds.size === 0) return;
+
+        const diagram = this.diagrams[this.currentDiagram];
+        this.ensureDiagramElementIds(diagram);
+
+        diagram.elements.forEach(element => {
+            if (element.type !== 'arrow') return;
+
+            if (element.sourceAttachment && elementIds.has(element.sourceAttachment.elementId)) {
+                this.updateArrowEndpointFromAttachment(element, 'start', diagram);
+            }
+            if (element.targetAttachment && elementIds.has(element.targetAttachment.elementId)) {
+                this.updateArrowEndpointFromAttachment(element, 'end', diagram);
+            }
+        });
+    }
+
+    cloneElement(element) {
+        return JSON.parse(JSON.stringify(element));
+    }
+
+    translateElement(element, dx, dy) {
+        if (element.x !== undefined) element.x += dx;
+        if (element.y !== undefined) element.y += dy;
+        if (element.x1 !== undefined) element.x1 += dx;
+        if (element.y1 !== undefined) element.y1 += dy;
+        if (element.x2 !== undefined) element.x2 += dx;
+        if (element.y2 !== undefined) element.y2 += dy;
+
+        if (Array.isArray(element.path)) {
+            element.path.forEach(point => {
+                point.x += dx;
+                point.y += dy;
+            });
+        }
+
+        if (Array.isArray(element.elements)) {
+            element.elements.forEach(subElement => this.translateElement(subElement, dx, dy));
+        }
+    }
+
+    transformElementGeometry(element, oldBounds, newBounds) {
+        const sx = oldBounds.width === 0 ? 1 : newBounds.width / oldBounds.width;
+        const sy = oldBounds.height === 0 ? 1 : newBounds.height / oldBounds.height;
+        const scaleText = (sx + sy) / 2;
+
+        const result = this.cloneElement(element);
+
+        if (element.x !== undefined) {
+            result.x = newBounds.x + (element.x - oldBounds.x) * sx;
+        }
+        if (element.y !== undefined) {
+            result.y = newBounds.y + (element.y - oldBounds.y) * sy;
+        }
+        if (element.width !== undefined) {
+            result.width = element.width * sx;
+        }
+        if (element.height !== undefined) {
+            result.height = element.height * sy;
+        }
+
+        if (element.x1 !== undefined) {
+            result.x1 = newBounds.x + (element.x1 - oldBounds.x) * sx;
+        }
+        if (element.y1 !== undefined) {
+            result.y1 = newBounds.y + (element.y1 - oldBounds.y) * sy;
+        }
+        if (element.x2 !== undefined) {
+            result.x2 = newBounds.x + (element.x2 - oldBounds.x) * sx;
+        }
+        if (element.y2 !== undefined) {
+            result.y2 = newBounds.y + (element.y2 - oldBounds.y) * sy;
+        }
+
+        if (Array.isArray(element.path)) {
+            result.path = element.path.map(point => ({
+                x: newBounds.x + (point.x - oldBounds.x) * sx,
+                y: newBounds.y + (point.y - oldBounds.y) * sy
+            }));
+        }
+
+        if (element.type === 'text' && element.fontSize) {
+            result.fontSize = Math.max(8, Math.round(element.fontSize * scaleText));
+        }
+
+        if (Array.isArray(element.elements)) {
+            result.elements = element.elements.map(subElement =>
+                this.transformElementGeometry(subElement, oldBounds, newBounds)
+            );
+        }
+
+        return result;
+    }
     
     startDrawingShape(x, y) {
         this.isDrawing = true;
@@ -769,6 +1347,22 @@ class UMLDrawer {
     
     startDrawingLine(x, y) {
         this.isDrawing = true;
+        if (this.currentTool === 'arrow') {
+            const startSnap = this.getNearestSnapTarget(x, y);
+            this.tempElement = {
+                type: this.currentTool,
+                x1: startSnap ? startSnap.x : x,
+                y1: startSnap ? startSnap.y : y,
+                x2: startSnap ? startSnap.x : x,
+                y2: startSnap ? startSnap.y : y,
+                stroke: '#333',
+                strokeWidth: 2,
+                sourceAttachment: startSnap ? { elementId: startSnap.elementId, anchorKey: startSnap.anchorKey } : null,
+                targetAttachment: null
+            };
+            return;
+        }
+
         this.tempElement = {
             type: this.currentTool,
             x1: x,
@@ -792,7 +1386,7 @@ class UMLDrawer {
                 fontSize: 14,
                 fontFamily: 'Arial'
             };
-            this.diagrams[this.currentDiagram].elements.push(element);
+            this.addElementToDiagram(this.diagrams[this.currentDiagram], element);
             this.render();
         }
     }
@@ -848,7 +1442,7 @@ class UMLDrawer {
             y: minY,
             width: maxX - minX,
             height: maxY - minY,
-            elements: selected.map(el => ({...el, originalX: el.x, originalY: el.y})),
+            elements: selected.map(el => this.cloneElement(el)),
             fill: 'rgba(76, 175, 80, 0.1)',
             stroke: '#4CAF50',
             strokeWidth: 2
@@ -862,16 +1456,18 @@ class UMLDrawer {
             }
         });
         
-        diagram.elements.push(group);
+        this.addElementToDiagram(diagram, group);
         diagram.selectedElements = [group];
         diagram.groups.push(group);
         
         this.render();
+        return group;
     }
     
     ungroupSelectedElements() {
         const diagram = this.diagrams[this.currentDiagram];
         const selected = diagram.selectedElements;
+        const releasedElements = [];
         
         selected.forEach(group => {
             if (group.type === 'group') {
@@ -881,9 +1477,9 @@ class UMLDrawer {
                     
                     // 释放组合中的元素
                     group.elements.forEach(element => {
-                        element.x = group.x + (element.originalX - group.x);
-                        element.y = group.y + (element.originalY - group.y);
-                        diagram.elements.push(element);
+                        const released = this.cloneElement(element);
+                        this.addElementToDiagram(diagram, released);
+                        releasedElements.push(released);
                     });
                     
                     // 从组合列表中移除
@@ -895,7 +1491,7 @@ class UMLDrawer {
             }
         });
         
-        diagram.selectedElements = [];
+        diagram.selectedElements = releasedElements;
         this.render();
     }
     
@@ -905,7 +1501,9 @@ class UMLDrawer {
             const dy = y - this.startY;
             
             const selected = this.diagrams[this.currentDiagram].selectedElements;
+            const movedElementIds = new Set();
             selected.forEach(element => {
+                if (element.id) movedElementIds.add(element.id);
                 if (element.type === 'group') {
                     element.x += dx;
                     element.y += dy;
@@ -938,15 +1536,26 @@ class UMLDrawer {
                     }
                 }
             });
+
+            this.syncAttachedArrowsForElementIds(movedElementIds);
             
             this.startX = x;
             this.startY = y;
         } else if (['rectangle', 'ellipse', 'class', 'use-case', 'actor', 'package', 'sticky'].includes(this.tempElement.type)) {
             this.tempElement.width = x - this.tempElement.x;
             this.tempElement.height = y - this.tempElement.y;
-        } else if (['line', 'arrow'].includes(this.tempElement.type)) {
+        } else if (this.tempElement.type === 'line') {
             this.tempElement.x2 = x;
             this.tempElement.y2 = y;
+        } else if (this.tempElement.type === 'arrow') {
+            const snap = this.getNearestSnapTarget(x, y);
+            if (snap) {
+                this.applyAttachmentToArrowEnd(this.tempElement, 'end', snap);
+            } else {
+                this.tempElement.x2 = x;
+                this.tempElement.y2 = y;
+                this.tempElement.targetAttachment = null;
+            }
         }
     }
     
@@ -963,7 +1572,7 @@ class UMLDrawer {
                 }
                 
                 if (this.tempElement.width > 10 && this.tempElement.height > 10) {
-                    this.diagrams[this.currentDiagram].elements.push(this.tempElement);
+                    this.addElementToDiagram(this.diagrams[this.currentDiagram], this.tempElement);
                 }
             } else if (['line', 'arrow'].includes(this.tempElement.type)) {
                 const distance = Math.sqrt(
@@ -971,7 +1580,7 @@ class UMLDrawer {
                     Math.pow(this.tempElement.y2 - this.tempElement.y1, 2)
                 );
                 if (distance > 10) {
-                    this.diagrams[this.currentDiagram].elements.push(this.tempElement);
+                    this.addElementToDiagram(this.diagrams[this.currentDiagram], this.tempElement);
                 }
             }
         }
@@ -1150,10 +1759,12 @@ class UMLDrawer {
     }
     
     render() {
+        this.ensureDiagramElementIds(this.diagrams[this.currentDiagram]);
+        this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.ctx.save();
+        this.ctx.scale(this.viewZoom, this.viewZoom);
         this.ctx.translate(this.canvasOffsetX, this.canvasOffsetY);
-        
-        this.ctx.clearRect(-this.canvasOffsetX, -this.canvasOffsetY, this.canvas.width, this.canvas.height);
         
         this.drawGrid();
         
@@ -1197,6 +1808,7 @@ class UMLDrawer {
         this.ctx.restore();
         
         this.updateBottomToolbar();
+        this.updateZoomRateDisplay();
     }
     
     drawGrid() {
@@ -1502,7 +2114,7 @@ class UMLDrawer {
         ctx.strokeRect(bounds.x - 2, bounds.y - 2, bounds.width + 4, bounds.height + 4);
         
         // 绘制调整大小的控制点
-        if (element.type !== 'line' && element.type !== 'arrow' && element.type !== 'group') {
+        if (element.type !== 'line' && element.type !== 'arrow') {
             const handles = this.getResizeHandles(element);
             ctx.fillStyle = '#4CAF50';
             ctx.setLineDash([]);
@@ -1550,7 +2162,7 @@ class UMLDrawer {
                 stroke: this.penColor,
                 strokeWidth: this.penWidth
             };
-            diagram.elements.push(penElement);
+            this.addElementToDiagram(diagram, penElement);
         }
         this.isDrawingPen = false;
         this.currentPenPath = [];
