@@ -248,7 +248,7 @@ class UMLDrawer {
             'close-help': this.hideHelp.bind(this),
             'close-property': this.hidePropertyDialog.bind(this),
             'apply-property': this.applyPropertyChanges.bind(this),
-            'btn-delete': this.quickDeleteTool.bind(this),
+            'btn-delete': this.deleteSelectedElements.bind(this),
             'btn-tools': this.toggleToolsPanel.bind(this),
             'btn-property': this.showPropertyForSelected.bind(this),
             'create-custom-shape': this.createCustomShapeFromSelection.bind(this),
@@ -365,12 +365,8 @@ class UMLDrawer {
         const diagram = this.diagrams[this.currentDiagram];
         const bottomToolbar = document.getElementById('bottom-toolbar');
         const hasSelection = diagram.selectedElements.length > 0;
-        
-        if (window.innerWidth <= 768) {
-            bottomToolbar.style.display = hasSelection ? 'flex' : 'none';
-        } else {
-            bottomToolbar.style.display = 'none';
-        }
+
+        bottomToolbar.style.display = hasSelection ? 'flex' : 'none';
     }
 
     handleWheel(e) {
