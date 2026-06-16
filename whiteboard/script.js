@@ -248,7 +248,7 @@ class UMLDrawer {
             'close-help': this.hideHelp.bind(this),
             'close-property': this.hidePropertyDialog.bind(this),
             'apply-property': this.applyPropertyChanges.bind(this),
-            'btn-delete': this.deleteSelectedElements.bind(this),
+            'btn-delete': this.quickDeleteTool.bind(this),
             'btn-tools': this.toggleToolsPanel.bind(this),
             'btn-property': this.showPropertyForSelected.bind(this),
             'create-custom-shape': this.createCustomShapeFromSelection.bind(this),
@@ -632,9 +632,20 @@ class UMLDrawer {
         if (e.key === 'Control') {
             this.ctrlPressed = true;
         }
-        
+
+        // 为安全起见：不允许通过键盘删除图形，只能使用删除工具
         if (e.key === 'Delete' || e.key === 'Backspace') {
-            this.deleteSelectedElements();
+            const tagName = (e.target && e.target.tagName ? e.target.tagName.toLowerCase() : '');
+            const isEditable =
+                tagName === 'input' ||
+                tagName === 'textarea' ||
+                (e.target && e.target.isContentEditable);
+
+            // 非输入状态下阻止默认行为（避免浏览器后退等）
+            if (!isEditable) {
+                e.preventDefault();
+            }
+            return;
         }
         
         if (e.key === 'g' && this.ctrlPressed) {
