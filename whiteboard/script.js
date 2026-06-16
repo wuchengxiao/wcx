@@ -224,42 +224,19 @@ class UMLDrawer {
         const tools = document.querySelectorAll('.tool');
         tools.forEach(tool => {
             tool.addEventListener('click', () => {
-                // 移除所有工具的active类
-                tools.forEach(t => t.classList.remove('active'));
-                // 添加当前工具的active类
-                tool.classList.add('active');
-                // 设置当前工具
-                this.currentTool = tool.dataset.tool;
-                this.currentCustomShapeId = null;
-                this.renderCustomShapeList();
-                
-                // 更新画布光标样式
-                const canvas = document.getElementById('canvas');
-                if (this.currentTool === 'pan') {
-                    canvas.classList.add('pan-mode');
-                } else {
-                    canvas.classList.remove('pan-mode');
-                }
-                
+                this.setCurrentTool(tool.dataset.tool);
+
                 // 移动端：关闭工具栏弹窗
                 if (window.innerWidth <= 768) {
                     const sidebar = document.querySelector('.sidebar');
                     sidebar.classList.remove('show');
                     document.getElementById('btn-tools').classList.remove('active');
-                    
-                    // 更新选择按钮状态
-                    const selectBtn = document.getElementById('btn-select');
-                    if (this.currentTool === 'select') {
-                        selectBtn.classList.add('active');
-                    } else {
-                        selectBtn.classList.remove('active');
-                    }
                 }
             });
         });
         
         // 默认选择选择工具
-        document.querySelector('[data-tool="select"]').classList.add('active');
+        this.setCurrentTool('select');
     }
     
     setupDiagramListeners() {
@@ -273,10 +250,12 @@ class UMLDrawer {
             'apply-property': this.applyPropertyChanges.bind(this),
             'btn-delete': this.deleteSelectedElements.bind(this),
             'btn-tools': this.toggleToolsPanel.bind(this),
-            'btn-select': this.setSelectTool.bind(this),
             'btn-property': this.showPropertyForSelected.bind(this),
             'create-custom-shape': this.createCustomShapeFromSelection.bind(this),
             'ungroup-shape': this.ungroupSelectedForEdit.bind(this),
+            'quick-select': this.quickSelectTool.bind(this),
+            'quick-pan': this.quickPanTool.bind(this),
+            'quick-delete': this.quickDeleteTool.bind(this),
             'zoom-in': this.zoomIn.bind(this),
             'zoom-out': this.zoomOut.bind(this),
             'zoom-reset': this.resetZoom.bind(this)
@@ -305,15 +284,74 @@ class UMLDrawer {
     }
     
     setSelectTool() {
-        this.currentTool = 'select';
-        this.currentCustomShapeId = null;
-        const tools = document.querySelectorAll('.tool');
-        tools.forEach(t => t.classList.remove('active'));
-        document.querySelector('[data-tool="select"]').classList.add('active');
-        this.renderCustomShapeList();
+        this.setCurrentTool('select');
         
         const btn = document.getElementById('btn-select');
-        btn.classList.add('active');
+        if (btn) {
+            btn.classList.add('active');
+        }
+    }
+
+    quickSelectTool() {
+        this.setCurrentTool('select');
+    }
+
+    quickPanTool() {
+        this.setCurrentTool('pan');
+    }
+
+    quickDeleteTool() {
+        this.setCurrentTool('delete');
+    }
+
+    setCurrentTool(toolName) {
+        this.currentTool = toolName;
+        if (toolName !== 'custom-shape') {
+            this.currentCustomShapeId = null;
+        }
+
+        const tools = document.querySelectorAll('.tool');
+        tools.forEach(t => t.classList.remove('active'));
+        const targetTool = document.querySelector(`[data-tool="${toolName}"]`);
+        if (targetTool) {
+            targetTool.classList.add('active');
+        }
+
+        this.renderCustomShapeList();
+
+        const canvas = document.getElementById('canvas');
+        if (this.currentTool === 'pan') {
+            canvas.classList.add('pan-mode');
+        } else {
+            canvas.classList.remove('pan-mode');
+        }
+
+        const selectBtn = document.getElementById('btn-select');
+        if (selectBtn) {
+            if (this.currentTool === 'select') {
+                selectBtn.classList.add('active');
+            } else {
+                selectBtn.classList.remove('active');
+            }
+        }
+
+        this.syncQuickToolButtons();
+    }
+
+    syncQuickToolButtons() {
+        const quickButtons = {
+            select: document.getElementById('quick-select'),
+            pan: document.getElementById('quick-pan'),
+            delete: document.getElementById('quick-delete')
+        };
+
+        Object.values(quickButtons).forEach(btn => {
+            if (btn) btn.classList.remove('active');
+        });
+
+        if (quickButtons[this.currentTool]) {
+            quickButtons[this.currentTool].classList.add('active');
+        }
     }
     
     showPropertyForSelected() {
@@ -466,11 +504,8 @@ class UMLDrawer {
         const item = e.target.closest('.custom-shape-item');
         if (!item) return;
 
-        this.currentTool = 'custom-shape';
+        this.setCurrentTool('custom-shape');
         this.currentCustomShapeId = item.dataset.shapeId;
-
-        const tools = document.querySelectorAll('.tool');
-        tools.forEach(t => t.classList.remove('active'));
 
         this.renderCustomShapeList();
     }
@@ -479,7 +514,7 @@ class UMLDrawer {
         this.customShapes = this.customShapes.filter(shape => shape.id !== shapeId);
         if (this.currentCustomShapeId === shapeId) {
             this.currentCustomShapeId = null;
-            this.currentTool = 'select';
+            this.setCurrentTool('select');
             const selectTool = document.querySelector('[data-tool="select"]');
             if (selectTool) {
                 document.querySelectorAll('.tool').forEach(t => t.classList.remove('active'));
@@ -524,9 +559,7 @@ class UMLDrawer {
         this.customShapes.push(shape);
         this.saveCustomShapes();
         this.currentCustomShapeId = shape.id;
-        this.currentTool = 'custom-shape';
-
-        document.querySelectorAll('.tool').forEach(t => t.classList.remove('active'));
+        this.setCurrentTool('custom-shape');
         this.renderCustomShapeList();
     }
 

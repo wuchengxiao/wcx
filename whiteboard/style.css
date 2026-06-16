@@ -394,6 +394,16 @@ body {
     z-index: 20;
 }
 
+.quick-tool-controls {
+    position: absolute;
+    right: 16px;
+    top: 62px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    z-index: 20;
+}
+
 .zoom-btn {
     width: 34px;
     height: 34px;
@@ -412,6 +422,13 @@ body {
 .zoom-btn:hover {
     border-color: var(--primary-color);
     color: #2e7d32;
+}
+
+.zoom-btn.active {
+    border-color: var(--primary-color);
+    color: #2e7d32;
+    background: rgba(76, 175, 80, 0.1);
+    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
 }
 
 .zoom-rate {
