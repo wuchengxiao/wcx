@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isEditing = false;         // 右栏当前是否处于可编辑模式
     let selectedIds = new Set();    // 保存复选框选中的文件 ID 集合
     let isLineFilterActive = false;// 查看模式下是否激活了行段筛选模式
+    let cmInstance = null;         // CodeMirror 语法高亮编辑器实例
 
     // DOM 节点引用声明
     const newFilenameInput = document.getElementById('new-filename');
@@ -49,6 +50,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const activeEditorTextarea = document.getElementById('active-editor-textarea');
     const activeEditorContainer = document.getElementById('active-editor-container');
     const btnToggleActiveExpand = document.getElementById('btn-toggle-active-expand');
+    const btnTogglePowerTools = document.getElementById('btn-toggle-power-tools');
+    const powerToolsPanel = document.getElementById('power-tools-panel');
+
+    const ptLanguageSelect = document.getElementById('pt-language-select');
+
+    const ptMultiPrefix = document.getElementById('pt-multi-prefix');
+    const ptMultiSuffix = document.getElementById('pt-multi-suffix');
+    const btnApplyPrefixSuffix = document.getElementById('btn-apply-prefix-suffix');
+
+    const ptNumStart = document.getElementById('pt-num-start');
+    const ptNumStep = document.getElementById('pt-num-step');
+    const ptNumFormat = document.getElementById('pt-num-format');
+    const btnApplyNumbering = document.getElementById('btn-apply-numbering');
+
+    const ptFindStr = document.getElementById('pt-find-str');
+    const ptReplaceStr = document.getElementById('pt-replace-str');
+    const btnReplaceAll = document.getElementById('btn-replace-all');
+    const ptCaseSensitive = document.getElementById('pt-case-sensitive');
+    const ptRegex = document.getElementById('pt-regex');
+
     const viewModeActions = document.getElementById('view-mode-actions');
     const editModeActions = document.getElementById('edit-mode-actions');
 
@@ -57,9 +78,41 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnSaveContent = document.getElementById('btn-save-content');
     const btnCancelEdit = document.getElementById('btn-cancel-edit');
 
-    // ==========================================
-    // 1. 核心渲染与状态同步函数
-    // ==========================================
+    /**
+     * 1. 核心渲染与状态同步函数 & CodeMirror 懒加载初始化
+     * ========================================== */
+
+    function initCodeMirrorIfNeeded() {
+        if (!cmInstance && window.CodeMirror) {
+            cmInstance = window.CodeMirror.fromTextArea(activeEditorTextarea, {
+                lineNumbers: true,               // 显示行号
+                mode: 'text/plain',              // 默认文本模式
+                theme: 'default',                // 主题样式
+                lineWrapping: true,              // 自动折行
+                viewportMargin: Infinity,        // 合理视距
+                readOnly: true                   // 默认只读
+            });
+
+            // 当 CodeMirror 内容改变时，需要把内容反馈同步回隐藏 textarea
+            cmInstance.on('change', () => {
+                activeEditorTextarea.value = cmInstance.getValue();
+            });
+        }
+    }
+
+    /**
+     * 根据文件名后缀智能识别高亮 mode
+     */
+    function autoDetectLanguageByExt(ext) {
+        switch (ext) {
+            case 'js': return 'javascript';
+            case 'css': return 'css';
+            case 'md': return 'markdown';
+            case 'html': return 'htmlmixed';
+            case 'json': return 'javascript'; // json 能够复用 javascript mode
+            default: return 'text/plain';
+        }
+    }
 
     /**
      * 渲染文件列表表格
@@ -210,6 +263,11 @@ document.addEventListener('DOMContentLoaded', () => {
         btnToggleActiveExpand.textContent = '🔍 放大编辑';
         btnToggleActiveExpand.classList.add('btn-outline');
         btnToggleActiveExpand.classList.remove('btn-primary');
+
+        // 还原高级工具面板
+        powerToolsPanel.classList.add('d-none');
+        btnTogglePowerTools.classList.remove('btn-primary');
+        btnTogglePowerTools.classList.add('btn-outline');
     }
 
     /**
@@ -219,6 +277,8 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {number} endLine 
      */
     function viewFile(id, startLine = null, endLine = null) {
+        initCodeMirrorIfNeeded();
+
         const file = window.FileService.getFileById(id);
         if (!file) {
             alertFeedback(false, '加载文件失败，该文件不存在。');
@@ -255,6 +315,12 @@ document.addEventListener('DOMContentLoaded', () => {
         activeEditorTextarea.readOnly = true;
         activeEditorTextarea.style.backgroundColor = '#f8fafd';
 
+        // 智能设置下拉框高亮语言 mode 并且触发
+        const detectedMode = autoDetectLanguageByExt(file.extension);
+        ptLanguageSelect.value = detectedMode === 'htmlmixed' ? 'htmlmixed' : (detectedMode === 'markdown' ? 'markdown' : detectedMode);
+
+        let finalShowContent = '';
+
         // 核心：若设置了行号，检索其行段
         if (startLine !== null || endLine !== null) {
             const start = parseInt(startLine, 10);
@@ -262,23 +328,34 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = window.FileService.getFileLines(id, start, end);
             
             if (res.success) {
-                activeEditorTextarea.value = res.linesContent;
+                finalShowContent = res.linesContent;
                 isLineFilterActive = true;
                 lineFilterMsg.innerHTML = `<span class="badge-line-success">过滤成功</span> 已过滤呈现原文件的第 <b>${res.range.start}</b> 至 <b>${res.range.end}</b> 行内容（原文件总计: ${res.totalLines} 行）。`;
                 inputLineStart.value = res.range.start;
                 inputLineEnd.value = res.range.end;
             } else {
-                activeEditorTextarea.value = file.content;
+                finalShowContent = file.content;
                 lineFilterMsg.innerHTML = `<span class="badge-line-fail">截取异常</span> ${res.message}，已恢复全文呈现。`;
             }
         } else {
             // 装载全文
-            activeEditorTextarea.value = file.content;
+            finalShowContent = file.content;
             isLineFilterActive = false;
             lineFilterMsg.textContent = '当前正在查看全部内容。可通过输入上方行数来截取展示。';
             // 显示原文件共有几行
             const totalLinesCount = file.content.split(/\r?\n/).length;
             lineFilterMsg.textContent += ` (共计 ${totalLinesCount} 行)`;
+        }
+
+        // 把渲染代理给 CodeMirror
+        if (cmInstance) {
+            cmInstance.setValue(finalShowContent);
+            cmInstance.setOption('mode', detectedMode);
+            cmInstance.setOption('readOnly', true);
+            // 刷新高亮排版渲染
+            setTimeout(() => cmInstance.refresh(), 1);
+        } else {
+            activeEditorTextarea.value = finalShowContent;
         }
 
         // 高亮选中左侧的该文件那一行
@@ -290,6 +367,8 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {string} id 
      */
     function editFile(id) {
+        initCodeMirrorIfNeeded();
+
         const file = window.FileService.getFileById(id);
         if (!file) {
             alertFeedback(false, '加载文件错误。');
@@ -318,7 +397,11 @@ document.addEventListener('DOMContentLoaded', () => {
         activeFileCreated.textContent = formatTimeDetail(file.createdAt);
         activeFileUpdated.textContent = formatTimeDetail(file.updatedAt);
 
-        // 屏蔽行过滤功能（编辑下必须编辑全文）
+        // 智能自动高亮
+        const detectedMode = autoDetectLanguageByExt(file.extension);
+        ptLanguageSelect.value = detectedMode;
+
+        // 阻止行过滤功能（编辑下必须编辑全文）
         lineFilterControl.style.opacity = '0.4';
         lineFilterControl.style.pointerEvents = 'none';
         lineFilterMsg.textContent = '提示：在线编辑模式下不支持分行截断，必须更新完整文卷。';
@@ -326,8 +409,19 @@ document.addEventListener('DOMContentLoaded', () => {
         // 文本域可写真实获焦
         activeEditorTextarea.readOnly = false;
         activeEditorTextarea.style.backgroundColor = '#ffffff';
-        activeEditorTextarea.value = file.content;
-        activeEditorTextarea.focus();
+
+        if (cmInstance) {
+            cmInstance.setValue(file.content);
+            cmInstance.setOption('mode', detectedMode);
+            cmInstance.setOption('readOnly', false);
+            setTimeout(() => {
+                cmInstance.refresh();
+                cmInstance.focus();
+            }, 1);
+        } else {
+            activeEditorTextarea.value = file.content;
+            activeEditorTextarea.focus();
+        }
 
         // 高亮行
         updateRowHighlight();
@@ -585,7 +679,228 @@ document.addEventListener('DOMContentLoaded', () => {
             btnToggleActiveExpand.innerHTML = '🔍 放大编辑';
             btnToggleActiveExpand.classList.add('btn-outline');
             btnToggleActiveExpand.classList.remove('btn-primary');
+
+            // 还原高级工具面板
+            powerToolsPanel.classList.add('d-none');
+            btnTogglePowerTools.classList.add('btn-outline');
+            btnTogglePowerTools.classList.remove('btn-primary');
         }
+    });
+
+    /**
+     * 5. 🛠️ Notepad++ 高级编辑面板 toggler
+     */
+    btnTogglePowerTools.addEventListener('click', () => {
+        const isHidden = powerToolsPanel.classList.toggle('d-none');
+        if (isHidden) {
+            btnTogglePowerTools.classList.add('btn-outline');
+            btnTogglePowerTools.classList.remove('btn-primary');
+        } else {
+            btnTogglePowerTools.classList.remove('btn-outline');
+            btnTogglePowerTools.classList.add('btn-primary');
+            // 如果 CodeMirror 在运行，拉取并刷新显示
+            if (cmInstance) {
+                cmInstance.refresh();
+            }
+        }
+    });
+
+    /**
+     * 监听下拉框语言切换，动态更新高亮
+     */
+    ptLanguageSelect.addEventListener('change', () => {
+        const selectedMode = ptLanguageSelect.value;
+        if (cmInstance) {
+            cmInstance.setOption('mode', selectedMode);
+            alertFeedback(true, `🎨 已成功将着色器切换为 [${selectedMode.toUpperCase()}] 语法高亮！`);
+        }
+    });
+
+    /**
+     * 辅助解析：获取当前光标所在的所有关联行。对 Notepad++ Column Editor 的模拟
+     */
+    function getSelectedLinesInfo(textarea) {
+        // 如果接入了 CodeMirror，优先运用其高阶的 Selection 范围进行处理
+        if (cmInstance) {
+            const doc = cmInstance.getDoc();
+            const hasSelection = cmInstance.somethingSelected();
+            const startLineIdx = doc.getCursor('start').line;
+            const endLineIdx = doc.getCursor('end').line;
+            const fullText = cmInstance.getValue();
+            const lines = fullText.split('\n');
+
+            let targetLinesRange = { startIdx: 0, endIdx: lines.length - 1 };
+            if (hasSelection) {
+                targetLinesRange.startIdx = startLineIdx;
+                targetLinesRange.endIdx = endLineIdx;
+            }
+
+            return { lines, range: targetLinesRange, hasSelection };
+        }
+
+        const text = textarea.value;
+        const startPos = textarea.selectionStart;
+        const endPos = textarea.selectionEnd;
+        const lines = text.split('\n');
+        
+        let targetLinesRange = { startIdx: 0, endIdx: lines.length - 1 };
+        const hasSelection = startPos !== endPos;
+
+        if (hasSelection) {
+            let currentOffset = 0;
+            let startLineIdx = -1;
+            let endLineIdx = -1;
+
+            for (let i = 0; i < lines.length; i++) {
+                // 用该行本身的长度 + 换行符 1 字符计算相对偏移量
+                const lineLength = lines[i].length + 1; 
+                const lineStart = currentOffset;
+                const lineEnd = currentOffset + lineLength;
+
+                if (startPos >= lineStart && startPos < lineEnd) {
+                    startLineIdx = i;
+                }
+                if (endPos > lineStart && endPos <= lineEnd) {
+                    endLineIdx = i;
+                }
+                currentOffset += lineLength;
+            }
+
+            if (startLineIdx !== -1) {
+                targetLinesRange.startIdx = startLineIdx;
+                targetLinesRange.endIdx = endLineIdx !== -1 ? endLineIdx : lines.length - 1;
+            }
+        }
+        return { lines, range: targetLinesRange, hasSelection };
+    }
+
+    /**
+     * 🛠️ 多行前缀与后缀插入编辑 (Notepad++ 多行同时列编辑)
+     */
+    btnApplyPrefixSuffix.addEventListener('click', () => {
+        if (!isEditing) {
+            alertFeedback(false, '❌ 无法编辑！当前处于【只读查看模式】，请点击左下角“进入编辑模式”。');
+            return;
+        }
+
+        const prefixValue = ptMultiPrefix.value;
+        const suffixValue = ptMultiSuffix.value;
+
+        if (!prefixValue && !suffixValue) {
+            alertFeedback(false, '⚠️ 请至少输入前缀或后缀的一项！');
+            return;
+        }
+
+        const { lines, range } = getSelectedLinesInfo(activeEditorTextarea);
+
+        for (let i = range.startIdx; i <= range.endIdx; i++) {
+            lines[i] = prefixValue + lines[i] + suffixValue;
+        }
+
+        const updatedText = lines.join('\n');
+        if (cmInstance) {
+            cmInstance.setValue(updatedText);
+        } else {
+            activeEditorTextarea.value = updatedText;
+        }
+        
+        // 置空输入
+        ptMultiPrefix.value = '';
+        ptMultiSuffix.value = '';
+        
+        alertFeedback(true, `⚡ 多行同时插入成功！已应用于第 ${range.startIdx + 1} 到第 ${range.endIdx + 1} 行。`);
+    });
+
+    /**
+     * 🛠️ 多行自增序号列编辑器插入
+     */
+    btnApplyNumbering.addEventListener('click', () => {
+        if (!isEditing) {
+            alertFeedback(false, '❌ 无法编辑！当前处于【只读查看模式】，请开启“页面编辑”。');
+            return;
+        }
+
+        let startVal = parseInt(ptNumStart.value, 10);
+        let stepVal = parseInt(ptNumStep.value, 10);
+        const formatVal = ptNumFormat.value || '';
+
+        if (isNaN(startVal)) startVal = 1;
+        if (isNaN(stepVal)) stepVal = 1;
+
+        const { lines, range } = getSelectedLinesInfo(activeEditorTextarea);
+
+        let currentVal = startVal;
+        for (let i = range.startIdx; i <= range.endIdx; i++) {
+            lines[i] = currentVal + formatVal + lines[i];
+            currentVal += stepVal;
+        }
+
+        const updatedText = lines.join('\n');
+        if (cmInstance) {
+            cmInstance.setValue(updatedText);
+        } else {
+            activeEditorTextarea.value = updatedText;
+        }
+        alertFeedback(true, `⚡ 序号插入成功！已应用于第 ${range.startIdx + 1} 到第 ${range.endIdx + 1} 行。`);
+    });
+
+    /**
+     * 🛠️ 批量查找与全部替换 (支持区分大小写与正则表达式)
+     */
+    btnReplaceAll.addEventListener('click', () => {
+        if (!isEditing) {
+            alertFeedback(false, '❌ 无法编辑！当前处于【只读查看模式】。');
+            return;
+        }
+
+        const findVal = ptFindStr.value;
+        const replaceVal = ptReplaceStr.value;
+
+        if (!findVal) {
+            alertFeedback(false, '⚠️ 查找文本不能为空！');
+            return;
+        }
+
+        const text = cmInstance ? cmInstance.getValue() : activeEditorTextarea.value;
+        const isCaseSensitive = ptCaseSensitive.checked;
+        const isRegex = ptRegex.checked;
+
+        let findRegex;
+        try {
+            if (isRegex) {
+                const flags = isCaseSensitive ? 'g' : 'gi';
+                findRegex = new RegExp(findVal, flags);
+            } else {
+                // 安全转义普通搜索词
+                const escapedFind = findVal.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                const flags = isCaseSensitive ? 'g' : 'gi';
+                findRegex = new RegExp(escapedFind, flags);
+            }
+        } catch (e) {
+            alertFeedback(false, `❌ 正则表达式编译错误: ${e.message}`);
+            return;
+        }
+
+        const matches = text.match(findRegex);
+        const count = matches ? matches.length : 0;
+
+        if (count === 0) {
+            alertFeedback(false, `🔍 未找到任何匹配项 "${findVal}"。`);
+            return;
+        }
+
+        const updatedText = text.replace(findRegex, replaceVal);
+        if (cmInstance) {
+            cmInstance.setValue(updatedText);
+        } else {
+            activeEditorTextarea.value = updatedText;
+        }
+        
+        // 置空输入
+        ptFindStr.value = '';
+        ptReplaceStr.value = '';
+
+        alertFeedback(true, `🔁 替换完成！成功批量替换了 ${count} 处匹配文本。`);
     });
 
 

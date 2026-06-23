@@ -643,6 +643,16 @@ body {
     display: flex;
 }
 
+/* Ensure CodeMirror fits layout neatly */
+.CodeMirror {
+    width: 100%;
+    height: 380px; /* Collapse standard height */
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+    font-size: 13px;
+}
+
 #active-editor-textarea {
     width: 100%;
     flex: 1;
@@ -708,6 +718,124 @@ body {
     color: var(--text-muted);
 }
 
+.expand-control-btns {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Hide Notepad++ Power Tools toggler by default when collapsed */
+#active-editor-container:not(.maximized-editor-container) #btn-toggle-power-tools {
+    display: none !important;
+}
+
+/* ==========================================
+   Notepad++ Advanced Power Panel
+   ========================================== */
+.power-tools-panel {
+    background-color: #fafbfc;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 14px 18px;
+    margin-bottom: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    animation: toast-slide-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.pt-section {
+    flex: 1;
+    min-width: 280px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.pt-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--primary-color);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.pt-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.pt-row input[type="text"],
+.pt-row input[type="number"],
+.pt-select {
+    padding: 4px 8px;
+    font-size: 11px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    outline: none;
+    background-color: #ffffff;
+}
+
+.pt-select {
+    cursor: pointer;
+    color: var(--text-main);
+    font-weight: 500;
+}
+
+.pt-select:focus {
+    border-color: var(--primary-color);
+}
+
+.pt-row input[type="text"] {
+    flex: 1;
+    min-width: 80px;
+}
+
+.pt-options {
+    gap: 12px;
+    margin-top: 2px;
+}
+
+.pt-checkbox-label {
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-muted);
+}
+
+.pt-divider {
+    width: 1px;
+    background-color: var(--border-color);
+    align-self: stretch;
+}
+
+@media (max-width: 768px) {
+    .pt-divider {
+        width: 100%;
+        height: 1px;
+        margin: 6px 0;
+    }
+}
+
+.pt-small-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+.maximized-editor-container .power-tools-panel {
+    border-color: var(--primary-color);
+    background-color: #f0f7ff;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.08);
+}
+
 /* Maximize container styling (fullscreen layout) */
 .maximized-editor-container {
     position: fixed !important;
@@ -725,9 +853,21 @@ body {
     box-sizing: border-box !important;
 }
 
+/* Adjust CodeMirror size inside maximized container */
+.maximized-editor-container .CodeMirror {
+    flex: 1 !important;
+    height: 100% !important;
+}
+
+.maximized-editor-container .text-area-main-container {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
 .maximized-editor-container textarea {
     flex: 1 !important;
-    height: calc(100vh - 110px) !important;
+    height: 100% !important;
     min-height: auto !important;
     font-size: 15px !important;
     resize: none !important;
