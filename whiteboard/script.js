@@ -48,6 +48,8 @@ class UMLDrawer {
         this.customShapeNameCounter = 1;
         this.elementIdCounter = 1;
         this.snapThreshold = 18;
+        this.newElementSelectDelayMs = 2000;
+        this.recentlyCreatedElements = new Map();
         
         this.init();
     }
@@ -138,7 +140,8 @@ class UMLDrawer {
         const y = coords.y;
         
         const diagram = this.diagrams[this.currentDiagram];
-        const elements = diagram.elements;
+        this.ensureDiagramElementLayers(diagram);
+        const elements = this.getElementsSortedByLayer(diagram);
         
         // 查找双击的元素
         let clickedElement = null;
@@ -157,6 +160,7 @@ class UMLDrawer {
     
     showPropertyDialog(element) {
         this.currentEditingElement = element;
+        this.ensureDiagramElementLayers(this.diagrams[this.currentDiagram]);
         
         // 填充当前值
         document.getElementById('prop-width').value = Math.abs(element.width);
@@ -168,6 +172,7 @@ class UMLDrawer {
         document.getElementById('prop-font-size').value = element.fontSize || 14;
         document.getElementById('prop-text-color').value = element.textColor || '#333333';
         document.getElementById('prop-text-position').value = element.textPosition || 'center';
+        document.getElementById('prop-layer').value = this.getElementLayer(element);
         
         document.getElementById('property-dialog').classList.add('show');
     }
@@ -199,6 +204,12 @@ class UMLDrawer {
         element.textColor = document.getElementById('prop-text-color').value;
         element.textPosition = document.getElementById('prop-text-position').value;
 
+        // 应用共通属性：层级
+        const newLayer = parseInt(document.getElementById('prop-layer').value, 10);
+        if (Number.isFinite(newLayer) && newLayer >= 1) {
+            this.setElementLayer(element, newLayer);
+        }
+
         if (element.id) {
             this.syncAttachedArrowsForElementIds(new Set([element.id]));
         }
@@ -217,6 +228,44 @@ class UMLDrawer {
         const x = (clientX - rect.left) / (this.canvasScale * this.viewZoom) - this.canvasOffsetX;
         const y = (clientY - rect.top) / (this.canvasScale * this.viewZoom) - this.canvasOffsetY;
         return { x, y };
+    }
+
+    markElementAsRecentlyCreated(element) {
+        if (!element || !element.id) return;
+        this.recentlyCreatedElements.set(element.id, Date.now());
+    }
+
+    pruneRecentlyCreatedElements() {
+        const now = Date.now();
+        this.recentlyCreatedElements.forEach((createdAt, id) => {
+            if (now - createdAt > this.newElementSelectDelayMs) {
+                this.recentlyCreatedElements.delete(id);
+            }
+        });
+    }
+
+    removeRecentCreatedMarker(element) {
+        if (!element || !element.id) return;
+        this.recentlyCreatedElements.delete(element.id);
+    }
+
+    findRecentlyCreatedElementAt(x, y) {
+        this.pruneRecentlyCreatedElements();
+        if (this.recentlyCreatedElements.size === 0) return null;
+
+        const diagram = this.diagrams[this.currentDiagram];
+        this.ensureDiagramElementLayers(diagram);
+        const ordered = this.getElementsSortedByLayer(diagram);
+
+        for (let i = ordered.length - 1; i >= 0; i--) {
+            const element = ordered[i];
+            if (!this.recentlyCreatedElements.has(element.id)) continue;
+            if (this.isPointInElement(x, y, element)) {
+                return element;
+            }
+        }
+
+        return null;
     }
     
     setupToolListeners() {
@@ -248,6 +297,10 @@ class UMLDrawer {
             'close-help': this.hideHelp.bind(this),
             'close-property': this.hidePropertyDialog.bind(this),
             'apply-property': this.applyPropertyChanges.bind(this),
+            'prop-layer-up': this.moveEditingElementLayerUp.bind(this),
+            'prop-layer-down': this.moveEditingElementLayerDown.bind(this),
+            'prop-layer-top': this.moveEditingElementLayerToTop.bind(this),
+            'prop-layer-bottom': this.moveEditingElementLayerToBottom.bind(this),
             'btn-delete': this.deleteSelectedElements.bind(this),
             'btn-tools': this.toggleToolsPanel.bind(this),
             'btn-property': this.showPropertyForSelected.bind(this),
@@ -731,6 +784,19 @@ class UMLDrawer {
         const coords = this.getCanvasCoordinates(e.clientX, e.clientY);
         const x = coords.x;
         const y = coords.y;
+
+        const recentElement = this.findRecentlyCreatedElementAt(x, y);
+        const shouldAutoSelectRecentElement =
+            recentElement &&
+            this.currentTool !== 'select' &&
+            this.currentTool !== 'pan' &&
+            this.currentTool !== 'delete';
+
+        if (shouldAutoSelectRecentElement) {
+            this.setCurrentTool('select');
+            this.handleSelectDown(x, y, e.ctrlKey);
+            return;
+        }
         
         this.startX = x;
         this.startY = y;
@@ -834,7 +900,8 @@ class UMLDrawer {
     
     handleSelectDown(x, y, ctrlKey) {
         const diagram = this.diagrams[this.currentDiagram];
-        const elements = diagram.elements;
+        this.ensureDiagramElementLayers(diagram);
+        const elements = this.getElementsSortedByLayer(diagram);
         
         // 检查是否点击了调整大小的控制点
         const selectedElements = diagram.selectedElements;
@@ -1174,9 +1241,96 @@ class UMLDrawer {
         diagram.elements.forEach(element => this.ensureElementId(element));
     }
 
+    // ===== 共通属性：层级（独立管理） =====
+    getElementLayer(element) {
+        if (!element) return 1;
+        const layer = Number(element.layer);
+        return Number.isFinite(layer) ? Math.max(1, Math.round(layer)) : 1;
+    }
+
+    getElementsSortedByLayer(diagram) {
+        return diagram.elements
+            .map((element, index) => ({ element, index }))
+            .sort((a, b) => {
+                const layerDiff = this.getElementLayer(a.element) - this.getElementLayer(b.element);
+                if (layerDiff !== 0) return layerDiff;
+                return a.index - b.index;
+            })
+            .map(item => item.element);
+    }
+
+    normalizeDiagramLayers(diagram) {
+        const ordered = this.getElementsSortedByLayer(diagram);
+        ordered.forEach((element, index) => {
+            element.layer = index + 1;
+        });
+    }
+
+    ensureDiagramElementLayers(diagram) {
+        diagram.elements.forEach((element, index) => {
+            if (!Number.isFinite(Number(element.layer))) {
+                element.layer = index + 1;
+            }
+        });
+        this.normalizeDiagramLayers(diagram);
+    }
+
+    setElementLayer(element, targetLayer) {
+        const diagram = this.diagrams[this.currentDiagram];
+        this.ensureDiagramElementLayers(diagram);
+
+        const ordered = this.getElementsSortedByLayer(diagram);
+        const currentIndex = ordered.indexOf(element);
+        if (currentIndex === -1) return;
+
+        const clampedLayer = Math.max(1, Math.min(ordered.length, Math.round(targetLayer)));
+        ordered.splice(currentIndex, 1);
+        ordered.splice(clampedLayer - 1, 0, element);
+
+        ordered.forEach((item, index) => {
+            item.layer = index + 1;
+        });
+    }
+
+    moveEditingElementLayerUp() {
+        if (!this.currentEditingElement) return;
+        const current = this.getElementLayer(this.currentEditingElement);
+        this.setElementLayer(this.currentEditingElement, current + 1);
+        document.getElementById('prop-layer').value = this.getElementLayer(this.currentEditingElement);
+        this.render();
+    }
+
+    moveEditingElementLayerDown() {
+        if (!this.currentEditingElement) return;
+        const current = this.getElementLayer(this.currentEditingElement);
+        this.setElementLayer(this.currentEditingElement, current - 1);
+        document.getElementById('prop-layer').value = this.getElementLayer(this.currentEditingElement);
+        this.render();
+    }
+
+    moveEditingElementLayerToTop() {
+        if (!this.currentEditingElement) return;
+        const diagram = this.diagrams[this.currentDiagram];
+        this.setElementLayer(this.currentEditingElement, diagram.elements.length);
+        document.getElementById('prop-layer').value = this.getElementLayer(this.currentEditingElement);
+        this.render();
+    }
+
+    moveEditingElementLayerToBottom() {
+        if (!this.currentEditingElement) return;
+        this.setElementLayer(this.currentEditingElement, 1);
+        document.getElementById('prop-layer').value = this.getElementLayer(this.currentEditingElement);
+        this.render();
+    }
+
     addElementToDiagram(diagram, element) {
         this.assignNewElementId(element);
+        if (!Number.isFinite(Number(element.layer))) {
+            element.layer = diagram.elements.length + 1;
+        }
         diagram.elements.push(element);
+        this.normalizeDiagramLayers(diagram);
+        this.markElementAsRecentlyCreated(element);
         return element;
     }
 
@@ -1432,11 +1586,25 @@ class UMLDrawer {
     }
     
     deleteElement(x, y) {
-        const elements = this.diagrams[this.currentDiagram].elements;
-        const index = elements.findIndex(element => this.isPointInElement(x, y, element));
+        const diagram = this.diagrams[this.currentDiagram];
+        this.ensureDiagramElementLayers(diagram);
+        const ordered = this.getElementsSortedByLayer(diagram);
+
+        let targetElement = null;
+        for (let i = ordered.length - 1; i >= 0; i--) {
+            const element = ordered[i];
+            if (this.isPointInElement(x, y, element)) {
+                targetElement = element;
+                break;
+            }
+        }
+
+        const index = targetElement ? diagram.elements.indexOf(targetElement) : -1;
         
         if (index !== -1) {
-            elements.splice(index, 1);
+            this.removeRecentCreatedMarker(diagram.elements[index]);
+            diagram.elements.splice(index, 1);
+            this.normalizeDiagramLayers(diagram);
             this.diagrams[this.currentDiagram].selectedElements = [];
             this.render();
         }
@@ -1449,9 +1617,12 @@ class UMLDrawer {
         diagram.selectedElements.forEach(element => {
             const index = diagram.elements.indexOf(element);
             if (index !== -1) {
+                this.removeRecentCreatedMarker(diagram.elements[index]);
                 diagram.elements.splice(index, 1);
             }
         });
+
+        this.normalizeDiagramLayers(diagram);
         
         diagram.selectedElements = [];
         this.render();
@@ -1772,7 +1943,9 @@ class UMLDrawer {
         tempCtx.save();
         tempCtx.translate(-exportBounds.minX, -exportBounds.minY);
         
-        const elements = this.diagrams[this.currentDiagram].elements;
+        const diagram = this.diagrams[this.currentDiagram];
+        this.ensureDiagramElementLayers(diagram);
+        const elements = this.getElementsSortedByLayer(diagram);
         elements.forEach(element => {
             if (element.type === 'pen') {
                 this.drawPen(tempCtx, element);
@@ -1848,6 +2021,8 @@ class UMLDrawer {
     
     clearDiagram() {
         if (confirm('确定要清空当前图表吗？')) {
+            const diagram = this.diagrams[this.currentDiagram];
+            diagram.elements.forEach(element => this.removeRecentCreatedMarker(element));
             this.diagrams[this.currentDiagram].elements = [];
             this.diagrams[this.currentDiagram].selectedElements = [];
             this.diagrams[this.currentDiagram].groups = [];
@@ -1857,6 +2032,7 @@ class UMLDrawer {
     
     render() {
         this.ensureDiagramElementIds(this.diagrams[this.currentDiagram]);
+        this.ensureDiagramElementLayers(this.diagrams[this.currentDiagram]);
         this.ctx.setTransform(1, 0, 0, 1, 0, 0);
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.ctx.save();
@@ -1866,7 +2042,7 @@ class UMLDrawer {
         this.drawGrid();
         
         const diagram = this.diagrams[this.currentDiagram];
-        const elements = diagram.elements;
+        const elements = this.getElementsSortedByLayer(diagram);
         
         elements.forEach(element => {
             this.drawElement(this.ctx, element);
