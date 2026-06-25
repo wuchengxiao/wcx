@@ -709,6 +709,8 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
     margin-bottom: 4px;
 }
 
@@ -724,8 +726,69 @@ body {
     gap: 10px;
 }
 
+.maximized-edit-toolbar {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background-color: #eff6ff;
+}
+
+.autosave-toggle-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--primary-dark);
+    cursor: pointer;
+}
+
+.autosave-toggle-label input {
+    cursor: pointer;
+}
+
+.save-status-indicator {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    background-color: #e2e8f0;
+    color: var(--text-muted);
+}
+
+.save-status-indicator.status-success {
+    background-color: #dcfce7;
+    color: #166534;
+}
+
+.save-status-indicator.status-warning {
+    background-color: #fef3c7;
+    color: #92400e;
+}
+
+.save-status-indicator.status-danger {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+.save-status-indicator.status-info {
+    background-color: #dbeafe;
+    color: #1d4ed8;
+}
+
 /* Hide Notepad++ Power Tools toggler by default when collapsed */
 #active-editor-container:not(.maximized-editor-container) #btn-toggle-power-tools {
+    display: none !important;
+}
+
+#active-editor-container:not(.maximized-editor-container) #maximized-edit-toolbar {
+    display: none !important;
+}
+
+#active-editor-container.maximized-editor-container #maximized-edit-toolbar.d-none {
     display: none !important;
 }
 
@@ -851,6 +914,11 @@ body {
     flex-direction: column !important;
     gap: 12px !important;
     box-sizing: border-box !important;
+    overflow: auto !important;
+}
+
+.maximized-editor-container .text-area-wrapper-header {
+    align-items: flex-start;
 }
 
 /* Adjust CodeMirror size inside maximized container */
@@ -873,6 +941,21 @@ body {
     resize: none !important;
     border-color: var(--primary-color) !important;
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1) !important;
+}
+
+@media (max-width: 768px) {
+    .maximized-edit-toolbar {
+        width: 100%;
+        justify-content: space-between;
+        border-radius: 14px;
+        flex-wrap: wrap;
+        margin-left: 0;
+    }
+
+    .expand-control-btns {
+        width: 100%;
+        justify-content: flex-end;
+    }
 }
 
 .d-none {

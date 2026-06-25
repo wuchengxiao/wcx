@@ -11,6 +11,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedIds = new Set();    // 保存复选框选中的文件 ID 集合
     let isLineFilterActive = false;// 查看模式下是否激活了行段筛选模式
     let cmInstance = null;         // CodeMirror 语法高亮编辑器实例
+    let autoSaveEnabled = false;   // 当前编辑会话的自动保存状态
+    let autoSaveTimer = null;      // 自动保存定时器
+    let lastSavedContent = '';     // 最近一次保存成功后的内容快照
+    let hasUnsavedChanges = false; // 当前是否存在未保存修改
 
     // DOM 节点引用声明
     const newFilenameInput = document.getElementById('new-filename');
@@ -52,6 +56,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnToggleActiveExpand = document.getElementById('btn-toggle-active-expand');
     const btnTogglePowerTools = document.getElementById('btn-toggle-power-tools');
     const powerToolsPanel = document.getElementById('power-tools-panel');
+    const maximizedEditToolbar = document.getElementById('maximized-edit-toolbar');
+    const autoSaveToggle = document.getElementById('autosave-toggle');
+    const btnToolbarSave = document.getElementById('btn-toolbar-save');
+    const saveStatusIndicator = document.getElementById('save-status-indicator');
 
     const ptLanguageSelect = document.getElementById('pt-language-select');
 
@@ -96,8 +104,134 @@ document.addEventListener('DOMContentLoaded', () => {
             // 当 CodeMirror 内容改变时，需要把内容反馈同步回隐藏 textarea
             cmInstance.on('change', () => {
                 activeEditorTextarea.value = cmInstance.getValue();
+                syncUnsavedChangesState();
             });
         }
+    }
+
+    function getCurrentEditorValue() {
+        return cmInstance ? cmInstance.getValue() : activeEditorTextarea.value;
+    }
+
+    function setSaveStatus(message, statusType = 'idle') {
+        if (!saveStatusIndicator) return;
+        saveStatusIndicator.textContent = message;
+        saveStatusIndicator.className = `save-status-indicator status-${statusType}`;
+    }
+
+    function clearAutoSaveTimer() {
+        if (autoSaveTimer) {
+            window.clearInterval(autoSaveTimer);
+            autoSaveTimer = null;
+        }
+    }
+
+    function updateMaximizedEditToolbar() {
+        const shouldShow = isEditing && activeEditorContainer.classList.contains('maximized-editor-container');
+        maximizedEditToolbar.classList.toggle('d-none', !shouldShow);
+    }
+
+    function syncUnsavedChangesState() {
+        if (!isEditing || !activeFileId) {
+            hasUnsavedChanges = false;
+            return;
+        }
+
+        hasUnsavedChanges = getCurrentEditorValue() !== lastSavedContent;
+
+        if (!activeEditorContainer.classList.contains('maximized-editor-container')) {
+            return;
+        }
+
+        if (hasUnsavedChanges) {
+            setSaveStatus(autoSaveEnabled ? '存在未保存修改（自动保存已开启）' : '存在未保存修改', 'warning');
+        } else if (autoSaveEnabled) {
+            setSaveStatus('自动保存已开启，等待下一次同步', 'info');
+        } else {
+            setSaveStatus('内容已与文件同步', 'idle');
+        }
+    }
+
+    function setAutoSaveEnabled(enabled) {
+        autoSaveEnabled = Boolean(enabled);
+        autoSaveToggle.checked = autoSaveEnabled;
+        clearAutoSaveTimer();
+
+        if (autoSaveEnabled && isEditing && activeFileId) {
+            autoSaveTimer = window.setInterval(() => {
+                saveActiveFile({ source: 'auto', showToast: false, stayInEditMode: true, skipIfUnchanged: true });
+            }, 5 * 60 * 1000);
+
+            setSaveStatus(hasUnsavedChanges ? '自动保存已开启，将每 5 分钟保存一次' : '自动保存已开启，等待下一次同步', 'info');
+        } else if (isEditing) {
+            setSaveStatus(hasUnsavedChanges ? '自动保存已关闭，存在未保存修改' : '自动保存已关闭', hasUnsavedChanges ? 'warning' : 'idle');
+        }
+    }
+
+    function resetEditSessionState() {
+        clearAutoSaveTimer();
+        autoSaveEnabled = false;
+        autoSaveToggle.checked = false;
+        lastSavedContent = '';
+        hasUnsavedChanges = false;
+        setSaveStatus('尚未保存', 'idle');
+        updateMaximizedEditToolbar();
+    }
+
+    function saveActiveFile(options = {}) {
+        const {
+            source = 'manual',
+            showToast = true,
+            stayInEditMode = false,
+            skipIfUnchanged = false
+        } = options;
+
+        if (!activeFileId) {
+            return { success: false, skipped: true, message: '当前没有可保存的活跃文件。' };
+        }
+
+        const textValue = getCurrentEditorValue();
+        const changed = textValue !== lastSavedContent;
+
+        if (skipIfUnchanged && !changed) {
+            const idleMessage = source === 'auto'
+                ? `自动保存检查完成（${formatTimeDetail(new Date().toISOString())}），当前无新增修改。`
+                : '当前没有新的修改需要保存。';
+            setSaveStatus(idleMessage, 'idle');
+            return { success: true, skipped: true, message: idleMessage };
+        }
+
+        const res = window.FileService.updateFile(activeFileId, textValue);
+        const latestFile = res.file || window.FileService.getFileById(activeFileId);
+
+        if (res.success) {
+            lastSavedContent = textValue;
+            hasUnsavedChanges = false;
+
+            if (latestFile) {
+                activeFileUpdated.textContent = formatTimeDetail(latestFile.updatedAt);
+            }
+
+            const saveTime = latestFile ? formatTimeDetail(latestFile.updatedAt) : formatTimeDetail(new Date().toISOString());
+            setSaveStatus(source === 'auto' ? `已自动保存 · ${saveTime}` : `已手动保存 · ${saveTime}`, 'success');
+
+            if (showToast) {
+                alertFeedback(true, source === 'auto' ? `自动保存成功：${res.message}` : res.message);
+            }
+
+            refreshAll();
+
+            if (!stayInEditMode) {
+                viewFile(activeFileId);
+            }
+        } else {
+            setSaveStatus(source === 'auto' ? `自动保存失败：${res.message}` : `保存失败：${res.message}`, 'danger');
+            if (showToast) {
+                alertFeedback(false, res.message);
+            }
+        }
+
+        return res;
     }
 
     /**
@@ -248,6 +382,7 @@ document.addEventListener('DOMContentLoaded', () => {
         activeFileId = null;
         isEditing = false;
         isLineFilterActive = false;
+        resetEditSessionState();
         editorWorkspace.classList.add('d-none');
         editorPlaceholder.classList.remove('d-none');
         
@@ -288,6 +423,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         activeFileId = id;
         isEditing = false;
+        clearAutoSaveTimer();
+        autoSaveEnabled = false;
+        autoSaveToggle.checked = false;
+        hasUnsavedChanges = false;
 
         // UI 切换
         editorPlaceholder.classList.add('d-none');
@@ -358,6 +497,9 @@ document.addEventListener('DOMContentLoaded', () => {
             activeEditorTextarea.value = finalShowContent;
         }
 
+        setSaveStatus('查看模式下不可保存', 'idle');
+        updateMaximizedEditToolbar();
+
         // 高亮选中左侧的该文件那一行
         updateRowHighlight();
     }
@@ -378,6 +520,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // 编辑时先退出行过滤段落查看。加载全部内容。
         activeFileId = id;
         isEditing = true;
+        lastSavedContent = file.content;
+        hasUnsavedChanges = false;
 
         // UI 切换
         editorPlaceholder.classList.add('d-none');
@@ -422,6 +566,9 @@ document.addEventListener('DOMContentLoaded', () => {
             activeEditorTextarea.value = file.content;
             activeEditorTextarea.focus();
         }
+
+        setSaveStatus('可开始编辑；放大后可使用自动保存', 'idle');
+        updateMaximizedEditToolbar();
 
         // 高亮行
         updateRowHighlight();
@@ -628,17 +775,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * 独立保存已编辑好的文件
      */
     btnSaveContent.addEventListener('click', () => {
-        if (!activeFileId) return;
-        const textValue = activeEditorTextarea.value;
-        const res = window.FileService.updateFile(activeFileId, textValue);
-        
-        alertFeedback(res.success, res.message);
-        if (res.success) {
-            // 重置回只读查看模式，以便可以看到更新时间
-            viewFile(activeFileId);
-            // 刷新列表（因为修改时间可能变化了）
-            refreshAll();
-        }
+        saveActiveFile({ source: 'manual', showToast: true, stayInEditMode: false, skipIfUnchanged: false });
     });
 
     /**
@@ -675,6 +812,8 @@ document.addEventListener('DOMContentLoaded', () => {
             btnToggleActiveExpand.innerHTML = '🔍 还原大小';
             btnToggleActiveExpand.classList.remove('btn-outline');
             btnToggleActiveExpand.classList.add('btn-primary');
+            updateMaximizedEditToolbar();
+            syncUnsavedChangesState();
         } else {
             btnToggleActiveExpand.innerHTML = '🔍 放大编辑';
             btnToggleActiveExpand.classList.add('btn-outline');
@@ -684,7 +823,25 @@ document.addEventListener('DOMContentLoaded', () => {
             powerToolsPanel.classList.add('d-none');
             btnTogglePowerTools.classList.add('btn-outline');
             btnTogglePowerTools.classList.remove('btn-primary');
+            updateMaximizedEditToolbar();
         }
+    });
+
+    autoSaveToggle.addEventListener('change', () => {
+        if (!isEditing) {
+            autoSaveToggle.checked = false;
+            alertFeedback(false, '请先进入编辑模式后再开启自动保存。');
+            return;
+        }
+        setAutoSaveEnabled(autoSaveToggle.checked);
+    });
+
+    btnToolbarSave.addEventListener('click', () => {
+        if (!isEditing) {
+            alertFeedback(false, '当前处于查看模式，无法执行保存。');
+            return;
+        }
+        saveActiveFile({ source: 'manual', showToast: true, stayInEditMode: true, skipIfUnchanged: false });
     });
 
     /**
@@ -972,6 +1129,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 重新刷列表视图
         refreshAll();
+    });
+
+    activeEditorTextarea.addEventListener('input', () => {
+        syncUnsavedChangesState();
     });
 
     // ==========================================

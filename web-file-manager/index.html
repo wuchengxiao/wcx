@@ -194,6 +194,14 @@
                         <div class="text-area-wrapper-header">
                             <span class="editor-sub-label">文件内容:</span>
                             <div class="expand-control-btns">
+                                <div id="maximized-edit-toolbar" class="maximized-edit-toolbar d-none">
+                                  <label class="autosave-toggle-label" for="autosave-toggle">
+                                      <input type="checkbox" id="autosave-toggle" />
+                                      <span>自动保存</span>
+                                  </label>
+                                  <span id="save-status-indicator" class="save-status-indicator status-idle">尚未保存</span>
+                                  <button id="btn-toolbar-save" type="button" class="btn btn-xs btn-primary">💾 保存</button>
+                               </div>
                                 <button id="btn-toggle-power-tools" type="button" class="btn btn-xs btn-outline">🛠️ Notepad++ 高级编辑包</button>
                                 <button id="btn-toggle-active-expand" type="button" class="btn btn-xs btn-outline">🔍 放大编辑</button>
                             </div>
