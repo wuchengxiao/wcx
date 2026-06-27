@@ -21,25 +21,82 @@
             padding: 8px 0;
         }
         
-        .web-search-toggle {
+        .tools-config-btn {
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 4px;
             font-size: 13px;
             color: var(--text-secondary, #999);
             cursor: pointer;
             user-select: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: var(--bg-secondary, #2a2a2a);
+            border: 1px solid var(--border-color, #3a3a3a);
+            transition: all 0.2s;
         }
         
-        .web-search-toggle input[type="checkbox"] {
+        .tools-config-btn:hover {
+            background: var(--bg-tertiary, #3a3a3a);
+        }
+        
+        .tools-config-panel {
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 0;
+            right: 0;
+            background: var(--bg-primary, #1a1a1a);
+            border: 1px solid var(--border-color, #3a3a3a);
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+            display: none;
+            z-index: 100;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .tools-config-panel.show {
+            display: block;
+        }
+        
+        .tools-config-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text-primary, #fff);
+        }
+        
+        .tool-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 10px;
+            border-radius: 6px;
+            margin-bottom: 4px;
+            transition: background 0.2s;
+        }
+        
+        .tool-item:hover {
+            background: var(--bg-secondary, #2a2a2a);
+        }
+        
+        .tool-item input[type="checkbox"] {
             cursor: pointer;
             width: 16px;
             height: 16px;
             margin: 0;
         }
         
-        .web-search-toggle .toggle-label {
-            cursor: pointer;
+        .tool-item .tool-name {
+            font-size: 13px;
+            color: var(--text-primary, #fff);
+        }
+        
+        .tool-item .tool-desc {
+            font-size: 12px;
+            color: var(--text-secondary, #999);
+            flex: 1;
         }
     </style>
 </head>
@@ -143,10 +200,13 @@
                             <option value="GLM-4.7">GLM-4.7-Flash</option>
                             <option value="role-agent">role-agent</option>
                         </select>
-                        <label class="web-search-toggle" title="启用/禁用联网查询">
-                            <input type="checkbox" id="webSearchToggle" checked onchange="chatApp.handleWebSearchToggle(this.checked)">
-                            <span class="toggle-label">联网查询</span>
-                        </label>
+                        <button class="tools-config-btn" id="toolsConfigBtn" onclick="chatApp.toggleToolsConfig()" title="工具配置">
+                            ⚙️ 工具配置
+                        </button>
+                    </div>
+                    <div class="tools-config-panel" id="toolsConfigPanel">
+                        <div class="tools-config-title">选择可用工具</div>
+                        <div id="toolsConfigList"></div>
                     </div>
                     <div class="input-hint">按 Enter 发送，Shift + Enter 换行</div>
                 </div>

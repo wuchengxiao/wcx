@@ -23,6 +23,7 @@ class ChatApp {
         // 临时思考内容（不落盘）
         this.sessionThinkingById = {};
         this.sessionThinkingMessageIdById = {};
+        this.selectedTools = [];
 
         this.applyTheme(this.currentTheme);
         this.init();
@@ -655,22 +656,57 @@ class ChatApp {
         }
 
         const allTools = Array.isArray(window.llmTools) ? window.llmTools : [];
-        const webSearchToggle = document.getElementById('webSearchToggle');
-        const allowWebSearch = !webSearchToggle || !!webSearchToggle.checked;
-        const allowedToolNames = [];
-
-        if (allowWebSearch) {
-            allowedToolNames.push('web_search');
-        }
-
-        if (selectedRole && selectedRole.enableBaiduAgent) {
-            allowedToolNames.push('agent_drawing');
-        }
+        const selectedToolNames = Array.isArray(this.selectedTools) ? this.selectedTools : [];
 
         return allTools.filter(tool => {
             const name = tool && tool.function ? tool.function.name : '';
-            return allowedToolNames.includes(name);
+            return selectedToolNames.includes(name);
         });
+    }
+
+    toggleToolsConfig() {
+        const panel = document.getElementById('toolsConfigPanel');
+        if (panel) {
+            panel.classList.toggle('show');
+            if (panel.classList.contains('show')) {
+                this.renderToolsConfig();
+            }
+        }
+    }
+
+    renderToolsConfig() {
+        const list = document.getElementById('toolsConfigList');
+        if (!list) return;
+
+        const allTools = Array.isArray(window.llmTools) ? window.llmTools : [];
+        
+        list.innerHTML = allTools.map(tool => {
+            const toolName = tool && tool.function ? tool.function.name : '';
+            const toolDesc = tool && tool.function ? tool.function.description : '';
+            const isSelected = this.selectedTools.includes(toolName);
+            
+            return `
+                <div class="tool-item">
+                    <input type="checkbox" 
+                        id="tool-${toolName}" 
+                        ${isSelected ? 'checked' : ''} 
+                        onchange="chatApp.handleToolToggle('${toolName}', this.checked)"
+                    >
+                    <span class="tool-name">${this.escapeHtml(toolName)}</span>
+                    <span class="tool-desc">${this.escapeHtml(toolDesc)}</span>
+                </div>
+            `;
+        }).join('');
+    }
+
+    handleToolToggle(toolName, checked) {
+        if (checked) {
+            if (!this.selectedTools.includes(toolName)) {
+                this.selectedTools.push(toolName);
+            }
+        } else {
+            this.selectedTools = this.selectedTools.filter(t => t !== toolName);
+        }
     }
 
     handleWebSearchToggle(checked) {
@@ -1074,8 +1110,7 @@ class ChatApp {
             }
 
             // 检查是否启用联网查询，如果启用则先执行搜索
-            const webSearchToggle = document.getElementById('webSearchToggle');
-            const isWebSearchEnabled = webSearchToggle && webSearchToggle.checked;
+            const isWebSearchEnabled = Array.isArray(this.selectedTools) && this.selectedTools.includes('web_search');
             let webSearchContext = null;
             // 临时存储搜索结果用于显示（不落盘）
             this.currentWebSearchResults = null;
@@ -1111,8 +1146,8 @@ class ChatApp {
 
             const token = processinput.processedApiKey;
             const url = processinput.processedUrl;
-            // 当启用联网查询时，不再传递 tools，避免重复调用
-            const tools = isWebSearchEnabled ? [] : this.getFunctionCallingTools(activeRole);
+            // 获取选中的工具列表
+            const tools = this.getFunctionCallingTools(activeRole);
             const toolInstructionMessage = this.buildToolInstructionMessage(tools);
             
             // 构建消息，如果有联网查询结果则添加到上下文
@@ -2070,6 +2105,12 @@ window.onLoginSuccess = function() {
 document.addEventListener('click', (e) => {
     if (!e.target.closest('.model-selector')) {
         document.getElementById('modelDropdown').classList.remove('show');
+    }
+    if (!e.target.closest('.tools-config-btn') && !e.target.closest('.tools-config-panel')) {
+        const panel = document.getElementById('toolsConfigPanel');
+        if (panel) {
+            panel.classList.remove('show');
+        }
     }
 }
 );
