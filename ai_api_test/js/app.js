@@ -40,6 +40,63 @@ const BAIDU_ERR = {
   1001: '百度智能体不存在或已下线'
 };
 
+function newModelConfig(seed = {}) {
+  return {
+    id: seed.id || uid(),
+    cfgName: seed.cfgName || '',
+    apiType: seed.apiType || 'openai',
+    apiUrl: seed.apiUrl || '',
+    apiKey: seed.apiKey || '',
+    modelName: seed.modelName || '',
+    baiduAppId: seed.baiduAppId || '',
+    baiduSecretKey: seed.baiduSecretKey || '',
+    baiduOpenId: seed.baiduOpenId || '',
+    corsProxy: seed.corsProxy || ''
+  };
+}
+
+function normalizeSettings(raw) {
+  const base = raw || {};
+  const fromLegacy = base.apiType || base.apiUrl || base.apiKey || base.modelName || base.baiduAppId || base.baiduSecretKey || base.baiduOpenId || base.corsProxy;
+  const modelConfigs = Array.isArray(base.modelConfigs) && base.modelConfigs.length
+    ? base.modelConfigs.map(c => newModelConfig(c))
+    : [newModelConfig({
+      cfgName: '默认模型',
+      apiType: base.apiType || 'openai',
+      apiUrl: base.apiUrl || '',
+      apiKey: base.apiKey || '',
+      modelName: base.modelName || '',
+      baiduAppId: base.baiduAppId || '',
+      baiduSecretKey: base.baiduSecretKey || '',
+      baiduOpenId: base.baiduOpenId || '',
+      corsProxy: base.corsProxy || ''
+    })];
+
+  if (!modelConfigs.length) modelConfigs.push(newModelConfig({ cfgName: '默认模型' }));
+
+  const activeExists = modelConfigs.some(c => c.id === base.activeModelId);
+  return {
+    modelConfigs,
+    activeModelId: activeExists ? base.activeModelId : modelConfigs[0].id,
+    ctxWindow: Math.max(1, Math.min(50, parseInt(base.ctxWindow) || 20)),
+    sysPrompt: typeof base.sysPrompt === 'string' ? base.sysPrompt : '你是一个有用的AI助手。',
+    theme: base.theme === 'light' ? 'light' : 'dark',
+    _migratedFromLegacy: !!fromLegacy
+  };
+}
+
+function getActiveModelConfig(settings) {
+  const s = settings || S.settings();
+  return s.modelConfigs.find(c => c.id === s.activeModelId) || s.modelConfigs[0] || newModelConfig();
+}
+
+function modelDisplayName(cfg) {
+  if (!cfg) return '未配置';
+  if (cfg.cfgName) return cfg.cfgName;
+  if (cfg.apiType === 'baidu') return '百度智能体';
+  return cfg.modelName || '未配置';
+}
+
 /* ==================== STORE ==================== */
 const S = {
   _g(k, d) { try { return JSON.parse(localStorage.getItem(PFX + k)) ?? d; } catch { return d; } },
@@ -48,12 +105,20 @@ const S = {
   setUser(u)     { this._s('user', u); },
   convs()        { return this._g('convs', []); },
   setConvs(c)    { this._s('convs', c); },
-  settings()     { return this._g('settings', {
-    apiType: 'openai', apiUrl: '', apiKey: '', modelName: '',
-    baiduAppId: '', baiduSecretKey: '', baiduOpenId: '',
-    corsProxy: '', ctxWindow: 20, sysPrompt: '你是一个有用的AI助手。', theme: 'dark'
-  }); },
-  setSettings(s) { this._s('settings', s); },
+  settings()     {
+    const normalized = normalizeSettings(this._g('settings', null));
+    if (normalized._migratedFromLegacy) {
+      const { _migratedFromLegacy, ...safe } = normalized;
+      this._s('settings', safe);
+      return safe;
+    }
+    const { _migratedFromLegacy, ...safe } = normalized;
+    return safe;
+  },
+  setSettings(s) {
+    const { _migratedFromLegacy, ...safe } = normalizeSettings(s);
+    this._s('settings', safe);
+  },
   clear()        { Object.keys(localStorage).filter(k => k.startsWith(PFX)).forEach(k => localStorage.removeItem(k)); }
 };
 
@@ -62,6 +127,7 @@ let $ = {};
 let convId    = null;
 let streaming = false;
 let abortCtrl = null;
+let settingsDraft = null;
 
 function cacheDom() {
   [
@@ -70,7 +136,7 @@ function cacheDom() {
     'mainContent','topbar','topTitle','modelDisp','btnModel','btnTokens','btnUser',
     'welcomeScreen','apiHint','btnGotoSet','chatArea','msgList',
     'inputArea','ctxBar','ctxCnt','ctxMax','msgInput','btnSend','btnStop','charCnt',
-    'setModal','sPreset','sApiType','openaiFields','baiduFields',
+    'setModal','sActiveModel','btnAddModelCfg','btnDelModelCfg','btnImportModelCfg','fileModelImport','sCfgName','sPreset','sApiType','openaiFields','baiduFields',
     'sApiUrl','sApiKey','sModel','sProxy','sBaiduAppId','sBaiduSecretKey','sBaiduOpenId',
     'sCtx','sPrompt','btnSaveSet','btnExport','btnImport','btnClear','fileImport',
     'cfmModal','cfmTitle','cfmMsg','cfmOk','cfmCancel','toasts'
@@ -242,14 +308,12 @@ function timeStr(ts) {
   return new Date(ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
 }
 function getConfiguredType() {
-  const cfg = S.settings();
+  const cfg = getActiveModelConfig();
   if (cfg.apiType === 'baidu') return cfg.baiduAppId && cfg.baiduSecretKey ? 'ok' : 'missing';
   return cfg.apiUrl && cfg.apiKey && cfg.modelName ? 'ok' : 'missing';
 }
 function getModelLabel() {
-  const cfg = S.settings();
-  if (cfg.apiType === 'baidu') return '百度智能体';
-  return cfg.modelName || '未配置';
+  return modelDisplayName(getActiveModelConfig());
 }
 
 /* ==================== LIGHTBOX ==================== */
@@ -717,7 +781,7 @@ function bindMsgActions() {
 /* ==================== SEND / STREAM ==================== */
 function sendMessage(text) {
   if (!text.trim() || streaming) return;
-  const cfg = S.settings();
+  const cfg = getActiveModelConfig();
   if (cfg.apiType === 'baidu') {
     if (!cfg.baiduAppId || !cfg.baiduSecretKey) { toast('请先在设置中配置百度智能体的 App ID 和 Secret Key','warn'); openSettings(); return; }
   } else {
@@ -736,11 +800,13 @@ function sendMessage(text) {
 }
 
 function doStream(conv) {
-  const cfg = S.settings();
+  const cfg = getActiveModelConfig();
+  const globalSettings = S.settings();
+  const reqCfg = { ...cfg, ctxWindow: globalSettings.ctxWindow, sysPrompt: globalSettings.sysPrompt };
   streaming = true;
   toggleStreamUI(true);
 
-  const modelLabel = cfg.apiType === 'baidu' ? '百度智能体' : cfg.modelName;
+  const modelLabel = modelDisplayName(cfg);
   const aiMsg = { id: uid(), role: 'assistant', content: '', ts: Date.now(), model: modelLabel, tokens: 0 };
   conv.messages.push(aiMsg);
   S.setConvs(S.convs());
@@ -789,12 +855,12 @@ function doStream(conv) {
 
   if (cfg.apiType === 'baidu') {
     const lastUser = [...conv.messages].reverse().find(m => m.role === 'user');
-    baiduSend(lastUser?.content || '', conv.id, cfg, cbs);
+    baiduSend(lastUser?.content || '', conv.id, reqCfg, cbs);
   } else {
-    const history = buildHistory(conv, cfg);
+    const history = buildHistory(conv, reqCfg);
     const lastUser = [...conv.messages].reverse().find(m => m.role === 'user');
     if (lastUser) history.push({ role: 'user', content: lastUser.content });
-    openaiSend(history, cfg, cbs);
+    openaiSend(history, reqCfg, cbs);
   }
 }
 
@@ -830,19 +896,188 @@ function showChat() { $.welcomeScreen.style.display = 'none'; $.chatArea.style.d
 function updateApiHint() { $.apiHint.style.display = getConfiguredType() === 'missing' ? '' : 'none'; }
 
 /* ==================== SETTINGS ==================== */
+function getDraftActiveModel() {
+  if (!settingsDraft?.modelConfigs?.length) return null;
+  let cfg = settingsDraft.modelConfigs.find(c => c.id === settingsDraft.activeModelId);
+  if (!cfg) {
+    cfg = settingsDraft.modelConfigs[0];
+    settingsDraft.activeModelId = cfg.id;
+  }
+  return cfg;
+}
+
+function syncModelFormToDraft() {
+  const cfg = getDraftActiveModel();
+  if (!cfg) return;
+  cfg.cfgName = $.sCfgName.value.trim();
+  cfg.apiType = $.sApiType.value;
+  cfg.apiUrl = $.sApiUrl.value.trim();
+  cfg.apiKey = $.sApiKey.value.trim();
+  cfg.modelName = $.sModel.value.trim();
+  cfg.baiduAppId = $.sBaiduAppId.value.trim();
+  cfg.baiduSecretKey = $.sBaiduSecretKey.value.trim();
+  cfg.baiduOpenId = $.sBaiduOpenId.value.trim();
+  cfg.corsProxy = $.sProxy.value.trim();
+}
+
+function loadActiveModelToForm() {
+  const cfg = getDraftActiveModel() || newModelConfig();
+  $.sCfgName.value = cfg.cfgName || '';
+  $.sApiType.value = cfg.apiType || 'openai';
+  $.sApiUrl.value = cfg.apiUrl || '';
+  $.sApiKey.value = cfg.apiKey || '';
+  $.sModel.value = cfg.modelName || '';
+  $.sBaiduAppId.value = cfg.baiduAppId || '';
+  $.sBaiduSecretKey.value = cfg.baiduSecretKey || '';
+  $.sBaiduOpenId.value = cfg.baiduOpenId || '';
+  $.sProxy.value = cfg.corsProxy || '';
+  toggleApiFields(cfg.apiType || 'openai');
+}
+
+function renderModelSelectOptions() {
+  const list = settingsDraft?.modelConfigs || [];
+  $.sActiveModel.innerHTML = list.map((cfg, idx) => {
+    const name = modelDisplayName(cfg) || `模型${idx + 1}`;
+    return `<option value="${cfg.id}">${esc(name)}</option>`;
+  }).join('');
+  $.sActiveModel.value = settingsDraft?.activeModelId || list[0]?.id || '';
+}
+
+function addModelConfigDraft() {
+  syncModelFormToDraft();
+  const idx = (settingsDraft.modelConfigs?.length || 0) + 1;
+  const cfg = newModelConfig({ cfgName: `模型${idx}` });
+  settingsDraft.modelConfigs.push(cfg);
+  settingsDraft.activeModelId = cfg.id;
+  renderModelSelectOptions();
+  loadActiveModelToForm();
+  $.sPreset.value = '';
+}
+
+function removeModelConfigDraft() {
+  if (!settingsDraft?.modelConfigs?.length) return;
+  if (settingsDraft.modelConfigs.length <= 1) {
+    toast('至少保留一个模型配置', 'warn');
+    return;
+  }
+  const id = settingsDraft.activeModelId;
+  settingsDraft.modelConfigs = settingsDraft.modelConfigs.filter(c => c.id !== id);
+  settingsDraft.activeModelId = settingsDraft.modelConfigs[0].id;
+  renderModelSelectOptions();
+  loadActiveModelToForm();
+}
+
+function ensureUniqueModelConfigId(id, existingIds) {
+  let nextId = id || uid();
+  while (existingIds.has(nextId)) nextId = uid();
+  return nextId;
+}
+
+function importModelConfigs(file) {
+  if (!file) return;
+  const r = new FileReader();
+  r.onload = e => {
+    try {
+      const raw = JSON.parse(e.target.result);
+      const sourceList = Array.isArray(raw)
+        ? raw
+        : Array.isArray(raw?.modelConfigs)
+          ? raw.modelConfigs
+          : [];
+
+      if (!sourceList.length) {
+        toast('导入失败：未找到 modelConfigs 数组', 'error');
+        return;
+      }
+
+      syncModelFormToDraft();
+      settingsDraft.modelConfigs = settingsDraft.modelConfigs || [];
+
+      const existingIds = new Set(settingsDraft.modelConfigs.map(c => c.id));
+      const existingFingerprints = new Set(settingsDraft.modelConfigs.map(c => JSON.stringify({
+        apiType: c.apiType || '',
+        apiUrl: c.apiUrl || '',
+        apiKey: c.apiKey || '',
+        modelName: c.modelName || '',
+        baiduAppId: c.baiduAppId || '',
+        baiduSecretKey: c.baiduSecretKey || '',
+        baiduOpenId: c.baiduOpenId || '',
+        corsProxy: c.corsProxy || ''
+      })));
+
+      let added = 0;
+      let skipped = 0;
+      let lastAddedId = '';
+
+      for (const item of sourceList) {
+        const cfg = newModelConfig(item || {});
+        const fp = JSON.stringify({
+          apiType: cfg.apiType || '',
+          apiUrl: cfg.apiUrl || '',
+          apiKey: cfg.apiKey || '',
+          modelName: cfg.modelName || '',
+          baiduAppId: cfg.baiduAppId || '',
+          baiduSecretKey: cfg.baiduSecretKey || '',
+          baiduOpenId: cfg.baiduOpenId || '',
+          corsProxy: cfg.corsProxy || ''
+        });
+
+        if (existingFingerprints.has(fp)) {
+          skipped++;
+          continue;
+        }
+
+        cfg.id = ensureUniqueModelConfigId(cfg.id, existingIds);
+        if (!cfg.cfgName) cfg.cfgName = modelDisplayName(cfg);
+        existingIds.add(cfg.id);
+        existingFingerprints.add(fp);
+        settingsDraft.modelConfigs.push(cfg);
+        lastAddedId = cfg.id;
+        added++;
+      }
+
+      if (!added) {
+        toast('没有新增模型配置（可能已存在）', 'warn');
+        return;
+      }
+
+      settingsDraft.activeModelId = lastAddedId || settingsDraft.activeModelId;
+      renderModelSelectOptions();
+      loadActiveModelToForm();
+      $.sPreset.value = '';
+      toast(`成功导入 ${added} 个模型配置${skipped ? `，跳过 ${skipped} 个重复项` : ''}`, 'success');
+    } catch {
+      toast('导入失败：JSON 格式不正确', 'error');
+    }
+  };
+  r.readAsText(file);
+}
+
 function openSettings() {
   const s = S.settings();
-  $.sApiType.value = s.apiType || 'openai'; $.sPreset.value = '';
-  $.sApiUrl.value = s.apiUrl || ''; $.sApiKey.value = s.apiKey || ''; $.sModel.value = s.modelName || '';
-  $.sBaiduAppId.value = s.baiduAppId || ''; $.sBaiduSecretKey.value = s.baiduSecretKey || ''; $.sBaiduOpenId.value = s.baiduOpenId || '';
-  $.sProxy.value = s.corsProxy || ''; $.sCtx.value = s.ctxWindow || 20; $.sPrompt.value = s.sysPrompt || '';
-  applyTheme(s.theme || 'dark'); toggleApiFields(s.apiType || 'openai'); $.setModal.style.display = '';
+  settingsDraft = JSON.parse(JSON.stringify(s));
+  renderModelSelectOptions();
+  loadActiveModelToForm();
+  $.sPreset.value = '';
+  $.sCtx.value = settingsDraft.ctxWindow || 20;
+  $.sPrompt.value = settingsDraft.sysPrompt || '';
+  applyTheme(settingsDraft.theme || 'dark');
+  $.setModal.style.display = '';
 }
 function closeSettings() { $.setModal.style.display = 'none'; }
 function toggleApiFields(type) { const o = type !== 'baidu'; $.openaiFields.style.display = o ? '' : 'none'; $.baiduFields.style.display = o ? 'none' : ''; }
 function saveSettings() {
-  const s = { apiType: $.sApiType.value, apiUrl: $.sApiUrl.value.trim(), apiKey: $.sApiKey.value.trim(), modelName: $.sModel.value.trim(), baiduAppId: $.sBaiduAppId.value.trim(), baiduSecretKey: $.sBaiduSecretKey.value.trim(), baiduOpenId: $.sBaiduOpenId.value.trim(), corsProxy: $.sProxy.value.trim(), ctxWindow: Math.max(1, Math.min(50, parseInt($.sCtx.value) || 20)), sysPrompt: $.sPrompt.value.trim(), theme: document.querySelector('.theme-btn.active')?.dataset.t || 'dark' };
-  S.setSettings(s); applyTheme(s.theme); updateModelDisp(); updateApiHint(); updateCtxBar(getConv(convId)); closeSettings(); toast('设置已保存','success');
+  syncModelFormToDraft();
+  settingsDraft.ctxWindow = Math.max(1, Math.min(50, parseInt($.sCtx.value) || 20));
+  settingsDraft.sysPrompt = $.sPrompt.value.trim();
+  settingsDraft.theme = document.querySelector('.theme-btn.active')?.dataset.t || 'dark';
+  S.setSettings(settingsDraft);
+  applyTheme(settingsDraft.theme);
+  updateModelDisp();
+  updateApiHint();
+  updateCtxBar(getConv(convId));
+  closeSettings();
+  toast('设置已保存','success');
 }
 function updateModelDisp() { $.modelDisp.textContent = getModelLabel(); }
 
@@ -861,7 +1096,16 @@ function initDefaultData() {
       { id: uid(), role: 'assistant', content: '你好！我是 AI Chat 智能助手。\n\n支持 OpenAI 兼容接口和百度智能体（支持图文混合回复）。使用前请先点击左下角 **设置** 配置模型 API。', ts: now - 1000, model: 'system', tokens: 80 }
     ], createdAt: now - 2000, updatedAt: now - 1000, pinned: true, archived: false }]);
   }
-  if (!S.settings().apiType) S.setSettings({ ...S.settings(), apiType: 'openai', apiUrl: '', apiKey: '', modelName: '', baiduAppId: '', baiduSecretKey: '', baiduOpenId: '', corsProxy: '', ctxWindow: 20, sysPrompt: '你是一个有用的AI助手。', theme: 'dark' });
+  const settings = S.settings();
+  if (!settings.modelConfigs?.length) {
+    S.setSettings({
+      modelConfigs: [newModelConfig({ cfgName: '默认模型', apiType: 'openai' })],
+      activeModelId: '',
+      ctxWindow: 20,
+      sysPrompt: '你是一个有用的AI助手。',
+      theme: 'dark'
+    });
+  }
 }
 
 /* ==================== KEYBOARD ==================== */
@@ -888,8 +1132,40 @@ function bindEvents() {
   $.setModal.querySelector('.modal-cancel').addEventListener('click', closeSettings);
   $.setModal.querySelector('.modal-bg').addEventListener('click', closeSettings);
   $.btnSaveSet.addEventListener('click', saveSettings);
-  $.sApiType.addEventListener('change', () => toggleApiFields($.sApiType.value));
-  $.sPreset.addEventListener('change', () => { const p = PRESETS[$.sPreset.value]; if (!p) return; $.sApiType.value = p.apiType || 'openai'; toggleApiFields(p.apiType || 'openai'); if (p.url) $.sApiUrl.value = p.url; if (p.model) $.sModel.value = p.model; });
+  $.sActiveModel.addEventListener('change', () => {
+    syncModelFormToDraft();
+    settingsDraft.activeModelId = $.sActiveModel.value;
+    loadActiveModelToForm();
+    $.sPreset.value = '';
+  });
+  $.btnAddModelCfg.addEventListener('click', addModelConfigDraft);
+  $.btnDelModelCfg.addEventListener('click', removeModelConfigDraft);
+  $.btnImportModelCfg.addEventListener('click', () => $.fileModelImport.click());
+  $.fileModelImport.addEventListener('change', e => {
+    if (e.target.files[0]) importModelConfigs(e.target.files[0]);
+    e.target.value = '';
+  });
+  $.sCfgName.addEventListener('input', () => {
+    syncModelFormToDraft();
+    const cur = document.activeElement;
+    renderModelSelectOptions();
+    if (cur === $.sCfgName) $.sCfgName.focus();
+  });
+  $.sApiType.addEventListener('change', () => {
+    toggleApiFields($.sApiType.value);
+    syncModelFormToDraft();
+    renderModelSelectOptions();
+  });
+  $.sPreset.addEventListener('change', () => {
+    const p = PRESETS[$.sPreset.value];
+    if (!p) return;
+    $.sApiType.value = p.apiType || 'openai';
+    toggleApiFields(p.apiType || 'openai');
+    if (p.url) $.sApiUrl.value = p.url;
+    if (p.model) $.sModel.value = p.model;
+    syncModelFormToDraft();
+    renderModelSelectOptions();
+  });
   document.querySelectorAll('.theme-btn').forEach(b => { b.addEventListener('click', () => applyTheme(b.dataset.t)); });
   document.querySelectorAll('.toggle-pwd').forEach(b => { b.addEventListener('click', () => { const inp = document.getElementById(b.dataset.for); if (inp) inp.type = inp.type === 'password' ? 'text' : 'password'; }); });
   $.btnExport.addEventListener('click', exportData);

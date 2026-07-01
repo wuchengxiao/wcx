@@ -156,6 +156,20 @@
                     <section class="set-sec">
                         <h4>模型配置</h4>
                         <div class="form-field">
+                            <label for="sActiveModel">当前使用模型</label>
+                            <select id="sActiveModel" class="form-select"></select>
+                        </div>
+                        <div class="btn-row">
+                            <button id="btnAddModelCfg" class="btn btn-ghost" type="button">＋ 新增模型配置</button>
+                            <button id="btnDelModelCfg" class="btn btn-ghost" type="button">🗑 删除当前配置</button>
+                            <button id="btnImportModelCfg" class="btn btn-ghost" type="button">📥 导入模型配置JSON</button>
+                        </div>
+                        <input id="fileModelImport" type="file" accept=".json" style="display:none">
+                        <div class="form-field">
+                            <label for="sCfgName">配置名称</label>
+                            <input id="sCfgName" type="text" class="form-input" placeholder="例如：工作-DeepSeek" autocomplete="off">
+                        </div>
+                        <div class="form-field">
                             <label for="sPreset">快速预设</label>
                             <select id="sPreset" class="form-select">
                                 <option value="">自定义配置</option>
