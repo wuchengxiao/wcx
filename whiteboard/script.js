@@ -128,9 +128,6 @@ class UMLDrawer {
         document.addEventListener('keydown', this.handleKeyDown.bind(this));
         document.addEventListener('keyup', this.handleKeyUp.bind(this));
         
-        document.addEventListener('copy', this.handleCopy.bind(this));
-        document.addEventListener('paste', this.handlePaste.bind(this));
-        
         window.addEventListener('resize', this.handleResize.bind(this));
     }
     
@@ -304,6 +301,8 @@ class UMLDrawer {
             'btn-delete': this.deleteSelectedElements.bind(this),
             'btn-tools': this.toggleToolsPanel.bind(this),
             'btn-property': this.showPropertyForSelected.bind(this),
+            'btn-copy': this.copySelectedElements.bind(this),
+            'quick-paste': this.pasteClipboardElements.bind(this),
             'create-custom-shape': this.createCustomShapeFromSelection.bind(this),
             'ungroup-shape': this.ungroupSelectedForEdit.bind(this),
             'quick-select': this.quickSelectTool.bind(this),
@@ -682,6 +681,16 @@ class UMLDrawer {
             this.ctrlPressed = true;
         }
 
+        // 禁用复制/粘贴键盘快捷键（除非在输入框内）
+        if (this.ctrlPressed && (e.key === 'c' || e.key === 'C' || e.key === 'v' || e.key === 'V')) {
+            const tagName = (e.target && e.target.tagName ? e.target.tagName.toLowerCase() : '');
+            const isEditable = tagName === 'input' || tagName === 'textarea' || (e.target && e.target.isContentEditable);
+            if (!isEditable) {
+                e.preventDefault();
+                return;
+            }
+        }
+
         // 为安全起见：不允许通过键盘删除图形，只能使用删除工具
         if (e.key === 'Delete' || e.key === 'Backspace') {
             const tagName = (e.target && e.target.tagName ? e.target.tagName.toLowerCase() : '');
@@ -756,6 +765,42 @@ class UMLDrawer {
         }
     }
     
+
+    copySelectedElements() {
+        const selected = this.diagrams[this.currentDiagram].selectedElements;
+        if (selected.length > 0) {
+            this.clipboard = selected.map(el => JSON.parse(JSON.stringify(el)));
+        }
+    }
+
+    pasteClipboardElements() {
+        if (this.clipboard.length > 0) {
+            const diagram = this.diagrams[this.currentDiagram];
+            const offsetX = 20;
+            const offsetY = 20;
+            this.clipboard.forEach(el => {
+                const newElement = JSON.parse(JSON.stringify(el));
+                if (newElement.x !== undefined) newElement.x += offsetX;
+                if (newElement.y !== undefined) newElement.y += offsetY;
+                if (newElement.x1 !== undefined) newElement.x1 += offsetX;
+                if (newElement.y1 !== undefined) newElement.y1 += offsetY;
+                if (newElement.x2 !== undefined) newElement.x2 += offsetX;
+                if (newElement.y2 !== undefined) newElement.y2 += offsetY;
+                if (newElement.path && newElement.path.length > 0) {
+                    newElement.path = newElement.path.map(p => ({ x: p.x + offsetX, y: p.y + offsetY }));
+                }
+                this.addElementToDiagram(diagram, newElement);
+            });
+
+            diagram.selectedElements = [];
+            const startIndex = diagram.elements.length - this.clipboard.length;
+            for (let i = 0; i < this.clipboard.length; i++) {
+                diagram.selectedElements.push(diagram.elements[startIndex + i]);
+            }
+
+            this.render();
+        }
+    }
     handleMouseDown(e) {
         if (window.innerWidth <= 768) {
             const sidebar = document.querySelector('.sidebar');
@@ -1779,7 +1824,7 @@ class UMLDrawer {
             
             this.startX = x;
             this.startY = y;
-        } else if (['rectangle', 'ellipse', 'class', 'use-case', 'actor', 'package', 'sticky'].includes(this.tempElement.type)) {
+        } else if (['rectangle', 'ellipse', 'class', 'use-case', 'actor', 'package', 'sticky', 'triangle', 'diamond'].includes(this.tempElement.type)) {
             this.tempElement.width = x - this.tempElement.x;
             this.tempElement.height = y - this.tempElement.y;
         } else if (this.tempElement.type === 'line') {
@@ -1799,7 +1844,7 @@ class UMLDrawer {
     
     finishDrawing(x, y) {
         if (this.tempElement) {
-            if (['rectangle', 'ellipse', 'class', 'use-case', 'actor', 'package', 'sticky'].includes(this.tempElement.type)) {
+            if (['rectangle', 'ellipse', 'class', 'use-case', 'actor', 'package', 'sticky', 'triangle', 'diamond'].includes(this.tempElement.type)) {
                 if (this.tempElement.width < 0) {
                     this.tempElement.x += this.tempElement.width;
                     this.tempElement.width = Math.abs(this.tempElement.width);
@@ -1857,6 +1902,22 @@ class UMLDrawer {
                 const textWidth = this.ctx.measureText(element.text).width;
                 return x >= element.x && x <= element.x + textWidth &&
                        y >= element.y - element.fontSize && y <= element.y;
+            case 'triangle':
+            case 'diamond':
+                // compute polygon points based on bounds
+                const b = this.getElementBounds(element);
+                const pts = [];
+                if (element.type === 'triangle') {
+                    pts.push({ x: b.x + b.width / 2, y: b.y });
+                    pts.push({ x: b.x + b.width, y: b.y + b.height });
+                    pts.push({ x: b.x, y: b.y + b.height });
+                } else {
+                    pts.push({ x: b.x + b.width / 2, y: b.y });
+                    pts.push({ x: b.x + b.width, y: b.y + b.height / 2 });
+                    pts.push({ x: b.x + b.width / 2, y: b.y + b.height });
+                    pts.push({ x: b.x, y: b.y + b.height / 2 });
+                }
+                return this.pointInPolygon(x, y, pts);
             case 'line':
             case 'arrow':
                 const distance = this.getDistanceToLine(
@@ -1909,6 +1970,20 @@ class UMLDrawer {
         const dx = px - xx;
         const dy = py - yy;
         return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    pointInPolygon(px, py, points) {
+        // ray-casting algorithm
+        let inside = false;
+        for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+            const xi = points[i].x, yi = points[i].y;
+            const xj = points[j].x, yj = points[j].y;
+
+            const intersect = ((yi > py) !== (yj > py)) &&
+                (px < (xj - xi) * (py - yi) / (yj - yi + 0.0) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
     }
     
     createNewDiagram() {
@@ -2216,6 +2291,35 @@ class UMLDrawer {
                 if (element.text) {
                     this.drawElementText(ctx, element);
                 }
+                break;
+
+            case 'triangle':
+                ctx.fillStyle = element.fill;
+                ctx.strokeStyle = element.stroke;
+                ctx.lineWidth = element.strokeWidth;
+                ctx.beginPath();
+                ctx.moveTo(element.x + element.width / 2, element.y);
+                ctx.lineTo(element.x + element.width, element.y + element.height);
+                ctx.lineTo(element.x, element.y + element.height);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                if (element.text) this.drawElementText(ctx, element);
+                break;
+
+            case 'diamond':
+                ctx.fillStyle = element.fill;
+                ctx.strokeStyle = element.stroke;
+                ctx.lineWidth = element.strokeWidth;
+                ctx.beginPath();
+                ctx.moveTo(element.x + element.width / 2, element.y);
+                ctx.lineTo(element.x + element.width, element.y + element.height / 2);
+                ctx.lineTo(element.x + element.width / 2, element.y + element.height);
+                ctx.lineTo(element.x, element.y + element.height / 2);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                if (element.text) this.drawElementText(ctx, element);
                 break;
                 
             case 'sticky':

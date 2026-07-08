@@ -116,6 +116,18 @@
                             </svg>
                             <span>直线</span>
                         </button>
+                        <button class="tool" data-tool="triangle" aria-label="绘制三角形">
+                            <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                                <polygon points="12,4 20,20 4,20" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>三角形</span>
+                        </button>
+                        <button class="tool" data-tool="diamond" aria-label="绘制菱形">
+                            <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                                <polygon points="12,3 21,12 12,21 3,12" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>菱形</span>
+                        </button>
                         <button class="tool" data-tool="arrow" aria-label="绘制箭头">
                             <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
                                 <line x1="5" y1="12" x2="19" y2="12" fill="none" stroke="currentColor" stroke-width="2"/>
@@ -189,6 +201,7 @@
                 <div class="tool-group">
                     <h4>操作</h4>
                     <div class="tools" role="group" aria-label="操作工具">
+                        <!-- sidebar paste removed per UI change -->
                         <button class="tool" data-tool="select" aria-label="选择工具">
                             <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
                                 <rect x="3" y="3" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="4"/>
@@ -244,6 +257,12 @@
                     </div>
 
                     <div class="quick-tool-controls" aria-label="常用操作">
+                        <button id="quick-paste" class="zoom-btn" aria-label="黏贴" title="黏贴">
+                            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M19 7h-3V4H8v3H5v13h14V7zM9 4h6v3H9V4z" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <rect x="9" y="10" width="6" height="6" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                        </button>
                         <button id="quick-select" class="zoom-btn" aria-label="选择工具" title="选择">
                             <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
                                 <rect x="3" y="3" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="4"/>
@@ -276,6 +295,13 @@
                 </div>
 
                 <div id="bottom-toolbar" class="bottom-toolbar" style="display: none;" role="toolbar" aria-label="底部操作栏">
+                    <button id="btn-copy" class="bottom-btn" aria-label="复制">
+                        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+                            <rect x="9" y="9" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"/>
+                            <rect x="5" y="5" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                        <span>复制</span>
+                    </button>
                     <button id="btn-property" class="bottom-btn" aria-label="属性设置">
                         <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
                             <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" fill="none" stroke="currentColor" stroke-width="2"/>
