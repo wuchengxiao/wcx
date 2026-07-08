@@ -884,8 +884,10 @@ class UMLDrawer {
         }
         
         if (!this.isDrawing && !this.isResizing) return;
-        
-        this.finishDrawing(x, y);
+
+        if (this.isDrawing) {
+            this.finishDrawing(x, y);
+        }
         this.isDrawing = false;
         this.isResizing = false;
         this.tempElement = null;
@@ -964,10 +966,6 @@ class UMLDrawer {
     }
     
     getResizeHandle(x, y, element) {
-        if (['line', 'arrow'].includes(element.type)) {
-            return null;
-        }
-        
         const handles = this.getResizeHandles(element);
         const handleSize = 8;
         
@@ -983,7 +981,12 @@ class UMLDrawer {
     
     getResizeHandles(element) {
         const handles = {};
-        const handleSize = 6;
+
+        if (element.x1 !== undefined && element.y1 !== undefined && element.x2 !== undefined && element.y2 !== undefined) {
+            handles.start = { x: element.x1, y: element.y1 };
+            handles.end = { x: element.x2, y: element.y2 };
+            return handles;
+        }
         
         if (element.x !== undefined && element.y !== undefined) {
             const x = element.x;
@@ -1009,6 +1012,30 @@ class UMLDrawer {
         const handle = this.resizeHandle;
         
         if (!element || !handle) return;
+
+        if ((element.type === 'line' || element.type === 'arrow') && (handle === 'start' || handle === 'end')) {
+            const xKey = handle === 'start' ? 'x1' : 'x2';
+            const yKey = handle === 'start' ? 'y1' : 'y2';
+
+            if (element.type === 'arrow') {
+                const snap = this.getNearestSnapTarget(x, y);
+                if (snap) {
+                    this.applyAttachmentToArrowEnd(element, handle, snap);
+                } else {
+                    element[xKey] = x;
+                    element[yKey] = y;
+                    if (handle === 'start') {
+                        element.sourceAttachment = null;
+                    } else {
+                        element.targetAttachment = null;
+                    }
+                }
+            } else {
+                element[xKey] = x;
+                element[yKey] = y;
+            }
+            return;
+        }
 
         if (element.type === 'group') {
             this.handleGroupResize(element, handle, x, y);
@@ -2387,17 +2414,15 @@ class UMLDrawer {
         ctx.strokeRect(bounds.x - 2, bounds.y - 2, bounds.width + 4, bounds.height + 4);
         
         // 绘制调整大小的控制点
-        if (element.type !== 'line' && element.type !== 'arrow') {
-            const handles = this.getResizeHandles(element);
-            ctx.fillStyle = '#4CAF50';
-            ctx.setLineDash([]);
-            
-            Object.values(handles).forEach(handle => {
-                ctx.beginPath();
-                ctx.arc(handle.x, handle.y, 4, 0, Math.PI * 2);
-                ctx.fill();
-            });
-        }
+        const handles = this.getResizeHandles(element);
+        ctx.fillStyle = '#4CAF50';
+        ctx.setLineDash([]);
+
+        Object.values(handles).forEach(handle => {
+            ctx.beginPath();
+            ctx.arc(handle.x, handle.y, 4, 0, Math.PI * 2);
+            ctx.fill();
+        });
         
         ctx.restore();
     }
