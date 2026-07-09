@@ -62,6 +62,10 @@ class UMLDrawer {
         this.setupDiagramListeners();
         this.renderCustomShapeList();
         this.currentTool = 'select';
+        // Load autosave if present and start periodic autosave
+        this.loadAutoBackup();
+        this.autosaveInterval = setInterval(this.saveAutoBackup.bind(this), 5000);
+        window.addEventListener('beforeunload', this.saveAutoBackup.bind(this));
         this.render();
     }
     
@@ -303,6 +307,8 @@ class UMLDrawer {
             'btn-property': this.showPropertyForSelected.bind(this),
             'btn-copy': this.copySelectedElements.bind(this),
             'quick-paste': this.pasteClipboardElements.bind(this),
+            'download-shapes': this.downloadCustomShapes.bind(this),
+            'import-shapes': this.openImportCustomShapesDialog.bind(this),
             'create-custom-shape': this.createCustomShapeFromSelection.bind(this),
             'ungroup-shape': this.ungroupSelectedForEdit.bind(this),
             'quick-select': this.quickSelectTool.bind(this),
@@ -534,6 +540,82 @@ class UMLDrawer {
         }).join('');
     }
 
+    downloadCustomShapes() {
+        try {
+            // Require a selection: user must choose a custom shape from the list
+            if (!this.currentCustomShapeId) {
+                alert('请先在自定义图形列表中选择要下载的图形。');
+                return;
+            }
+
+            const shape = this.customShapes.find(s => s.id === this.currentCustomShapeId);
+            if (!shape) {
+                alert('未找到所选自定义图形。');
+                return;
+            }
+
+            const data = JSON.stringify(shape, null, 2);
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${(shape.name || 'custom_shape').replace(/[^a-z0-9_-]/gi, '_')}_${Date.now()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.warn('导出自定义图形失败', err);
+            alert('导出自定义图形失败，请检查控制台。');
+        }
+    }
+
+    openImportCustomShapesDialog() {
+        const input = document.getElementById('import-shapes-input');
+        if (!input) return;
+        input.value = '';
+        input.onchange = this.handleImportCustomShapesFile.bind(this);
+        input.click();
+    }
+
+    handleImportCustomShapesFile(e) {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            try {
+                const text = evt.target.result;
+                const parsed = JSON.parse(text);
+                let incoming = [];
+                if (Array.isArray(parsed)) incoming = parsed;
+                else if (parsed && typeof parsed === 'object') incoming = [parsed];
+
+                // Validate basic shape structure
+                const normalized = incoming.map(item => {
+                    const clone = Object.assign({}, item);
+                    // ensure id unique
+                    clone.id = `custom-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+                    clone.name = clone.name || this.getNextCustomShapeName();
+                    clone.width = clone.width || 100;
+                    clone.height = clone.height || 80;
+                    clone.elements = Array.isArray(clone.elements) ? clone.elements : [];
+                    return clone;
+                });
+
+                // Merge into existing customShapes
+                this.customShapes = this.customShapes.concat(normalized);
+                this.saveCustomShapes();
+                this.renderCustomShapeList();
+                alert(`成功导入 ${normalized.length} 个自定义图形。`);
+            } catch (err) {
+                console.warn('导入自定义图形失败', err);
+                alert('导入失败：文件格式错误。');
+            }
+        };
+        reader.readAsText(file);
+    }
+
     handleCustomShapeListClick(e) {
         const deleteBtn = e.target.closest('[data-action="delete-shape"]');
         if (deleteBtn) {
@@ -556,6 +638,54 @@ class UMLDrawer {
         this.currentCustomShapeId = item.dataset.shapeId;
 
         this.renderCustomShapeList();
+    }
+
+    saveAutoBackup() {
+        try {
+            const diagram = this.diagrams[this.currentDiagram] || { elements: [], groups: [] };
+            const payload = {
+                timestamp: Date.now(),
+                diagramId: this.currentDiagram,
+                diagram: {
+                    elements: diagram.elements || [],
+                    groups: diagram.groups || [],
+                    // do not persist selection
+                },
+                viewZoom: this.viewZoom,
+                canvasOffsetX: this.canvasOffsetX,
+                canvasOffsetY: this.canvasOffsetY
+            };
+            localStorage.setItem('uml_drawer_autosave_v1', JSON.stringify(payload));
+        } catch (err) {
+            console.warn('自动保存失败', err);
+        }
+    }
+
+    loadAutoBackup() {
+        try {
+            const raw = localStorage.getItem('uml_drawer_autosave_v1');
+            if (!raw) return;
+            const parsed = JSON.parse(raw);
+            if (!parsed || !parsed.diagram) return;
+
+            const current = this.diagrams[this.currentDiagram] || { elements: [] };
+            const hasCurrentData = Array.isArray(current.elements) && current.elements.length > 0;
+
+            // Ask the user whether to restore only if current canvas is empty or they agree to overwrite
+            const message = hasCurrentData ? '检测到浏览器中的未保存编辑记录，是否覆盖当前画布并恢复上次编辑？' : '检测到未保存的编辑记录，是否恢复上次编辑？';
+            if (confirm(message)) {
+                this.diagrams[parsed.diagramId] = this.diagrams[parsed.diagramId] || { elements: [], selectedElements: [], groups: [] };
+                this.diagrams[parsed.diagramId].elements = parsed.diagram.elements || [];
+                this.diagrams[parsed.diagramId].groups = parsed.diagram.groups || [];
+                this.viewZoom = parsed.viewZoom || 1;
+                this.canvasOffsetX = parsed.canvasOffsetX || 0;
+                this.canvasOffsetY = parsed.canvasOffsetY || 0;
+                this.render();
+                alert('已从缓存恢复编辑内容。');
+            }
+        } catch (err) {
+            console.warn('恢复自动保存失败', err);
+        }
     }
 
     deleteCustomShape(shapeId) {

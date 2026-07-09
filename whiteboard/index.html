@@ -196,6 +196,11 @@
                         <button id="create-custom-shape" class="create-custom-shape-btn" aria-label="将当前选中元素组合并保存为自定义图形">组合为图形</button>
                         <button id="ungroup-shape" class="ungroup-shape-btn" aria-label="拆分当前选中的组合图形">拆分图形</button>
                     </div>
+                    <div style="display:flex; gap:8px; margin-bottom:8px;">
+                        <button id="download-shapes" class="create-custom-shape-btn" aria-label="下载自定义图形">下载图形</button>
+                        <button id="import-shapes" class="ungroup-shape-btn" aria-label="导入自定义图形">导入图形</button>
+                        <input id="import-shapes-input" type="file" accept="application/json" style="display:none" />
+                    </div>
                     <div id="custom-shapes-list" class="custom-shapes-list" role="group" aria-label="自定义图形列表"></div>
                 </div>
                 <div class="tool-group">
