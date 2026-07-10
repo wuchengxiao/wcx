@@ -55,10 +55,28 @@ body {
     gap: 6px;
 }
 
+.header-main-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
 .header-main-title {
     display: flex;
     align-items: center;
     gap: 10px;
+}
+
+.header-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.ai-assistant-trigger {
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .app-header .logo {

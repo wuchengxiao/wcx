@@ -1229,7 +1229,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================
-    // 6. 初始渲染引导运行
+    // 6. AI 协助事件监听
+    // ==========================================
+    window.addEventListener('ai-assistant-action', (e) => {
+        if (e.detail && e.detail.action === 'refresh') {
+            refreshAll();
+        }
+    });
+
+    // ==========================================
+    // 7. 初始渲染引导运行
     // ==========================================
     refreshAll();
 });

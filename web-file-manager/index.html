@@ -60,9 +60,16 @@
     <div class="app-container">
         <!-- 头部标题栏 -->
         <header class="app-header">
-            <div class="header-main-title">
-                <span class="logo">📂</span>
-                <h1>临时文本文件在线管理器 <span class="badge">Web-FS v1.0</span></h1>
+            <div class="header-main-row">
+                <div class="header-main-title">
+                    <span class="logo">📂</span>
+                    <h1>临时文本文件在线管理器 <span class="badge">Web-FS v1.0</span></h1>
+                </div>
+                <div class="header-actions">
+                    <button id="btn-ai-assistant" class="btn btn-primary ai-assistant-trigger" onclick="window.openAIAssistant()">
+                        🤖 AI 协助
+                    </button>
+                </div>
             </div>
             <p class="subtitle">完全运行于浏览器的文本存储、编辑集成套件。支持本地拖拽、多格式预览、批删和打包 ZIP 下载。</p>
         </header>
@@ -297,6 +304,12 @@
     
     <!-- 引入独立文件操作系统 -->
     <script src="fileService.js"></script>
+    
+    <!-- 引入 AI API 请求模块 -->
+    <script src="requestText.js"></script>
+    
+    <!-- 引入 AI 协助模块 -->
+    <script src="aiAssistant.js"></script>
     
     <!-- 引入 UI 与页面交互逻辑 -->
     <script src="app.js"></script>
