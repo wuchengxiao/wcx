@@ -36,13 +36,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const checkboxSelectAll = document.getElementById('checkbox-select-all');
     const filesListBody = document.getElementById('files-list-body');
 
+    // 新增：获取文件夹下拉框和创建按钮
+    const newFileParentSelect = document.getElementById('new-fileparent');
+    const btnCreateFolder = document.getElementById('btn-create-folder');
+    const currentFolderPathDisplay = document.getElementById('current-folder-path');
+
     const editorPlaceholder = document.getElementById('editor-placeholder');
     const editorWorkspace = document.getElementById('editor-workspace');
     const activeFileStatus = document.getElementById('active-file-status');
-    const activeFilename = document.getElementById('active-filename');
+    const activeFilename = document.getElementById('active-filename');        // ✅ 修正 ID
     const activeFileExt = document.getElementById('active-file-ext');
     const activeFileCreated = document.getElementById('active-file-created');
-    const activeFileUpdated = document.getElementById('active-file-updated');
+    const activeFileUpdated = document.getElementById('active-file-updated'); // ✅ 修正 ID
 
     const lineFilterControl = document.getElementById('line-filter-control');
     const inputLineStart = document.getElementById('line-start');
@@ -265,7 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (files.length === 0) {
             filesListBody.innerHTML = `
                 <tr>
-                    <td colspan="5" class="empty-placeholder">
+                    <td colspan="6" class="empty-placeholder">
                         ${searchKeyword.value.trim() ? '🔍 未找到与关键字匹配的临时文件。' : '📭 目前没有任何临时文件，请在上方输入或拖入文件创建。'}
                     </td>
                 </tr>
@@ -283,18 +288,22 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const trChecked = selectedIds.has(file.id);
-            const formattedTime = formatTime(file.createdAt);
+            const formattedUpdatedAt = formatTimeDetail(file.updatedAt);
 
             tr.innerHTML = `
                 <td class="txt-center">
                     <input type="checkbox" class="file-item-checkbox" data-id="${file.id}" ${trChecked ? 'checked' : ''} />
                 </td>
                 <td class="file-name-cell" title="${file.name}">
+                    <span class="tree-icon" style="display: inline-block; width: 20px; text-align: center; font-size: 16px;">
+                        ${file.isFolder ? '📁' : ''}
+                    </span>
+                    <span class="tree-indent" style="display: inline-block; width: ${getTreeIndent(file.path)}px; margin-right: 8px;"></span>
                     <span class="file-icon">${getFileEmoji(file.extension)}</span>
                     <span class="file-name-text">${escapeHtml(file.name)}</span>
                 </td>
                 <td><span class="badge badge-ext">${file.extension}</span></td>
-                <td class="time-col" title="${file.createdAt}">${formattedTime}</td>
+                <td class="time-col" title="${file.updatedAt}">${formattedUpdatedAt}</td>
                 <td class="action-cell txt-center">
                     <button class="btn-action btn-view" title="在线查看" data-id="${file.id}">👁️ 查看</button>
                     <button class="btn-action btn-edit" title="在线编辑" data-id="${file.id}">📝 编辑</button>
@@ -403,6 +412,7 @@ document.addEventListener('DOMContentLoaded', () => {
         powerToolsPanel.classList.add('d-none');
         btnTogglePowerTools.classList.remove('btn-primary');
         btnTogglePowerTools.classList.add('btn-outline');
+        updateMaximizedEditToolbar();
     }
 
     /**
@@ -599,6 +609,69 @@ document.addEventListener('DOMContentLoaded', () => {
         const keyword = searchKeyword.value;
         const filteredFiles = window.FileService.searchFiles(keyword);
         renderFileList(filteredFiles);
+        
+        // 更新文件夹下拉框中的选项
+        updateFolderSelectOptions();
+    }
+
+    /**
+     * 生成树状结构的缩进空间
+     * @param {string} path - 文件的完整路径
+     * @returns {number} - 缩进的空格数
+     */
+    function getTreeIndent(path) {
+        if (!path || path === '') return 0;
+        const parts = path.split('/');
+        return (parts.length - 1) * 24; // 每层缩进 24px
+    }
+
+    /**
+     * 更新文件夹下拉框选项
+     */
+    function updateFolderSelectOptions() {
+        const allFiles = window.FileService.getAllFiles();
+        // 获取所有文件夹
+        const folders = allFiles.filter(f => f.isFolder);
+        
+        // 清空下拉框
+        newFileParentSelect.innerHTML = '<option value="">📂 根目录</option>';
+        
+        // 添加文件夹选项
+        folders.forEach(folder => {
+            const option = document.createElement('option');
+            option.value = folder.path;
+            option.textContent = '📁 ' + folder.name;
+            newFileParentSelect.appendChild(option);
+        });
+    }
+
+    /**
+     * 创建文件夹
+     */
+    function handleCreateFolder() {
+        // 获取文件夹名称（这里简化处理，直接提示用户在对话框中输入，实际可以使用自定义模态框）
+        const folderName = prompt('请输入文件夹名称：');
+        if (!folderName || folderName.trim() === '') {
+            alertFeedback(false, '文件夹名称不能为空！');
+            return;
+        }
+
+        // 获取当前选中的父文件夹路径（如果下拉框有值）
+        const parentPath = newFileParentSelect.value || '';
+        
+        const res = window.FileService.createFolder(folderName, parentPath);
+        alertFeedback(res.success, res.message);
+
+        if (res.success && res.folder) {
+            // 刷新列表
+            refreshAll();
+            // 如果有父路径，高亮显示父路径
+            if (parentPath) {
+                currentFolderPathDisplay.textContent = parentPath + '/' + folderName;
+            } else {
+                currentFolderPathDisplay.textContent = folderName;
+            }
+        }
     }
 
     // ==========================================
@@ -775,7 +848,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * 独立保存已编辑好的文件
      */
     btnSaveContent.addEventListener('click', () => {
-        saveActiveFile({ source: 'manual', showToast: true, stayInEditMode: false, skipIfUnchanged: false });
+        saveActiveFile({ source: 'manual', showToast: true, stayInEditMode: true, skipIfUnchanged: false });
     });
 
     /**
@@ -936,7 +1009,7 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     btnApplyPrefixSuffix.addEventListener('click', () => {
         if (!isEditing) {
-            alertFeedback(false, '❌ 无法编辑！当前处于【只读查看模式】，请点击左下角“进入编辑模式”。');
+            alertFeedback(false, '❌ 无法编辑！当前处于【只读查看模式】，请点击左下角"进入编辑模式"。');
             return;
         }
 
@@ -973,7 +1046,7 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     btnApplyNumbering.addEventListener('click', () => {
         if (!isEditing) {
-            alertFeedback(false, '❌ 无法编辑！当前处于【只读查看模式】，请开启“页面编辑”。');
+            alertFeedback(false, '❌ 无法编辑！当前处于【只读查看模式】，请开启"页面编辑"。');
             return;
         }
 
@@ -1029,7 +1102,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 findRegex = new RegExp(findVal, flags);
             } else {
                 // 安全转义普通搜索词
-                const escapedFind = findVal.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                const escapedFind = findVal.replace(/[-\\/\\^$*+?.()|[\]{}]/g, '\\$&');
                 const flags = isCaseSensitive ? 'g' : 'gi';
                 findRegex = new RegExp(escapedFind, flags);
             }
@@ -1238,7 +1311,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ==========================================
-    // 7. 初始渲染引导运行
+    // 7. 创建文件夹按钮事件绑定
     // ==========================================
+    btnCreateFolder.addEventListener('click', handleCreateFolder);
+
+    // ==========================================
+    // 8. 初始渲染引导运行
+    // ==========================================
+
+    // 初始化文件夹下拉框
+    updateFolderSelectOptions();
+
+    // 初始刷新列表
     refreshAll();
 });

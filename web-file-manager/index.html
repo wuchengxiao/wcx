@@ -1,317 +1,327 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>临时文本文件在线管理器 - 浏览器端轻量级 Web 文件管理与编辑工具</title>
-    
-    <!-- 搜索引擎优化 (SEO) 核心元数据 -->
-    <meta name="description" content="一个纯浏览器端运行的临时文本文件在线管理器和编辑器。支持新建及管理 .md, .js, .css, .html 等多种文本格式，具备拖拽导入、批量删除、打包成 ZIP 点击下载，以及任意行范围截取查看的特色功能。无须后端配置，保障数据隐私。">
-    <meta name="keywords" content="网页文件管理器, 在线编辑器, 临时文本工具, 拖拽文件上传, ZIP打包下载, Web-FS, 代码编辑器, 浏览器存储">
-    <meta name="author" content="GitHub Copilot">
-    <meta name="robots" content="index, follow">
-    
-    <!-- 社交媒体/分享 Open Graph 协议优化 (WeChat, Weibo, Facebook 等) -->
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="临时文本文件在线管理器 - 浏览器端轻量级 Web 文件管理与编辑工具">
-    <meta property="og:description" content="完全运行于浏览器本地的安全临时文件工具，支持拖拽导入、全屏沉浸编辑、智能分行查看和 ZIP 打包。页面清爽，一站式解决临时数据管理。">
-    <meta property="og:image" content="https://raw.githubusercontent.com/favicon.ico">
-    <meta property="og:site_name" content="Web-FS File Manager">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>临时文本文件在线管理器 - 浏览器端轻量级 Web 文件管理与编辑工具</title>
 
-    <!-- Twitter 社交卡片优化 -->
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="临时文本文件在线管理器 - 浏览器端 Web 文件编辑工具">
-    <meta name="twitter:description" content="无需任何服务器，在浏览器本地管理并编辑 .txt, .md, .js, .css 等文本，提供 ZIP 打包与批量删除，隐私安全，开箱即用。">
+<!-- 搜索引擎优化 (SEO) 核心元数据 -->
+<meta name="description" content="一个纯浏览器端运行的临时文本文件在线管理器和编辑器。支持新建及管理 .md, .js, .css, .html 等多种文本格式，具备拖拽导入、批量删除、打包成 ZIP 点击下载，以及任意行范围截取查看的特色功能。无须后端配置，保障数据隐私。">
+<meta name="keywords" content="网页文件管理器, 在线编辑器, 临时文本工具, 拖拽文件上传, ZIP打包下载, Web-FS, 代码编辑器, 浏览器存储">
+<meta name="author" content="GitHub Copilot">
+<meta name="robots" content="index, follow">
 
-    <!-- 谷歌结构化数据标记 (JSON-LD) - 提高搜索结果切片展示率 -->
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "WebApplication",
-      "name": "临时文本文件在线管理器",
-      "alternateName": "Web-FS",
-      "description": "基于 HTML5 的浏览器端临时文本文件管理与在线编辑集成套件。支持本地拖拽、多格式预览、批删和打包 ZIP 下载等全套离线文件管理能力。",
-      "applicationCategory": "UtilityApplication",
-      "operatingSystem": "All",
-      "browserRequirements": "Requires HTML5 compatible browser.",
-      "features": [
-        "浏览器本地持久化 LocalStorage 存储",
-        "多种常见文本文件格式创建与查看 (.txt, .md, .js, .css, .html)",
-        "拖拽拖放多个本地文本一键合并导入",
-        "双重沉浸式全屏放大编辑和复原大小",
-        "按行段查看高阶文本过滤检索",
-        "多选批量导出打包 ZIP 归档"
-      ],
-      "author": {
-        "@type": "Organization",
-        "name": "GitHub Copilot"
-      }
-    }
-    </script>
+<!-- 社交媒体/分享 Open Graph 协议优化 (WeChat, Weibo, Facebook 等) -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="临时文本文件在线管理器 - 浏览器端轻量级 Web 文件管理与编辑工具">
+<meta property="og:description" content="完全运行于浏览器本地的安全临时文件工具，支持拖拽导入、全屏沉浸编辑、智能分行查看和 ZIP 打包。页面清爽，一站式解决临时数据管理。">
+<meta property="og:image" content="https://raw.githubusercontent.com/favicon.ico">
+<meta property="og:site_name" content="Web-FS File Manager">
 
-    <!-- 性能与图标配置 -->
-    <link rel="canonical" href="./index.html">
-    <link rel="shortcut icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📂</text></svg>">
-    
-    <!-- 引入简洁明快的通用样式 -->
-    <link rel="stylesheet" href="style.css">
+<!-- Twitter 社交卡片优化 -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="临时文本文件在线管理器 - 浏览器端 Web 文件编辑工具">
+<meta name="twitter:description" content="无需任何服务器，在浏览器本地管理并编辑 .txt, .md, .js, .css 等文本，提供 ZIP 打包与批量删除，隐私安全，开箱即用。">
+
+<!-- 谷歌结构化数据标记 (JSON-LD) - 提高搜索结果切片展示率 -->
+<script type="application/ld+json">
+{
+"@context": "https://schema.org",
+"@type": "WebApplication",
+"name": "临时文本文件在线管理器",
+"alternateName": "Web-FS",
+"description": "基于 HTML5 的浏览器端临时文本文件管理与在线编辑集成套件。支持本地拖拽、多格式预览、批删和打包 ZIP 下载等全套离线文件管理能力。",
+"applicationCategory": "UtilityApplication",
+"operatingSystem": "All",
+"browserRequirements": "Requires HTML5 compatible browser.",
+"features": [
+"浏览器本地持久化 LocalStorage 存储",
+"多种常见文本文件格式创建与查看 (.txt, .md, .js, .css, .html)",
+"拖拽拖放多个本地文本一键合并导入",
+"双重沉浸式全屏放大编辑和复原大小",
+"按行段查看高阶文本过滤检索",
+"多选批量导出打包 ZIP 归档",
+"文件夹管理与文件归类"
+],
+"author": {
+"@type": "Organization",
+"name": "GitHub Copilot"
+}
+}
+</script>
+
+<!-- 性能与图标配置 -->
+<link rel="canonical" href="./index.html">
+<link rel="shortcut icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📂</text></svg>">
+
+<!-- 引入简洁明快的通用样式 -->
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="app-container">
-        <!-- 头部标题栏 -->
-        <header class="app-header">
-            <div class="header-main-row">
-                <div class="header-main-title">
-                    <span class="logo">📂</span>
-                    <h1>临时文本文件在线管理器 <span class="badge">Web-FS v1.0</span></h1>
-                </div>
-                <div class="header-actions">
-                    <button id="btn-ai-assistant" class="btn btn-primary ai-assistant-trigger" onclick="window.openAIAssistant()">
-                        🤖 AI 协助
-                    </button>
-                </div>
-            </div>
-            <p class="subtitle">完全运行于浏览器的文本存储、编辑集成套件。支持本地拖拽、多格式预览、批删和打包 ZIP 下载。</p>
-        </header>
+<div class="app-container">
+<!-- 头部标题栏 -->
+<header class="app-header">
+<div class="header-main-row">
+<div class="header-main-title">
+<span class="logo">📂</span>
+<h1>临时文本文件在线管理器 <span class="badge">Web-FS v1.0</span></h1>
+</div>
+<div class="header-actions">
+<button id="btn-ai-assistant" class="btn btn-primary ai-assistant-trigger" onclick="window.openAIAssistant()">
+🤖 AI 协助
+</button>
+</div>
+</div>
+<p class="subtitle">完全运行于浏览器的文本存储、编辑集成套件。支持本地拖拽、多格式预览、批删和打包 ZIP 下载。</p>
+</header>
 
-        <!-- 第一部分：顶部控制与操作区 -->
-        <section class="control-box card">
-            <div class="section-title">✨ 新建临时文件 & 拖拽导入区</div>
-            <div class="create-form">
-                <div class="form-row">
-                    <div class="form-group flex-1">
-                        <label for="new-filename">文件名 (包含扩展名，如 memo.md, style.css)</label>
-                        <input type="text" id="new-filename" placeholder="例如: code.js, style.css, note.md (不写扩展名默认补全为 .txt)" />
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group flex-1" id="new-filecontent-container">
-                        <div class="expand-header-row">
-                            <label for="new-filecontent">初始文件内容 (可选)</label>
-                            <button id="btn-toggle-new-expand" type="button" class="btn btn-xs btn-outline" style="margin-bottom: 4px;">🔍 放大编辑</button>
-                        </div>
-                        <textarea id="new-filecontent" rows="3" placeholder="请输入临时文件的初始文本内容..."></textarea>
-                    </div>
-                </div>
-                <button id="btn-create-file" class="btn btn-primary">➕ 立即创建文件</button>
-            </div>
+<!-- 第一部分：顶部控制与操作区 -->
+<section class="control-box card">
+<div class="section-title">✨ 新建临时文件 & 拖拽导入区</div>
+<div class="create-form">
+<div class="form-row">
+<div class="form-group flex-1">
+<label for="new-filename">文件名 (包含扩展名，如 memo.md, style.css)</label>
+<input type="text" id="new-filename" placeholder="例如: code.js, style.css, note.md (不写扩展名默认补全为 .txt)" />
+</div>
+<div class="form-group" style="flex: 0 0 200px;">
+<label for="new-fileparent">创建在 (可选)</label>
+<select id="new-fileparent">
+<option value="">📂 根目录</option>
+</select>
+</div>
+</div>
+<div class="form-row">
+<div class="form-group flex-1" id="new-filecontent-container">
+<div class="expand-header-row">
+<label for="new-filecontent">初始文件内容 (可选)</label>
+<button id="btn-toggle-new-expand" type="button" class="btn btn-xs btn-outline" style="margin-bottom: 4px;">🔍 放大编辑</button>
+</div>
+<textarea id="new-filecontent" rows="3" placeholder="请输入临时文件的初始文本内容..."></textarea>
+</div>
+</div>
+<button id="btn-create-file" class="btn btn-primary">➕ 立即创建文件</button>
+</div>
 
-            <!-- HTML5 拖拽事件触发区域 -->
-            <div id="drop-zone" class="drop-zone">
-                <div class="drop-content">
-                    <span class="drop-icon">📥</span>
-                    <p class="drop-text">👉 将电脑里的<b>多个文本文件</b>直接拖拽投放至此区域导入 👈</p>
-                    <span class="drop-subtext">支持类型: .txt, .md, .js, .css, .html, .json, .xml 等 (不支持非文本格式)</span>
-                </div>
-            </div>
-        </section>
+<!-- HTML5 拖拽事件触发区域 -->
+<div id="drop-zone" class="drop-zone">
+<div class="drop-content">
+<span class="drop-icon">📥</span>
+<p class="drop-text">👉 将电脑里的<b>多个文本文件</b>直接拖拽投放至此区域导入 👈</p>
+<span class="drop-subtext">支持类型: .txt, .md, .js, .css, .html, .json, .xml 等 (不支持非文本格式)</span>
+</div>
+</div>
+</section>
 
-        <!-- 第二部分：搜索检索与批量管理框 -->
-        <section class="action-bar card">
-            <div class="search-form">
-                <div class="form-group flex-1 no-margin">
-                    <input type="text" id="search-keyword" placeholder="🔍 输入关键字检索文件名或文件内容... (支持实时过滤)" />
-                </div>
-                <button id="btn-search" class="btn btn-secondary">查询</button>
-                <button id="btn-reset-search" class="btn btn-light">重置</button>
-            </div>
-            
-            <div class="bulk-actions">
-                <span class="selected-count-label">已选中: <strong id="selected-count">0</strong> 个文件</span>
-                <button id="btn-bulk-download" class="btn btn-success" disabled>📦 批量打包下载 (ZIP)</button>
-                <button id="btn-bulk-delete" class="btn btn-danger" disabled>🗑️ 批量多选删除</button>
-            </div>
-        </section>
+<!-- 第二部分：搜索检索与批量管理框 -->
+<section class="action-bar card">
+<div class="search-form">
+<div class="form-group flex-1 no-margin">
+<input type="text" id="search-keyword" placeholder="🔍 输入关键字检索文件名或文件内容... (支持实时过滤)" />
+</div>
+<button id="btn-search" class="btn btn-secondary">查询</button>
+<button id="btn-reset-search" class="btn btn-light">重置</button>
+</div>
 
-        <!-- 第三部分：核心展示与编辑视图 - 采用左右双栏 -->
-        <main class="main-workspace">
-            <!-- 左栏：文件列表卡片 -->
-            <section class="left-panel card">
-                <div class="panel-header">
-                    <h2>📋 临时文件列表 (<span id="total-files-count">0</span>)</h2>
-                    <label class="select-all-label">
-                        <input type="checkbox" id="checkbox-select-all" /> 全选
-                    </label>
-                </div>
-                <div class="table-container">
-                    <table class="files-table">
-                        <thead>
-                            <tr>
-                                <th width="40" class="txt-center">选择</th>
-                                <th>文件名</th>
-                                <th width="85">类型</th>
-                                <th width="110">创建时间</th>
-                                <th width="150" class="txt-center">主要操作</th>
-                            </tr>
-                        </thead>
-                        <tbody id="files-list-body">
-                            <!-- JS 动态渲染文件列表项 -->
-                            <tr>
-                                <td colspan="5" class="empty-placeholder">
-                                    📭 目前没有任何临时文件，请在上方输入或拖入文件创建。
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+<div class="bulk-actions">
+<span class="selected-count-label">已选中: <strong id="selected-count">0</strong> 个文件</span>
+<button id="btn-bulk-download" class="btn btn-success" disabled>📦 批量打包下载 (ZIP)</button>
+<button id="btn-bulk-delete" class="btn btn-danger" disabled>🗑️ 批量多选删除</button>
+</div>
+</section>
 
-            <!-- 右栏：内容查看、按行段查看及在线编辑 -->
-            <section class="right-panel card">
-                <div class="panel-header">
-                    <h2>🖥️ 在线查看与编辑区</h2>
-                    <span id="active-file-status" class="file-status-label status-idle">当前无活跃文件</span>
-                </div>
+<!-- 第三部分：核心展示与编辑视图 - 采用左右双栏 -->
+<main class="main-workspace">
+<!-- 左栏：文件列表卡片 -->
+<section class="left-panel card">
+<div class="panel-header">
+<div style="flex: 1; display: flex; align-items: center; gap: 10px;">
+<h2>📁 <span id="current-folder-path">根目录</span> (<span id="total-files-count">0</span>)</h2>
+<button id="btn-create-folder" class="btn btn-xs btn-primary">➕ 创建文件夹</button>
+</div>
+<label class="select-all-label">
+<input type="checkbox" id="checkbox-select-all" /> 全选
+</label>
+</div>
+<div class="table-container">
+<table class="files-table">
+<thead>
+<tr>
+<th width="40" class="txt-center">选择</th>
+<th>名称</th>
+<th width="85">类型</th>
+<th width="110">创建时间</th>
+<th width="150" class="txt-center">操作</th>
+</tr>
+</thead>
+<tbody id="files-list-body">
+<!-- JS 动态渲染文件列表项 -->
+<tr>
+<td colspan="5" class="empty-placeholder">
+📭 当前目录下暂无文件，请点击上方按钮创建或导入。
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
 
-                <!-- 默认空白无活跃文件时的占位块 -->
-                <div id="editor-placeholder" class="editor-placeholder">
-                    <p>💡 请在左侧列表中点击 <b>「 👁️ 查看 」</b> 或 <b>「 📝 编辑 」</b> 按钮展开对应文本进行操作。</p>
-                    <p class="small">提示：已在此卡片中新增“部分行查看”能力，您可以加载超大日志或文本文件的特定段落！</p>
-                </div>
+<!-- 右栏：内容查看、按行段查看及在线编辑 -->
+<section class="right-panel card">
+<div class="panel-header">
+<h2>🖥️ 在线查看与编辑区</h2>
+<span id="active-file-status" class="file-status-label status-idle">当前无活跃文件</span>
+</div>
 
-                <!-- 活跃工作查看编辑视图 -->
-                <div id="editor-workspace" class="editor-workspace d-none">
-                    <div class="active-file-meta">
-                        <div class="meta-row">
-                            <span class="label">当前文件:</span>
-                            <strong id="active-filename" class="text-primary">none</strong>
-                            <span class="badge" id="active-file-ext">txt</span>
-                        </div>
-                        <div class="meta-row info-small">
-                            <span>📅 创建时间: <span id="active-file-created">-</span></span>
-                            <span>⏱️ 上次修改: <span id="active-file-updated">-</span></span>
-                        </div>
-                    </div>
+<!-- 默认空白无活跃文件时的占位块 -->
+<div id="editor-placeholder" class="editor-placeholder">
+<p>💡 请在左侧列表中点击 <b>「 👁️ 查看 」</b> 或 <b>「 📝 编辑 」</b> 按钮展开对应文本进行操作。</p>
+<p class="small">提示：已在此卡片中新增"部分行查看"能力，您可以加载超大日志或文本文件的特定段落！</p>
+</div>
 
-                    <!-- 指定行过滤输入组件 (仅在查看模式只读下有效) -->
-                    <div id="line-filter-control" class="line-filter-control">
-                        <span class="filter-tip">🧩 按特定行过滤内容 (1-based):</span>
-                        <div class="filter-inputs">
-                            <input type="number" id="line-start" min="1" placeholder="起始行" />
-                            <span class="dash">至</span>
-                            <input type="number" id="line-end" min="1" placeholder="结束行" />
-                            <button id="btn-get-lines" class="btn btn-xs btn-outline">📌 获取特定行</button>
-                            <button id="btn-restore-full" class="btn btn-xs btn-light">显示全文</button>
-                        </div>
-                        <div id="line-filter-msg" class="line-filter-msg text-muted"></div>
-                    </div>
+<!-- 活跃工作查看编辑视图 -->
+<div id="editor-workspace" class="editor-workspace d-none">
+<div class="active-file-meta">
+<div class="meta-row">
+<span class="label">当前文件:</span>
+<strong id="active-filename" class="text-primary">none</strong>
+<span class="badge" id="active-file-ext">txt</span>
+</div>
+<div class="meta-row info-small">
+<span>📅 创建时间: <span id="active-file-created">-</span></span>
+<span>⏱️ 上次修改: <span id="active-file-updated">-</span></span>
+</div>
+</div>
 
-                    <!-- 文件编辑器多行文本输入框 -->
-                    <div class="text-area-wrapper-container" id="active-editor-container">
-                        <div class="text-area-wrapper-header">
-                            <span class="editor-sub-label">文件内容:</span>
-                            <div class="expand-control-btns">
-                                <div id="maximized-edit-toolbar" class="maximized-edit-toolbar d-none">
-                                  <label class="autosave-toggle-label" for="autosave-toggle">
-                                      <input type="checkbox" id="autosave-toggle" />
-                                      <span>自动保存</span>
-                                  </label>
-                                  <span id="save-status-indicator" class="save-status-indicator status-idle">尚未保存</span>
-                                  <button id="btn-toolbar-save" type="button" class="btn btn-xs btn-primary">💾 保存</button>
-                               </div>
-                                <button id="btn-toggle-power-tools" type="button" class="btn btn-xs btn-outline">🛠️ Notepad++ 高级编辑包</button>
-                                <button id="btn-toggle-active-expand" type="button" class="btn btn-xs btn-outline">🔍 放大编辑</button>
-                            </div>
-                        </div>
+<!-- 指定行过滤输入组件 (仅在查看模式只读下有效) -->
+<div id="line-filter-control" class="line-filter-control">
+<span class="filter-tip">🧩 按特定行过滤内容 (1-based):</span>
+<div class="filter-inputs">
+<input type="number" id="line-start" min="1" placeholder="起始行" />
+<span class="dash">至</span>
+<input type="number" id="line-end" min="1" placeholder="结束行" />
+<button id="btn-get-lines" class="btn btn-xs btn-outline">📌 获取特定行</button>
+<button id="btn-restore-full" class="btn btn-xs btn-light">显示全文</button>
+</div>
+<div id="line-filter-msg" class="line-filter-msg text-muted"></div>
+</div>
 
-                        <!-- 🛠️ Notepad++ 专享极简高效栏操作面板 -->
-                        <div id="power-tools-panel" class="power-tools-panel d-none">
-                            <div class="pt-section">
-                                <span class="pt-title">�️ 语言高亮语法选择 (Notepad++ 核心)</span>
-                                <div class="pt-row">
-                                    <select id="pt-language-select" class="pt-select">
-                                        <option value="text/plain">📄 纯文本 (Plain Text)</option>
-                                        <option value="javascript">💛 JavaScript</option>
-                                        <option value="css">🎨 CSS</option>
-                                        <option value="markdown">📝 Markdown (.md)</option>
-                                        <option value="htmlmixed">🌐 HTML</option>
-                                    </select>
-                                    <span class="pt-small-label text-muted" style="font-size: 10px;">选择后智能切换对应关键字着色</span>
-                                </div>
-                                <div class="pt-divider-hm" style="margin: 8px 0; height: 1px; background-color: var(--border-color); width: 100%;"></div>
-                                <span class="pt-title">�📝 Notepad++ 多行编辑器 (作用于所选行/全文)</span>
-                                <div class="pt-row">
-                                    <input type="text" id="pt-multi-prefix" placeholder="前缀(如 //, - )" />
-                                    <input type="text" id="pt-multi-suffix" placeholder="后缀(如 ;, \\)" />
-                                    <button id="btn-apply-prefix-suffix" class="btn btn-xs btn-primary">⚡ 插入字符</button>
-                                </div>
-                                <div class="pt-row" style="margin-top: 5px;">
-                                    <span class="pt-small-label">序号:</span>
-                                    <input type="number" id="pt-num-start" value="1" placeholder="起点" style="width: 55px;" />
-                                    <input type="number" id="pt-num-step" value="1" placeholder="步长" style="width: 55px;" />
-                                    <input type="text" id="pt-num-format" value=". " placeholder="分符" style="width: 55px;" />
-                                    <button id="btn-apply-numbering" class="btn btn-xs btn-primary">⚡ 插入数字</button>
-                                </div>
-                            </div>
-                            <div class="pt-divider"></div>
-                            <div class="pt-section">
-                                <span class="pt-title">🔍 批量检索与替换</span>
-                                <div class="pt-row">
-                                    <input type="text" id="pt-find-str" placeholder="查找文本" />
-                                    <input type="text" id="pt-replace-str" placeholder="替换新文本" />
-                                    <button id="btn-replace-all" class="btn btn-xs btn-success">🔁 全部替换</button>
-                                </div>
-                                <div class="pt-row pt-options">
-                                    <label class="pt-checkbox-label">
-                                        <input type="checkbox" id="pt-case-sensitive" /> 区分大小写
-                                    </label>
-                                    <label class="pt-checkbox-label">
-                                        <input type="checkbox" id="pt-regex" /> 正则表达式 (RegEx)
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
+<!-- 文件编辑器多行文本输入框 -->
+<div class="text-area-wrapper-container" id="active-editor-container">
+<div class="text-area-wrapper-header">
+<span class="editor-sub-label">文件内容:</span>
+<div class="expand-control-btns">
+<div id="maximized-edit-toolbar" class="maximized-edit-toolbar d-none">
+<label class="autosave-toggle-label" for="autosave-toggle">
+<input type="checkbox" id="autosave-toggle" />
+<span>自动保存</span>
+</label>
+<span id="save-status-indicator" class="save-status-indicator status-idle">尚未保存</span>
+<button id="btn-toolbar-save" type="button" class="btn btn-xs btn-primary">💾 保存</button>
+</div>
+<button id="btn-toggle-power-tools" type="button" class="btn btn-xs btn-outline">🛠️ Notepad++ 高级编辑包</button>
+<button id="btn-toggle-active-expand" type="button" class="btn btn-xs btn-outline">🔍 放大编辑</button>
+</div>
+</div>
 
-                        <div class="text-area-wrapper text-area-main-container">
-                            <textarea id="active-editor-textarea" rows="15" placeholder="文件内容为空"></textarea>
-                        </div>
-                    </div>
+<!-- 🛠️ Notepad++ 专享极简高效栏操作面板 -->
+<div id="power-tools-panel" class="power-tools-panel d-none">
+<div class="pt-section">
+<span class="pt-title">🏷️ 语言高亮语法选择 (Notepad++ 核心)</span>
+<div class="pt-row">
+<select id="pt-language-select" class="pt-select">
+<option value="text/plain">📄 纯文本 (Plain Text)</option>
+<option value="javascript">💛 JavaScript</option>
+<option value="css">🎨 CSS</option>
+<option value="markdown">📝 Markdown (.md)</option>
+<option value="htmlmixed">🌐 HTML</option>
+</select>
+<span class="pt-small-label text-muted" style="font-size: 10px;">选择后智能切换对应关键字着色</span>
+</div>
+<div class="pt-divider-hm" style="margin: 8px 0; height: 1px; background-color: var(--border-color); width: 100%;"></div>
+<span class="pt-title">📝 Notepad++ 多行编辑器 (作用于所选行/全文)</span>
+<div class="pt-row">
+<input type="text" id="pt-multi-prefix" placeholder="前缀(如 //, - )" />
+<input type="text" id="pt-multi-suffix" placeholder="后缀(如 ;, \\)" />
+<button id="btn-apply-prefix-suffix" class="btn btn-xs btn-primary">⚡ 插入字符</button>
+</div>
+<div class="pt-row" style="margin-top: 5px;">
+<span class="pt-small-label">序号:</span>
+<input type="number" id="pt-num-start" value="1" placeholder="起点" style="width: 55px;" />
+<input type="number" id="pt-num-step" value="1" placeholder="步长" style="width: 55px;" />
+<input type="text" id="pt-num-format" value=". " placeholder="分符" style="width: 55px;" />
+<button id="btn-apply-numbering" class="btn btn-xs btn-primary">⚡ 插入数字</button>
+</div>
+</div>
+<div class="pt-divider"></div>
+<div class="pt-section">
+<span class="pt-title">🔍 批量检索与替换</span>
+<div class="pt-row">
+<input type="text" id="pt-find-str" placeholder="查找文本" />
+<input type="text" id="pt-replace-str" placeholder="替换新文本" />
+<button id="btn-replace-all" class="btn btn-xs btn-success">🔁 全部替换</button>
+</div>
+<div class="pt-row pt-options">
+<label class="pt-checkbox-label">
+<input type="checkbox" id="pt-case-sensitive" /> 区分大小写
+</label>
+<label class="pt-checkbox-label">
+<input type="checkbox" id="pt-regex" /> 正则表达式 (RegEx)
+</label>
+</div>
+</div>
+</div>
 
-                    <!-- 操作操作按键区 -->
-                    <div class="workspace-actions">
-                        <div class="view-mode-buttons" id="view-mode-actions">
-                            <button id="btn-edit-mode" class="btn btn-warning">📝 进入编辑模式</button>
-                            <button id="btn-download-active" class="btn btn-success">📥 下载该文件</button>
-                        </div>
-                        <div class="edit-mode-buttons d-none" id="edit-mode-actions">
-                            <button id="btn-save-content" class="btn btn-primary">💾 保存修改内容</button>
-                            <button id="btn-cancel-edit" class="btn btn-light">❌ 取消</button>
-                        </div>
-                    </div>
-                </div>
-            </section>
-        </main>
+<div class="text-area-wrapper text-area-main-container">
+<textarea id="active-editor-textarea" rows="15" placeholder="文件内容为空"></textarea>
+</div>
+</div>
 
-        <footer class="app-footer-bar">
-            📊 数据持久化采用本地 LocalStorage · 带独立库压缩技术 · 2026 技术演示
-        </footer>
-    </div>
+<!-- 操作操作按键区 -->
+<div class="workspace-actions">
+<div class="view-mode-buttons" id="view-mode-actions">
+<button id="btn-edit-mode" class="btn btn-warning">📝 进入编辑模式</button>
+<button id="btn-download-active" class="btn btn-success">📥 下载该文件</button>
+</div>
+<div class="edit-mode-buttons d-none" id="edit-mode-actions">
+<button id="btn-save-content" class="btn btn-primary">💾 保存修改内容</button>
+<button id="btn-cancel-edit" class="btn btn-light">❌ 取消</button>
+</div>
+</div>
+</div>
+</section>
+</main>
 
-    <!-- 动态自动消失提示框容器 -->
-    <div id="toast-container" class="toast-container"></div>
+<footer class="app-footer-bar">
+📊 数据持久化采用本地 LocalStorage · 带独立库压缩技术 · 2026 技术演示
+</footer>
+</div>
 
-    <!-- 💡 核心：引入 CodeMirror 样式及核心库，实现 Notepad++ 语法的极致色彩高亮 -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/javascript/javascript.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/css/css.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/xml/xml.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/htmlmixed/htmlmixed.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/markdown/markdown.min.js"></script>
+<!-- 动态自动消失提示框容器 -->
+<div id="toast-container" class="toast-container"></div>
 
-    <!-- 💡 核心：引入 JSZip CDN，以便在前端完成多选批量 ZIP 压缩打包下载 -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    
-    <!-- 引入独立文件操作系统 -->
-    <script src="fileService.js"></script>
-    
-    <!-- 引入 AI API 请求模块 -->
-    <script src="requestText.js"></script>
-    
-    <!-- 引入 AI 协助模块 -->
-    <script src="aiAssistant.js"></script>
-    
-    <!-- 引入 UI 与页面交互逻辑 -->
-    <script src="app.js"></script>
+<!-- 💡 核心：引入 CodeMirror 样式及核心库，实现 Notepad++ 语法的极致色彩高亮 -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/css/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/htmlmixed/htmlmixed.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/markdown/markdown.min.js"></script>
+
+<!-- 💡 核心：引入 JSZip CDN，以便在前端完成多选批量 ZIP 压缩打包下载 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+<!-- 引入独立文件操作系统 -->
+<script src="fileService.js"></script>
+
+<!-- 引入 AI API 请求模块 -->
+<script src="requestText.js"></script>
+
+<!-- 引入 AI 协助模块 -->
+<script src="aiAssistant.js"></script>
+
+<!-- 引入 UI 与页面交互逻辑 -->
+<script src="app.js"></script>
 </body>
 </html>

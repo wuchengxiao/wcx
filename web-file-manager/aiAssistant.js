@@ -214,16 +214,17 @@ class AIAssistant {
                     display: none;
                 }
                 .ai-assistant-overlay.show {
-                    display: block;
+                    display: none;
                 }
                 .ai-assistant-dialog {
                     position: fixed;
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%);
+                    resize: auto;
+                    overflow: auto;
+                    top: 10px;
+                    left: 10px;
                     width: 90%;
-                    max-width: 700px;
-                    max-height: 80vh;
+                    max-width: calc(100vw - 35px);
+                    max-height: calc(100vh - 35px);
                     background: var(--bg-primary, #ffffff);
                     border-radius: 12px;
                     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
