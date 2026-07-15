@@ -10,7 +10,7 @@ const FILE_STORAGE_KEY = 'TEMP_FILE_MANAGER_FILES';
 // 允许编辑的常见文本文件类型扩展名集合
 const SUPPORTED_TEXT_EXTENSIONS = [
     'txt', 'md', 'js', 'css', 'html', 'json', 'xml', 
-    'ini', 'csv', 'py', 'java', 'ts', 'sh', 'yml', 'yaml', 'sql'
+    'ini', 'csv', 'ddl', 'env', 'bat', 'py', 'java', 'ts', 'sh', 'yml', 'yaml', 'sql'
 ];
 
 // 文件夹分隔符
@@ -64,7 +64,7 @@ function getAllFiles() {
                 id: 'default-1',
                 name: '欢迎阅读.md',
                 extension: 'md',
-                content: '# 网页轻量级文件管理系统\n\n这是一个完全在浏览器中运行的临时文件管理器！\n\n### 😉 特色功能：\n1. **持久化保存**：文件保存在 LocalStorage 中，页面刷新/关闭不会丢失。\n2. **多格式支持**：支持 .txt, .md, .js, .css, .html 等常见文本格式，非法格式（如图片、压缩包）会有贴心引导提示。\n3. **文件夹管理**：支持创建文件夹，将文件归类管理。不同文件夹下的文件可以同名。\n4. **打包下载**：勾选多个文件可以一键打包下载为 .zip 压缩包，文件夹结构会被保留。\n5. **按行检索**：支持查看文件的任意指定起止行数内容，非常适合阅读较长代码/日志！\n6. **多项联删**：支持多选框，批量删除无用文件。',
+                content: '# 网页轻量级文件管理系统\n\n这是一个完全在浏览器中运行的临时文件管理器！\n\n### 😉 特色功能：\n1. **持久化保存**：文件保存在 LocalStorage 中，页面刷新/关闭不会丢失。\n2. **多格式支持**：支持 .txt, .md, .js, .css, .html, .json, .xml, .csv, .ddl, .env, .bat 等常见文本格式，非法格式（如图片、压缩包）会有贴心引导提示。\n3. **文件夹管理**：支持创建文件夹，将文件归类管理。不同文件夹下的文件可以同名。\n4. **打包下载**：勾选多个文件可以一键打包下载为 .zip 压缩包，文件夹结构会被保留。\n5. **按行检索**：支持查看文件的任意指定起止行数内容，非常适合阅读较长代码/日志！\n6. **多项联删**：支持多选框，批量删除无用文件。',
                 path: '',
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString()

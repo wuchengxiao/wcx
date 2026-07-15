@@ -249,6 +249,11 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'md': return 'markdown';
             case 'html': return 'htmlmixed';
             case 'json': return 'javascript'; // json 能够复用 javascript mode
+            case 'sql': return 'sql';
+            case 'ddl': return 'sql';
+            case 'env': return 'properties';
+            case 'bat': return 'shell';
+            case 'csv': return 'text/plain';
             default: return 'text/plain';
         }
     }
@@ -1296,6 +1301,10 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'py': return '🐍';
             case 'java': return '☕';
             case 'sql': return '💾';
+            case 'ddl': return '🧾';
+            case 'csv': return '📑';
+            case 'env': return '🔑';
+            case 'bat': return '⚙️';
             case 'sh': return '🐚';
             default: return '📄';
         }
