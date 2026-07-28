@@ -9,7 +9,7 @@ const FILE_STORAGE_KEY = 'TEMP_FILE_MANAGER_FILES';
 
 // 允许编辑的常见文本文件类型扩展名集合
 const SUPPORTED_TEXT_EXTENSIONS = [
-    'txt', 'md', 'js', 'css', 'html', 'json', 'xml', 
+    'txt', 'md', 'js', 'css', 'html', 'json', 'xml', 'vue',
     'ini', 'csv', 'ddl', 'env', 'bat', 'py', 'java', 'ts', 'sh', 'yml', 'yaml', 'sql'
 ];
 
