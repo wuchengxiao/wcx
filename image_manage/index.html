@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片粘贴与编辑工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .editor-layout {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+        }
+        .left-panel {
+            width: 260px;
+            border: 1px solid #ddd;
+            background: #fff;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        .left-panel h3 {
+            margin: 0 0 10px;
+            font-size: 14px;
+        }
+        .image-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            max-height: 420px;
+            overflow: auto;
+        }
+        .image-list li {
+            border: 1px solid #ddd;
+            padding: 6px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }
+        .image-list li.drag-over {
+            border-color: #1677ff;
+            box-shadow: inset 0 0 0 1px #1677ff;
+        }
+        .image-list li.active {
+            border-color: #1677ff;
+            background: #eaf3ff;
+        }
+        .list-actions button {
+            margin: 0;
+            padding: 2px 6px;
+            font-size: 12px;
+        }
+        .right-panel {
+            flex: 1;
+        }
+        .image-container {
+            position: relative;
+            display: block;
+            gap: 10px;
+            margin-bottom: 20px;
+            min-height: 320px;
+            border: 1px dashed #ddd;
+            background: #fafafa;
+        }
+        .image-wrapper {
+            position: absolute;
+            border: 1px solid #ccc;
+            background: #fff;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            user-select: none;
+        }
+        .image-wrapper.active {
+            border: 2px solid #1677ff;
+        }
+        .image-wrapper img {
+            display: block;
+            cursor: default;
+        }
+        .drag-handle {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            right: 8px;
+            z-index: 5;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            background: rgba(243, 243, 243, 0.96);
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 6px 8px;
+            font-size: 12px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+        }
+        .image-wrapper:hover .drag-handle,
+        .image-wrapper.active .drag-handle {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .drag-title {
+            cursor: move;
+            padding: 2px 4px;
+            border-radius: 4px;
+        }
+        .drag-title:hover {
+            background: #e9e9e9;
+        }
+        .item-tools {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+        }
+        .zoom-input {
+            width: 56px;
+            padding: 2px 4px;
+            font-size: 12px;
+        }
+        .zoom-btn {
+            margin: 0;
+            padding: 2px 8px;
+            font-size: 12px;
+            line-height: 1.2;
+        }
+        .image-stage {
+            position: relative;
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+        .controls .active-tool {
+            background: #1677ff;
+            color: #fff;
+            border: 1px solid #1677ff;
+        }
+        button {
+            padding: 8px 12px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: auto;
+            cursor: crosshair;
+        }
+    </style>
+</head>
+<body>
+    <h1>图片粘贴与编辑工具</h1>
+    <div class="controls">
+        <button id="arrangeVertical">垂直排列</button>
+        <button id="arrangeHorizontal">水平排列</button>
+        <button id="selectTool">选择</button>
+        <button id="drawTool" class="active-tool">涂鸦</button>
+        <button id="eraseTool">擦除</button>
+        <button id="pasteBtn">粘贴</button>
+        <button id="deleteSelectedBtn">删除当前选中图片</button>
+        <button id="clearAll">清除所有</button>
+    </div>
+    <div class="container">
+        <div class="editor-layout">
+            <div class="left-panel">
+                <h3>图片列表（可调整顺序）</h3>
+                <ul id="imageList" class="image-list"></ul>
+            </div>
+            <div class="right-panel">
+                <div class="image-container" id="imageContainer"></div>
+            </div>
+        </div>
+        <div>
+            <p>粘贴图片到以下区域：</p>
+            <div id="pasteArea" tabindex="0" style="border: 2px dashed #ccc; padding: 20px; min-height: 100px;">
+                点击此处后粘贴图片 (Ctrl+V)
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const pasteArea = document.getElementById('pasteArea');
+            const imageContainer = document.getElementById('imageContainer');
+            const imageList = document.getElementById('imageList');
+            const arrangeVerticalBtn = document.getElementById('arrangeVertical');
+            const arrangeHorizontalBtn = document.getElementById('arrangeHorizontal');
+            const selectToolBtn = document.getElementById('selectTool');
+            const drawToolBtn = document.getElementById('drawTool');
+            const eraseToolBtn = document.getElementById('eraseTool');
+            const pasteBtn = document.getElementById('pasteBtn');
+            const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
+            const clearAllBtn = document.getElementById('clearAll');
+            let images = [];
+            let layoutMode = 'horizontal';
+            let zIndexSeed = 1;
+            let imageIdSeed = 1;
+            let activeTool = 'draw'; // 默认涂鸦
+            let isDrawing = false;
+            let currentItem = null;
+            let selectedItem = null;
+            let isDragging = false;
+            let dragState = null;
+            let selectCycle = { x: -1, y: -1, index: 0 };
+            let draggingListItemId = null;
+
+            function setTool(tool) {
+                activeTool = tool;
+                selectToolBtn.classList.toggle('active-tool', tool === 'select');
+                drawToolBtn.classList.toggle('active-tool', tool === 'draw');
+                eraseToolBtn.classList.toggle('active-tool', tool === 'erase');
+                images.forEach(item => {
+                    item.canvas.style.cursor = tool === 'draw' ? 'crosshair' : tool === 'erase' ? 'cell' : 'pointer';
+                });
+            }
+
+            selectToolBtn.addEventListener('click', () => setTool('select'));
+            drawToolBtn.addEventListener('click', () => setTool('draw'));
+            eraseToolBtn.addEventListener('click', () => setTool('erase'));
+            setTool('draw');
+
+            function setSelectedItem(item) {
+                selectedItem = item;
+                images.forEach(it => it.wrapper.classList.toggle('active', it === item));
+                renderImageList();
+            }
+
+            function renderImageList() {
+                imageList.innerHTML = '';
+                images.forEach((item, index) => {
+                    const li = document.createElement('li');
+                    li.draggable = true;
+                    li.dataset.itemId = String(item.id);
+                    if (item === selectedItem) li.classList.add('active');
+
+                    const title = document.createElement('span');
+                    title.textContent = item.name;
+
+                    const actions = document.createElement('div');
+                    actions.className = 'list-actions';
+
+                    const upBtn = document.createElement('button');
+                    upBtn.textContent = '↑';
+                    upBtn.title = '上移';
+                    upBtn.disabled = index === 0;
+                    upBtn.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        moveImage(index, -1);
+                    });
+
+                    const downBtn = document.createElement('button');
+                    downBtn.textContent = '↓';
+                    downBtn.title = '下移';
+                    downBtn.disabled = index === images.length - 1;
+                    downBtn.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        moveImage(index, 1);
+                    });
+
+                    actions.appendChild(upBtn);
+                    actions.appendChild(downBtn);
+                    li.appendChild(title);
+                    li.appendChild(actions);
+                    li.addEventListener('click', function() {
+                        bringToFront(item);
+                        setSelectedItem(item);
+                    });
+
+                    li.addEventListener('dragstart', function(e) {
+                        draggingListItemId = Number(li.dataset.itemId);
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', li.dataset.itemId);
+                    });
+
+                    li.addEventListener('dragover', function(e) {
+                        e.preventDefault();
+                        li.classList.add('drag-over');
+                        e.dataTransfer.dropEffect = 'move';
+                    });
+
+                    li.addEventListener('dragleave', function() {
+                        li.classList.remove('drag-over');
+                    });
+
+                    li.addEventListener('drop', function(e) {
+                        e.preventDefault();
+                        li.classList.remove('drag-over');
+                        const fromId = draggingListItemId;
+                        const toId = Number(li.dataset.itemId);
+                        if (!fromId || !toId || fromId === toId) return;
+
+                        const targetRect = li.getBoundingClientRect();
+                        const insertAfter = e.clientY > (targetRect.top + targetRect.height / 2);
+                        reorderImagesById(fromId, toId, insertAfter);
+                    });
+
+                    li.addEventListener('dragend', function() {
+                        draggingListItemId = null;
+                        Array.from(imageList.querySelectorAll('li.drag-over')).forEach(el => el.classList.remove('drag-over'));
+                    });
+
+                    imageList.appendChild(li);
+                });
+            }
+
+            function reorderImagesById(fromId, toId, insertAfter) {
+                const fromIndex = images.findIndex(it => it.id === fromId);
+                const toIndex = images.findIndex(it => it.id === toId);
+                if (fromIndex < 0 || toIndex < 0) return;
+
+                const moving = images.splice(fromIndex, 1)[0];
+                let targetIndex = images.findIndex(it => it.id === toId);
+                if (insertAfter) targetIndex += 1;
+                images.splice(targetIndex, 0, moving);
+
+                renderImageList();
+                if (layoutMode === 'vertical') arrangeVertical();
+                if (layoutMode === 'horizontal') arrangeHorizontal();
+            }
+
+            function moveImage(index, delta) {
+                const newIndex = index + delta;
+                if (newIndex < 0 || newIndex >= images.length) return;
+                const tmp = images[index];
+                images[index] = images[newIndex];
+                images[newIndex] = tmp;
+                renderImageList();
+                if (layoutMode === 'vertical') arrangeVertical();
+                if (layoutMode === 'horizontal') arrangeHorizontal();
+            }
+
+            // 监听粘贴事件
+            pasteArea.addEventListener('click', function() {
+                this.focus();
+            });
+
+            function handlePasteEvent(e) {
+                e.preventDefault();
+                const items = (e.clipboardData || window.clipboardData).items;
+                
+                for (let i = 0; i < items.length; i++) {
+                    if (items[i].type.indexOf('image') !== -1) {
+                        const blob = items[i].getAsFile();
+                        const reader = new FileReader();
+                        
+                        reader.onload = function(event) {
+                            addImageToContainer(event.target.result);
+                        };
+                        
+                        reader.readAsDataURL(blob);
+                        break;
+                    }
+                }
+            }
+
+            pasteArea.addEventListener('paste', handlePasteEvent);
+            document.addEventListener('paste', handlePasteEvent);
+
+            // 点击按钮粘贴：优先 Clipboard API，失败时回退到 Ctrl+V 引导
+            pasteBtn.addEventListener('click', async function() {
+                if (navigator.clipboard && navigator.clipboard.read) {
+                    try {
+                        const clipboardItems = await navigator.clipboard.read();
+                        for (const clipboardItem of clipboardItems) {
+                            const imageType = clipboardItem.types.find(t => t.startsWith('image/'));
+                            if (!imageType) continue;
+                            const blob = await clipboardItem.getType(imageType);
+                            const reader = new FileReader();
+                            reader.onload = function(event) {
+                                addImageToContainer(event.target.result);
+                            };
+                            reader.readAsDataURL(blob);
+                            return;
+                        }
+                    } catch (err) {
+                        // 忽略后走回退
+                    }
+                }
+                pasteArea.focus();
+                alert('浏览器未授予剪贴板读取权限，请按 Ctrl+V 粘贴图片。');
+            });
+
+            // 添加图片到容器
+            function addImageToContainer(imageData) {
+                const imageWrapper = document.createElement('div');
+                imageWrapper.className = 'image-wrapper';
+
+                const dragHandle = document.createElement('div');
+                dragHandle.className = 'drag-handle';
+
+                const dragTitle = document.createElement('span');
+                dragTitle.className = 'drag-title';
+                dragTitle.textContent = '拖动图片';
+
+                const itemTools = document.createElement('div');
+                itemTools.className = 'item-tools';
+
+                const sizeLabel = document.createElement('label');
+                sizeLabel.textContent = '缩放';
+
+                const zoomOutBtn = document.createElement('button');
+                zoomOutBtn.type = 'button';
+                zoomOutBtn.className = 'zoom-btn';
+                zoomOutBtn.textContent = '-';
+
+                const sizeInput = document.createElement('input');
+                sizeInput.type = 'number';
+                sizeInput.className = 'zoom-input';
+                sizeInput.min = '20';
+                sizeInput.max = '300';
+                sizeInput.step = '1';
+                sizeInput.value = '100';
+
+                const sizeText = document.createElement('span');
+                sizeText.textContent = '%';
+
+                const zoomInBtn = document.createElement('button');
+                zoomInBtn.type = 'button';
+                zoomInBtn.className = 'zoom-btn';
+                zoomInBtn.textContent = '+';
+
+                itemTools.appendChild(sizeLabel);
+                itemTools.appendChild(zoomOutBtn);
+                itemTools.appendChild(sizeInput);
+                itemTools.appendChild(sizeText);
+                itemTools.appendChild(zoomInBtn);
+                dragHandle.appendChild(dragTitle);
+                dragHandle.appendChild(itemTools);
+
+                const stage = document.createElement('div');
+                stage.className = 'image-stage';
+
+                const img = document.createElement('img');
+                img.src = imageData;
+                img.draggable = false;
+
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+
+                stage.appendChild(img);
+                stage.appendChild(canvas);
+                imageWrapper.appendChild(dragHandle);
+                imageWrapper.appendChild(stage);
+                imageContainer.appendChild(imageWrapper);
+                
+                const item = {
+                    id: imageIdSeed++,
+                    name: `图片${imageIdSeed - 1}`,
+                    wrapper: imageWrapper,
+                    img,
+                    canvas,
+                    ctx,
+                    scale: 1,
+                    x: 10 + images.length * 24,
+                    y: 10 + images.length * 24,
+                    naturalWidth: 0,
+                    naturalHeight: 0
+                };
+
+                images.push(item);
+                bringToFront(item);
+                setSelectedItem(item);
+                placeItem(item, item.x, item.y);
+                renderImageList();
+
+                img.onload = function() {
+                    item.naturalWidth = img.naturalWidth;
+                    item.naturalHeight = img.naturalHeight;
+                    applyScale(item, 1);
+                    if (layoutMode === 'vertical') arrangeVertical();
+                    if (layoutMode === 'horizontal') arrangeHorizontal();
+                };
+
+                function applyZoomFromPercent(percent) {
+                    if (!item.naturalWidth || !item.naturalHeight) return;
+                    const safePercent = Math.max(20, Math.min(300, Math.round(percent)));
+                    sizeInput.value = String(safePercent);
+                    applyScale(item, safePercent / 100);
+                    if (layoutMode === 'vertical') arrangeVertical();
+                    if (layoutMode === 'horizontal') arrangeHorizontal();
+                }
+
+                zoomOutBtn.addEventListener('click', function() {
+                    applyZoomFromPercent(Number(sizeInput.value || '100') - 5);
+                });
+
+                zoomInBtn.addEventListener('click', function() {
+                    applyZoomFromPercent(Number(sizeInput.value || '100') + 5);
+                });
+
+                sizeInput.addEventListener('change', function() {
+                    const value = Number(this.value);
+                    if (Number.isNaN(value)) {
+                        this.value = '100';
+                        applyZoomFromPercent(100);
+                        return;
+                    }
+                    applyZoomFromPercent(value);
+                });
+
+                // 缩放区域阻止冒泡，避免触发拖动逻辑
+                [zoomOutBtn, sizeInput, zoomInBtn, itemTools, sizeText].forEach(el => {
+                    el.addEventListener('pointerdown', e => e.stopPropagation());
+                    el.addEventListener('mousedown', e => e.stopPropagation());
+                    el.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
+                    el.addEventListener('click', e => e.stopPropagation());
+                });
+
+                canvas.addEventListener('mousedown', function(e) {
+                    if (activeTool === 'select') {
+                        return;
+                    }
+                    e.stopPropagation();
+                    startDrawing(e, item);
+                });
+                canvas.addEventListener('mousemove', draw);
+                canvas.addEventListener('mouseup', stopDrawing);
+                canvas.addEventListener('mouseleave', stopDrawing);
+
+                // 拖动图片位置：仅拖动标题区触发，避免与缩放控件冲突
+                dragTitle.addEventListener('mousedown', function(e) {
+                    if (activeTool === 'select' || activeTool === 'draw' || activeTool === 'erase') {
+                        // 三种模式都允许拖动；保持已有行为
+                    }
+                    isDragging = true;
+                    bringToFront(item);
+                    setSelectedItem(item);
+                    const rect = imageContainer.getBoundingClientRect();
+                    dragState = {
+                        item,
+                        offsetX: e.clientX - rect.left - item.x,
+                        offsetY: e.clientY - rect.top - item.y
+                    };
+                    e.preventDefault();
+                });
+
+                imageWrapper.addEventListener('mousedown', function() {
+                    bringToFront(item);
+                    setSelectedItem(item);
+                });
+            }
+
+            function bringToFront(item) {
+                item.wrapper.style.zIndex = String(++zIndexSeed);
+            }
+
+            function placeItem(item, x, y) {
+                item.x = x;
+                item.y = y;
+                item.wrapper.style.left = `${x}px`;
+                item.wrapper.style.top = `${y}px`;
+            }
+
+            function applyScale(item, scale) {
+                if (!item.naturalWidth || !item.naturalHeight) {
+                    return;
+                }
+                const oldImage = item.canvas.width > 0 && item.canvas.height > 0 ? item.canvas.toDataURL() : null;
+                item.scale = scale;
+                const width = Math.max(40, Math.round(item.naturalWidth * scale));
+                const height = Math.max(40, Math.round(item.naturalHeight * scale));
+
+                item.img.style.width = `${width}px`;
+                item.img.style.height = `${height}px`;
+                item.canvas.width = width;
+                item.canvas.height = height;
+                item.canvas.style.width = `${width}px`;
+                item.canvas.style.height = `${height}px`;
+
+                item.ctx.clearRect(0, 0, width, height);
+                if (oldImage) {
+                    const temp = new Image();
+                    temp.onload = function() {
+                        item.ctx.drawImage(temp, 0, 0, width, height);
+                    };
+                    temp.src = oldImage;
+                }
+            }
+
+            // 涂鸦功能
+            function startDrawing(e, item) {
+                if (activeTool === 'select') {
+                    return;
+                }
+                isDrawing = true;
+                currentItem = item;
+                setSelectedItem(item);
+                const ctx = item.ctx;
+                ctx.beginPath();
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                if (activeTool === 'erase') {
+                    ctx.globalCompositeOperation = 'destination-out';
+                    ctx.lineWidth = 20;
+                } else {
+                    ctx.globalCompositeOperation = 'source-over';
+                    ctx.strokeStyle = 'red';
+                    ctx.lineWidth = 3;
+                }
+                ctx.moveTo(e.offsetX, e.offsetY);
+            }
+
+            function draw(e) {
+                if (!isDrawing || !currentItem) return;
+                const ctx = currentItem.ctx;
+                ctx.lineTo(e.offsetX, e.offsetY);
+                ctx.stroke();
+            }
+
+            imageContainer.addEventListener('click', function(e) {
+                if (activeTool !== 'select') return;
+                const rect = imageContainer.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                const hitItems = images.filter(item => {
+                    const left = item.x;
+                    const top = item.y;
+                    const right = left + item.wrapper.offsetWidth;
+                    const bottom = top + item.wrapper.offsetHeight;
+                    return x >= left && x <= right && y >= top && y <= bottom;
+                }).sort((a, b) => Number(b.wrapper.style.zIndex || 0) - Number(a.wrapper.style.zIndex || 0));
+
+                if (!hitItems.length) return;
+
+                const nearSamePoint = Math.abs(selectCycle.x - x) < 6 && Math.abs(selectCycle.y - y) < 6;
+                if (!nearSamePoint) {
+                    selectCycle = { x, y, index: 0 };
+                }
+
+                const pick = hitItems[selectCycle.index % hitItems.length];
+                selectCycle.index += 1;
+                bringToFront(pick);
+                setSelectedItem(pick);
+            });
+
+            function stopDrawing() {
+                isDrawing = false;
+                currentItem = null;
+            }
+
+            document.addEventListener('mousemove', function(e) {
+                if (!isDragging || !dragState) return;
+                const rect = imageContainer.getBoundingClientRect();
+                const x = e.clientX - rect.left - dragState.offsetX;
+                const y = e.clientY - rect.top - dragState.offsetY;
+                placeItem(dragState.item, x, y);
+            });
+
+            document.addEventListener('mouseup', function() {
+                isDragging = false;
+                dragState = null;
+            });
+
+            // 排列功能
+            function arrangeVertical() {
+                layoutMode = 'vertical';
+                let y = 10;
+                images.forEach(item => {
+                    placeItem(item, 10, y);
+                    y += item.wrapper.offsetHeight + 10;
+                });
+            }
+
+            function arrangeHorizontal() {
+                layoutMode = 'horizontal';
+                let x = 10;
+                images.forEach(item => {
+                    placeItem(item, x, 10);
+                    x += item.wrapper.offsetWidth + 10;
+                });
+            }
+
+            arrangeVerticalBtn.addEventListener('click', arrangeVertical);
+            arrangeHorizontalBtn.addEventListener('click', arrangeHorizontal);
+
+            // 清除所有
+            clearAllBtn.addEventListener('click', function() {
+                imageContainer.innerHTML = '';
+                imageList.innerHTML = '';
+                images = [];
+                isDrawing = false;
+                currentItem = null;
+                selectedItem = null;
+            });
+
+            deleteSelectedBtn.addEventListener('click', function() {
+                if (!selectedItem) return;
+                const removeId = selectedItem.id;
+                if (selectedItem.wrapper && selectedItem.wrapper.parentNode) {
+                    selectedItem.wrapper.parentNode.removeChild(selectedItem.wrapper);
+                }
+                images = images.filter(it => it.id !== removeId);
+                selectedItem = images.length ? images[images.length - 1] : null;
+                if (selectedItem) {
+                    bringToFront(selectedItem);
+                }
+                setSelectedItem(selectedItem);
+                renderImageList();
+            });
+        });
+    </script>
+</body>
+</html>
