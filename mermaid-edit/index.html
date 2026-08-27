@@ -4,6 +4,37 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mermaid 实时编辑器</title>
+    <meta name="description" content="Mermaid 实时编辑器，支持流程图、时序图、类图等模板，一边编辑一边预览，支持缩放与手掌拖动画布。">
+    <meta name="keywords" content="Mermaid, Mermaid编辑器, 流程图, 时序图, 类图, ER图, 架构图, 图表编辑器">
+    <meta name="author" content="Mermaid Editor">
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
+    <meta name="theme-color" content="#181825">
+    <meta property="og:locale" content="zh_CN">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Mermaid 实时编辑器">
+    <meta property="og:description" content="支持多模板、实时渲染、缩放与手掌拖拽的 Mermaid 在线编辑器。">
+    <meta property="og:site_name" content="Mermaid 实时编辑器">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Mermaid 实时编辑器">
+    <meta name="twitter:description" content="支持多模板、实时渲染、缩放与手掌拖拽的 Mermaid 在线编辑器。">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Mermaid 实时编辑器",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Any",
+      "browserRequirements": "Requires JavaScript",
+      "description": "支持 Mermaid 多图表模板、实时预览、缩放和手掌拖拽的可视化编辑器。",
+      "inLanguage": "zh-CN",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "CNY"
+      }
+    }
+    </script>
     <!-- 引入 Mermaid -->
     <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
     <style>
@@ -172,6 +203,36 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 12px;
+        }
+        .preview-tools {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .preview-tool-btn {
+            border: 1px solid #45475a;
+            background: #313244;
+            color: #cdd6f4;
+            border-radius: 6px;
+            padding: 2px 8px;
+            font-size: 12px;
+            cursor: pointer;
+            min-width: 30px;
+        }
+        .preview-tool-btn:hover {
+            border-color: #89b4fa;
+            color: #89b4fa;
+        }
+        .preview-tool-btn.active {
+            border-color: #a6e3a1;
+            color: #a6e3a1;
+        }
+        .zoom-level {
+            font-size: 12px;
+            color: #a6adc8;
+            min-width: 52px;
+            text-align: center;
         }
         .preview-header .status {
             font-size: 12px;
@@ -189,10 +250,27 @@
             display: flex;
             align-items: flex-start;
             justify-content: center;
-            overflow: auto;
+            overflow: hidden;
             background: #181825;
             border-radius: 0;
-			zoom:3;
+            position: relative;
+            cursor: default;
+        }
+        #mermaid-preview.pan-mode {
+            cursor: grab;
+        }
+        #mermaid-preview.panning {
+            cursor: grabbing;
+        }
+        .preview-canvas {
+            transform-origin: center top;
+            will-change: transform;
+        }
+        .preview-empty {
+            color: #585b70;
+            padding: 40px;
+            text-align: center;
+            font-size: 14px;
         }
         #mermaid-preview svg {
             max-width: 100%;
@@ -223,443 +301,807 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #585b70;
         }
+        /* 底部模板栏 */
+        .template-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 10px 12px;
+            border-top: 1px solid #313244;
+            background: #181825;
+            max-height: 132px;
+            overflow-y: auto;
+        }
+        .template-btn {
+            border: 1px solid #45475a;
+            background: #313244;
+            color: #cdd6f4;
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all .15s ease;
+            white-space: nowrap;
+        }
+        .template-btn:hover {
+            border-color: #89b4fa;
+            color: #89b4fa;
+            background: #3b3f57;
+        }
+        .template-btn.active {
+            border-color: #a6e3a1;
+            color: #a6e3a1;
+        }
     </style>
 </head>
 <body>
 
-    <!-- 顶部 -->
-    <div class="header">
-        <h1>✦ Mermaid 实时编辑器</h1>
-        <span class="badge">拖拽分割线调整</span>
-        <span class="badge">Tab 触发提示</span>
+<!-- 顶部 -->
+<div class="header">
+    <h1>✦ Mermaid 实时编辑器</h1>
+    <span class="badge">拖拽分割线调整</span>
+    <span class="badge">Tab 触发提示</span>
+</div>
+
+<!-- 主体 -->
+<div class="container">
+    <!-- 左侧编辑区 -->
+    <div class="editor-panel" id="editorPanel">
+        <div class="panel-header">
+            <span>📝 代码编辑区</span>
+            <span class="hint-icon">按 Tab 关键词提示</span>
+        </div>
+        <textarea id="mermaid-editor" spellcheck="false" placeholder="在此输入 Mermaid 语法...&#10;&#10;例如:&#10;graph TD&#10;    A[开始] --> B{判断}&#10;    B -->|是| C[通过]&#10;    B -->|否| D[驳回]"></textarea>
+        <!-- 语法提示下拉 -->
+        <div class="suggestions" id="suggestions"></div>
+        <!-- 模板按钮栏 -->
+        <div class="template-bar" id="templateBar"></div>
     </div>
 
-    <!-- 主体 -->
-    <div class="container">
-        <!-- 左侧编辑区 -->
-        <div class="editor-panel" id="editorPanel">
-            <div class="panel-header">
-                <span>📝 代码编辑区</span>
-                <span class="hint-icon">按 Tab 关键词提示</span>
+    <!-- 拖拽分割线 -->
+    <div class="divider" id="divider"></div>
+
+    <!-- 右侧渲染区 -->
+    <div class="preview-panel">
+        <div class="preview-header">
+            <span>🎨 实时渲染预览</span>
+            <div class="preview-tools">
+                <button type="button" class="preview-tool-btn" id="zoomOutBtn">-</button>
+                <span class="zoom-level" id="zoomLevel">100%</span>
+                <button type="button" class="preview-tool-btn" id="zoomInBtn">+</button>
+                <button type="button" class="preview-tool-btn" id="zoomResetBtn">重置</button>
+                <button type="button" class="preview-tool-btn" id="panToggleBtn">🖐️ 手掌</button>
             </div>
-            <textarea id="mermaid-editor" spellcheck="false" placeholder="在此输入 Mermaid 语法...&#10;&#10;例如:&#10;graph TD&#10;    A[开始] --> B{判断}&#10;    B -->|是| C[通过]&#10;    B -->|否| D[驳回]"></textarea>
-            <!-- 语法提示下拉 -->
-            <div class="suggestions" id="suggestions"></div>
+            <span class="status ok" id="status">✅ 正常</span>
         </div>
-
-        <!-- 拖拽分割线 -->
-        <div class="divider" id="divider"></div>
-
-        <!-- 右侧渲染区 -->
-        <div class="preview-panel">
-            <div class="preview-header">
-                <span>🎨 实时渲染预览</span>
-                <span class="status ok" id="status">✅ 正常</span>
-            </div>
-            <div id="mermaid-preview">
+        <div id="mermaid-preview">
+            <div class="preview-canvas" id="previewCanvas">
                 <div class="mermaid">
                     graph TD
-                        A[开始] --> B{判断}
-                        B -->|是| C[通过]
-                        B -->|否| D[驳回]
+                    A[开始] --> B{判断条件}
+                    B -->|是| C[执行操作]
+                    B -->|否| D[结束]
+
+                    subgraph 子流程
+                        C --> E[处理数据]
+                        E --> F[输出结果]
+                    end
+
+                    D --> F
                 </div>
             </div>
-            <div class="error-msg" id="errorMsg"></div>
         </div>
+        <div class="error-msg" id="errorMsg"></div>
     </div>
+</div>
 
-    <script>
-        // =============================================
-        // 1. 初始化 Mermaid
-        // =============================================
-        mermaid.initialize({
-            startOnLoad: false,
-            theme: 'dark',
-            themeVariables: {
-                background: '#181825',
-                primaryColor: '#89b4fa',
-                primaryBorderColor: '#89b4fa',
-                primaryTextColor: '#cdd6f4',
-                lineColor: '#585b70',
-                secondaryColor: '#313244',
-                tertiaryColor: '#1e1e2e',
-                fontFamily: '"Segoe UI", "Microsoft YaHei", sans-serif'
-            }
+<script>
+    // =============================================
+    // 1. 初始化 Mermaid
+    // =============================================
+    mermaid.initialize({
+        startOnLoad: false,
+        theme: 'dark',
+        themeVariables: {
+            background: '#181825',
+            primaryColor: '#89b4fa',
+            primaryBorderColor: '#89b4fa',
+            primaryTextColor: '#cdd6f4',
+            lineColor: '#585b70',
+            secondaryColor: '#313244',
+            tertiaryColor: '#1e1e2e',
+            fontFamily: '"Segoe UI", "Microsoft YaHei", sans-serif'
+        }
+    });
+
+    // =============================================
+    // 2. DOM 元素引用
+    // =============================================
+    const editor = document.getElementById('mermaid-editor');
+    const preview = document.getElementById('mermaid-preview');
+    const previewCanvas = document.getElementById('previewCanvas');
+    const status = document.getElementById('status');
+    const errorMsg = document.getElementById('errorMsg');
+    const divider = document.getElementById('divider');
+    const editorPanel = document.getElementById('editorPanel');
+    const suggestions = document.getElementById('suggestions');
+    const templateBar = document.getElementById('templateBar');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+    const panToggleBtn = document.getElementById('panToggleBtn');
+    const zoomLevel = document.getElementById('zoomLevel');
+    let renderTimer = null;
+    let previewScale = 1;
+    let previewX = 0;
+    let previewY = 0;
+    let isPanMode = false;
+    let isPanning = false;
+    let panStartX = 0;
+    let panStartY = 0;
+    let panOriginX = 0;
+    let panOriginY = 0;
+
+    function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    function applyPreviewTransform() {
+        previewCanvas.style.transform = `translate(${previewX}px, ${previewY}px) scale(${previewScale})`;
+        zoomLevel.textContent = `${Math.round(previewScale * 100)}%`;
+    }
+
+    function setPanMode(enabled) {
+        isPanMode = enabled;
+        panToggleBtn.classList.toggle('active', isPanMode);
+        preview.classList.toggle('pan-mode', isPanMode);
+        if (!enabled) {
+            isPanning = false;
+            preview.classList.remove('panning');
+            document.body.style.userSelect = '';
+        }
+    }
+
+    function zoomBy(step) {
+        previewScale = clamp(parseFloat((previewScale + step).toFixed(2)), 0.25, 4);
+        applyPreviewTransform();
+    }
+
+    function resetPreviewView() {
+        previewScale = 1;
+        previewX = 0;
+        previewY = 0;
+        applyPreviewTransform();
+    }
+
+    // =============================================
+    // 3. 默认模板
+    // =============================================
+    const MERMAID_TEMPLATES = [
+        {
+            key: 'flowchart',
+            label: '流程图',
+            code: `flowchart TD
+    A[开始] --> B{是否通过?}
+    B -- 是 --> C[执行成功]
+    B -- 否 --> D[返回错误]
+    C --> E[结束]
+    D --> E`
+        },
+        {
+            key: 'sequence',
+            label: '时序图',
+            code: `sequenceDiagram
+    participant U as 用户
+    participant W as Web
+    participant S as 服务
+    U->>W: 提交请求
+    W->>S: 调用接口
+    S-->>W: 返回结果
+    W-->>U: 展示响应`
+        },
+        {
+            key: 'class',
+            label: '类图',
+            code: `classDiagram
+    class User {
+      +String id
+      +String name
+      +login()
+    }
+    class Order {
+      +String orderId
+      +create()
+    }
+    User "1" --> "*" Order : places`
+        },
+        {
+            key: 'state',
+            label: '状态图',
+            code: `stateDiagram-v2
+    [*] --> 待处理
+    待处理 --> 审核中: 提交
+    审核中 --> 已通过: 同意
+    审核中 --> 已驳回: 拒绝
+    已通过 --> [*]
+    已驳回 --> [*]`
+        },
+        {
+            key: 'er',
+            label: 'ER图',
+            code: `erDiagram
+    USER ||--o{ ORDER : places
+    ORDER ||--|{ ORDER_ITEM : contains
+    PRODUCT ||--o{ ORDER_ITEM : referenced
+    USER {
+      string id
+      string name
+    }
+    ORDER {
+      string id
+      date created_at
+    }`
+        },
+        {
+            key: 'xy',
+            label: 'XY图',
+            code: `xychart-beta
+    title "月度访问量"
+    x-axis [Jan, Feb, Mar, Apr, May, Jun]
+    y-axis "PV" 0 --> 1000
+    bar [120, 260, 380, 520, 760, 880]
+    line [100, 240, 360, 500, 700, 920]`
+        },
+        {
+            key: 'journey',
+            label: '旅程图',
+            code: `journey
+    title 用户下单旅程
+    section 访问阶段
+      打开首页: 5: 用户
+      浏览商品: 4: 用户
+    section 下单阶段
+      加入购物车: 4: 用户
+      提交订单: 3: 用户
+      完成支付: 5: 用户`
+        },
+        {
+            key: 'pie',
+            label: '饼图',
+            code: `pie showData
+    title 流量来源占比
+    "直接访问" : 42
+    "搜索引擎" : 28
+    "社交媒体" : 18
+    "其他" : 12`
+        },
+        {
+            key: 'mindmap',
+            label: '思维导图',
+            code: `mindmap
+  root((项目规划))
+    需求
+      用户故事
+      验收标准
+    设计
+      架构
+      UI
+    开发
+      前端
+      后端
+    测试
+      单元测试
+      集成测试`
+        },
+        {
+            key: 'git',
+            label: 'Git图',
+            code: `gitGraph
+    commit id: "init"
+    branch feature/login
+    checkout feature/login
+    commit id: "login page"
+    commit id: "auth api"
+    checkout main
+    merge feature/login
+    commit id: "release v1.0"`
+        },
+        {
+            key: 'kanban',
+            label: '看板图',
+            code: `kanban
+    title 开发看板
+    section 待办
+      需求评审
+      数据库设计
+    section 进行中
+      接口开发
+      页面联调
+    section 已完成
+      项目初始化`
+        },
+        {
+            key: 'architecture',
+            label: '架构图',
+            code: `architecture-beta
+    group client(cloud)[客户端]
+    group app(server)[应用层]
+    group data(database)[数据层]
+
+    service web(internet)[Web]
+    service api(server)[API]
+    service db(database)[MySQL]
+    service cache(database)[Redis]
+
+    web:R -- L:api
+    api:B -- T:db
+    api:R -- L:cache`
+        },
+        {
+            key: 'packet',
+            label: '数据包图',
+            code: `packet-beta
+    0-15: "Source Port"
+    16-31: "Destination Port"
+    32-63: "Sequence Number"
+    64-95: "Acknowledgment Number"
+    96-99: "Header Length"
+    100-105: "Flags"
+    106-127: "Window Size"
+    128-143: "Checksum"
+    144-159: "Urgent Pointer"`
+        }
+    ];
+
+    function setTemplateActive(key) {
+        const buttons = templateBar.querySelectorAll('.template-btn');
+        buttons.forEach((btn) => {
+            btn.classList.toggle('active', btn.dataset.key === key);
         });
+    }
 
-        // =============================================
-        // 2. DOM 元素引用
-        // =============================================
-        const editor = document.getElementById('mermaid-editor');
-        const preview = document.getElementById('mermaid-preview');
-        const status = document.getElementById('status');
-        const errorMsg = document.getElementById('errorMsg');
-        const divider = document.getElementById('divider');
-        const editorPanel = document.getElementById('editorPanel');
-        const suggestions = document.getElementById('suggestions');
+    function applyTemplate(template) {
+        editor.value = template.code;
+        editor.focus();
+        editor.setSelectionRange(editor.value.length, editor.value.length);
+        setTemplateActive(template.key);
+        clearTimeout(renderTimer);
+        renderMermaid();
+    }
 
-        // =============================================
-        // 3. 默认模板
-        // =============================================
-        const defaultCode = `graph TD
-    A[开始] --> B{判断条件}
-    B -->|是| C[执行操作]
-    B -->|否| D[结束]
-    
-    subgraph 子流程
-        C --> E[处理数据]
-        E --> F[输出结果]
-    end
-    
-    D --> F`;
+    function renderTemplateButtons() {
+        templateBar.innerHTML = '';
+        MERMAID_TEMPLATES.forEach((template) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'template-btn';
+            button.dataset.key = template.key;
+            button.textContent = template.label;
+            button.addEventListener('click', function() {
+                applyTemplate(template);
+            });
+            templateBar.appendChild(button);
+        });
+    }
 
-        editor.value = defaultCode;
+    renderTemplateButtons();
+    applyTemplate(MERMAID_TEMPLATES[0]);
 
-        // =============================================
-        // 4. 实时渲染
-        // =============================================
-        let renderTimer = null;
+    // =============================================
+    // 4. 实时渲染
+    // =============================================
 
-        function renderMermaid() {
-            const code = editor.value.trim();
-            if (!code) {
-                preview.innerHTML = '<div style="color:#585b70;padding:40px;text-align:center;font-size:14px;">✨ 输入 Mermaid 语法开始渲染</div>';
-                status.textContent = '⏳ 等待输入';
-                status.className = 'status';
-                errorMsg.style.display = 'none';
-                return;
-            }
-
-            status.textContent = '⏳ 渲染中...';
+    function renderMermaid() {
+        const code = editor.value.trim();
+        if (!code) {
+            previewCanvas.innerHTML = '<div class="preview-empty">✨ 输入 Mermaid 语法开始渲染</div>';
+            status.textContent = '⏳ 等待输入';
             status.className = 'status';
+            errorMsg.style.display = 'none';
+            return;
+        }
 
-            try {
-                // 清除旧内容
-                preview.innerHTML = '<div class="mermaid"></div>';
-                const mermaidDiv = preview.querySelector('.mermaid');
-                mermaidDiv.textContent = code;
+        status.textContent = '⏳ 渲染中...';
+        status.className = 'status';
 
-                mermaid.run({
-                    nodes: [mermaidDiv],
-                    suppressErrors: true
-                }).then(() => {
-                    status.textContent = '✅ 渲染成功';
-                    status.className = 'status ok';
-                    errorMsg.style.display = 'none';
-                }).catch((err) => {
-                    // 渲染失败
-                    status.textContent = '❌ 语法错误';
-                    status.className = 'status error';
-                    errorMsg.textContent = '⚠️ ' + (err.message || err || '语法错误，请检查');
-                    errorMsg.style.display = 'block';
-                });
-            } catch (e) {
+        try {
+            previewCanvas.innerHTML = '<div class="mermaid"></div>';
+            const mermaidDiv = previewCanvas.querySelector('.mermaid');
+            mermaidDiv.textContent = code;
+
+            mermaid.run({
+                nodes: [mermaidDiv],
+                suppressErrors: true
+            }).then(() => {
+                status.textContent = '✅ 渲染成功';
+                status.className = 'status ok';
+                errorMsg.style.display = 'none';
+            }).catch((err) => {
+                // 渲染失败
                 status.textContent = '❌ 语法错误';
                 status.className = 'status error';
-                errorMsg.textContent = '⚠️ ' + (e.message || '语法错误，请检查');
+                errorMsg.textContent = '⚠️ ' + (err.message || err || '语法错误，请检查');
                 errorMsg.style.display = 'block';
-            }
-        }
-
-        // 防抖渲染
-        editor.addEventListener('input', function() {
-            clearTimeout(renderTimer);
-            renderTimer = setTimeout(renderMermaid, 300);
-        });
-
-        // 初始渲染
-        setTimeout(renderMermaid, 100);
-
-        // =============================================
-        // 5. 拖拽分割线
-        // =============================================
-        let isDragging = false;
-        let startX = 0;
-        let startLeftWidth = 0;
-
-        divider.addEventListener('mousedown', function(e) {
-            isDragging = true;
-            startX = e.clientX;
-            startLeftWidth = editorPanel.getBoundingClientRect().width;
-            divider.classList.add('active');
-            document.body.style.cursor = 'col-resize';
-            document.body.style.userSelect = 'none';
-        });
-
-        document.addEventListener('mousemove', function(e) {
-            if (!isDragging) return;
-            const containerWidth = document.querySelector('.container').getBoundingClientRect().width;
-            const deltaX = e.clientX - startX;
-            let newLeftWidth = startLeftWidth + deltaX;
-            // 限制最小宽度
-            const minWidth = 300;
-            const maxWidth = containerWidth - minWidth - 6;
-            newLeftWidth = Math.max(minWidth, Math.min(maxWidth, newLeftWidth));
-            const leftPercent = (newLeftWidth / containerWidth) * 100;
-            const rightPercent = 100 - leftPercent;
-            editorPanel.style.flex = `0 0 ${leftPercent}%`;
-            // 右侧面板自动适应剩余
-            const previewPanel = document.querySelector('.preview-panel');
-            previewPanel.style.flex = `0 0 ${rightPercent}%`;
-        });
-
-        document.addEventListener('mouseup', function() {
-            if (isDragging) {
-                isDragging = false;
-                divider.classList.remove('active');
-                document.body.style.cursor = '';
-                document.body.style.userSelect = '';
-            }
-        });
-
-        // =============================================
-        // 6. 代码提示（Mermaid 关键字）
-        // =============================================
-        const MERMAID_KEYWORDS = [
-            // 图表类型
-            { word: 'graph', type: '图表类型', desc: '流程图' },
-            { word: 'flowchart', type: '图表类型', desc: '流程图' },
-            { word: 'sequenceDiagram', type: '图表类型', desc: '时序图' },
-            { word: 'classDiagram', type: '图表类型', desc: '类图' },
-            { word: 'stateDiagram-v2', type: '图表类型', desc: '状态图' },
-            { word: 'erDiagram', type: '图表类型', desc: 'ER图' },
-            { word: 'gantt', type: '图表类型', desc: '甘特图' },
-            { word: 'pie', type: '图表类型', desc: '饼图' },
-            { word: 'mindmap', type: '图表类型', desc: '思维导图' },
-            { word: 'timeline', type: '图表类型', desc: '时间线图' },
-            // 关键字
-            { word: 'subgraph', type: '关键字', desc: '子图开始' },
-            { word: 'end', type: '关键字', desc: '结束' },
-            { word: 'direction', type: '关键字', desc: '方向' },
-            // 方向
-            { word: 'TB', type: '方向', desc: '从上到下' },
-            { word: 'BT', type: '方向', desc: '从下到上' },
-            { word: 'RL', type: '方向', desc: '从右到左' },
-            { word: 'LR', type: '方向', desc: '从左到右' },
-            { word: 'TD', type: '方向', desc: '从上到下' },
-            // 节点形状
-            { word: 'A[文本]', type: '节点', desc: '矩形节点' },
-            { word: 'A(文本)', type: '节点', desc: '圆角矩形' },
-            { word: 'A((文本))', type: '节点', desc: '圆形节点' },
-            { word: 'A{文本}', type: '节点', desc: '菱形节点' },
-            { word: 'A>文本]', type: '节点', desc: '不对称形状' },
-            // 连接线
-            { word: '-->', type: '连接线', desc: '箭头' },
-            { word: '---', type: '连接线', desc: '实线' },
-            { word: '-.-', type: '连接线', desc: '虚线' },
-            { word: '==>', type: '连接线', desc: '粗箭头' },
-            { word: '-.->', type: '连接线', desc: '虚线箭头' },
-            // 时序图关键字
-            { word: 'participant', type: '时序图', desc: '参与者' },
-            { word: 'actor', type: '时序图', desc: '角色' },
-            { word: 'Note', type: '时序图', desc: '备注' },
-            { word: 'loop', type: '时序图', desc: '循环' },
-            { word: 'alt', type: '时序图', desc: '分支' },
-            { word: 'opt', type: '时序图', desc: '可选' },
-            { word: 'rect', type: '时序图', desc: '矩形' },
-            // 甘特图
-            { word: 'title', type: '甘特图', desc: '标题' },
-            { word: 'dateFormat', type: '甘特图', desc: '日期格式' },
-            { word: 'section', type: '甘特图', desc: '分组' },
-            // 其他
-            { word: '%%', type: '注释', desc: '注释' },
-            { word: 'style', type: '样式', desc: '自定义样式' },
-            { word: 'link', type: '链接', desc: '添加链接' },
-            { word: 'click', type: '交互', desc: '点击事件' },
-        ];
-
-        let activeSuggestionIndex = -1;
-        let currentFilter = '';
-
-        function getCursorWord(textarea) {
-            const pos = textarea.selectionStart;
-            const text = textarea.value;
-            // 往前找单词边界
-            let start = pos;
-            while (start > 0 && /[a-zA-Z0-9_\[\]\(\)\{\}\->\.]/.test(text[start - 1])) {
-                start--;
-            }
-            return {
-                word: text.substring(start, pos),
-                start: start,
-                end: pos
-            };
-        }
-
-        function showSuggestions(filter, cursorStart, cursorEnd) {
-            if (!filter) {
-                suggestions.style.display = 'none';
-                return;
-            }
-            const filtered = MERMAID_KEYWORDS.filter(k => 
-                k.word.toLowerCase().startsWith(filter.toLowerCase()) ||
-                k.word.toLowerCase().includes(filter.toLowerCase())
-            );
-            if (filtered.length === 0) {
-                suggestions.style.display = 'none';
-                return;
-            }
-            // 最多显示10个
-            const display = filtered.slice(0, 10);
-            currentFilter = filter;
-            activeSuggestionIndex = -1;
-
-            suggestions.innerHTML = '';
-            display.forEach((item, index) => {
-                const div = document.createElement('div');
-                div.className = 'suggestion-item';
-                div.dataset.index = index;
-                div.dataset.word = item.word;
-                div.innerHTML = `<strong>${item.word}</strong> <span class="keyword-type">${item.type} · ${item.desc}</span>`;
-                div.addEventListener('click', function() {
-                    insertSuggestion(item.word, cursorStart, cursorEnd);
-                });
-                div.addEventListener('mouseenter', function() {
-                    document.querySelectorAll('.suggestion-item').forEach(el => el.classList.remove('active'));
-                    div.classList.add('active');
-                    activeSuggestionIndex = index;
-                });
-                suggestions.appendChild(div);
             });
-
-            // 定位下拉框
-			var editor = document.getElementById('mermaid-editor');  // 改这里！
-            const textareaRect = editor.getBoundingClientRect();
-            const editorRect = editorPanel.getBoundingClientRect();
-            // 估算光标位置的行高
-            const lineHeight = 24;
-            const lines = editor.value.substring(0, cursorStart).split('\n');
-            const lineNum = lines.length;
-            const colNum = lines[lines.length - 1].length;
-            const top = (lineNum * lineHeight) + 16; // 16 padding
-            const left = Math.min(colNum * 9, textareaRect.width - 200);
-            suggestions.style.left = left + 'px';
-            suggestions.style.top = top + 'px';
-            suggestions.style.display = 'block';
+        } catch (e) {
+            status.textContent = '❌ 语法错误';
+            status.className = 'status error';
+            errorMsg.textContent = '⚠️ ' + (e.message || '语法错误，请检查');
+            errorMsg.style.display = 'block';
         }
+    }
 
-        function insertSuggestion(word, cursorStart, cursorEnd) {
-            const text = editor.value;
-            editor.value = text.substring(0, cursorStart) + word + text.substring(cursorEnd);
-            const newPos = cursorStart + word.length;
-            editor.setSelectionRange(newPos, newPos);
-            editor.focus();
+    zoomInBtn.addEventListener('click', function() {
+        zoomBy(0.1);
+    });
+
+    zoomOutBtn.addEventListener('click', function() {
+        zoomBy(-0.1);
+    });
+
+    zoomResetBtn.addEventListener('click', function() {
+        resetPreviewView();
+    });
+
+    panToggleBtn.addEventListener('click', function() {
+        setPanMode(!isPanMode);
+    });
+
+    preview.addEventListener('mousedown', function(e) {
+        if (!isPanMode || e.button !== 0) return;
+        isPanning = true;
+        panStartX = e.clientX;
+        panStartY = e.clientY;
+        panOriginX = previewX;
+        panOriginY = previewY;
+        preview.classList.add('panning');
+        document.body.style.userSelect = 'none';
+        e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', function(e) {
+        if (!isPanning) return;
+        const dx = e.clientX - panStartX;
+        const dy = e.clientY - panStartY;
+        previewX = panOriginX + dx;
+        previewY = panOriginY + dy;
+        applyPreviewTransform();
+    });
+
+    document.addEventListener('mouseup', function() {
+        if (!isPanning) return;
+        isPanning = false;
+        preview.classList.remove('panning');
+        document.body.style.userSelect = '';
+    });
+
+    // Ctrl + 鼠标滚轮缩放，便于快速查看细节
+    preview.addEventListener('wheel', function(e) {
+        if (!e.ctrlKey) return;
+        e.preventDefault();
+        zoomBy(e.deltaY < 0 ? 0.1 : -0.1);
+    }, { passive: false });
+
+    applyPreviewTransform();
+
+    // 防抖渲染
+    editor.addEventListener('input', function() {
+        clearTimeout(renderTimer);
+        renderTimer = setTimeout(renderMermaid, 300);
+    });
+
+    // 初始渲染
+    setTimeout(renderMermaid, 100);
+
+    // =============================================
+    // 5. 拖拽分割线
+    // =============================================
+    let isDragging = false;
+    let startX = 0;
+    let startLeftWidth = 0;
+
+    divider.addEventListener('mousedown', function(e) {
+        isDragging = true;
+        startX = e.clientX;
+        startLeftWidth = editorPanel.getBoundingClientRect().width;
+        divider.classList.add('active');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        const containerWidth = document.querySelector('.container').getBoundingClientRect().width;
+        const deltaX = e.clientX - startX;
+        let newLeftWidth = startLeftWidth + deltaX;
+        // 限制最小宽度
+        const minWidth = 300;
+        const maxWidth = containerWidth - minWidth - 6;
+        newLeftWidth = Math.max(minWidth, Math.min(maxWidth, newLeftWidth));
+        const leftPercent = (newLeftWidth / containerWidth) * 100;
+        const rightPercent = 100 - leftPercent;
+        editorPanel.style.flex = `0 0 ${leftPercent}%`;
+        // 右侧面板自动适应剩余
+        const previewPanel = document.querySelector('.preview-panel');
+        previewPanel.style.flex = `0 0 ${rightPercent}%`;
+    });
+
+    document.addEventListener('mouseup', function() {
+        if (isDragging) {
+            isDragging = false;
+            divider.classList.remove('active');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        }
+    });
+
+    // =============================================
+    // 6. 代码提示（Mermaid 关键字）
+    // =============================================
+    const MERMAID_KEYWORDS = [
+        // 图表类型
+        { word: 'graph', type: '图表类型', desc: '流程图' },
+        { word: 'flowchart', type: '图表类型', desc: '流程图' },
+        { word: 'sequenceDiagram', type: '图表类型', desc: '时序图' },
+        { word: 'classDiagram', type: '图表类型', desc: '类图' },
+        { word: 'stateDiagram-v2', type: '图表类型', desc: '状态图' },
+        { word: 'erDiagram', type: '图表类型', desc: 'ER图' },
+        { word: 'gantt', type: '图表类型', desc: '甘特图' },
+        { word: 'pie', type: '图表类型', desc: '饼图' },
+        { word: 'mindmap', type: '图表类型', desc: '思维导图' },
+        { word: 'timeline', type: '图表类型', desc: '时间线图' },
+        // 关键字
+        { word: 'subgraph', type: '关键字', desc: '子图开始' },
+        { word: 'end', type: '关键字', desc: '结束' },
+        { word: 'direction', type: '关键字', desc: '方向' },
+        // 方向
+        { word: 'TB', type: '方向', desc: '从上到下' },
+        { word: 'BT', type: '方向', desc: '从下到上' },
+        { word: 'RL', type: '方向', desc: '从右到左' },
+        { word: 'LR', type: '方向', desc: '从左到右' },
+        { word: 'TD', type: '方向', desc: '从上到下' },
+        // 节点形状
+        { word: 'A[文本]', type: '节点', desc: '矩形节点' },
+        { word: 'A(文本)', type: '节点', desc: '圆角矩形' },
+        { word: 'A((文本))', type: '节点', desc: '圆形节点' },
+        { word: 'A{文本}', type: '节点', desc: '菱形节点' },
+        { word: 'A>文本]', type: '节点', desc: '不对称形状' },
+        // 连接线
+        { word: '-->', type: '连接线', desc: '箭头' },
+        { word: '---', type: '连接线', desc: '实线' },
+        { word: '-.-', type: '连接线', desc: '虚线' },
+        { word: '==>', type: '连接线', desc: '粗箭头' },
+        { word: '-.->', type: '连接线', desc: '虚线箭头' },
+        // 时序图关键字
+        { word: 'participant', type: '时序图', desc: '参与者' },
+        { word: 'actor', type: '时序图', desc: '角色' },
+        { word: 'Note', type: '时序图', desc: '备注' },
+        { word: 'loop', type: '时序图', desc: '循环' },
+        { word: 'alt', type: '时序图', desc: '分支' },
+        { word: 'opt', type: '时序图', desc: '可选' },
+        { word: 'rect', type: '时序图', desc: '矩形' },
+        // 甘特图
+        { word: 'title', type: '甘特图', desc: '标题' },
+        { word: 'dateFormat', type: '甘特图', desc: '日期格式' },
+        { word: 'section', type: '甘特图', desc: '分组' },
+        // 其他
+        { word: '%%', type: '注释', desc: '注释' },
+        { word: 'style', type: '样式', desc: '自定义样式' },
+        { word: 'link', type: '链接', desc: '添加链接' },
+        { word: 'click', type: '交互', desc: '点击事件' },
+        // 样式与 UI 定制相关
+        { word: 'classDef', type: '样式', desc: '定义可复用的样式类' },
+        { word: 'class', type: '样式', desc: '将样式类应用到节点' },
+        { word: 'linkStyle', type: '样式', desc: '定义连接线的样式' },
+        { word: '%%{init:', type: '配置', desc: '全局初始化配置指令' },
+        { word: 'theme:', type: '配置', desc: '设置图表主题(如dark,base)' },
+        { word: 'themeVariables:', type: '配置', desc: '自定义主题变量' },
+        // 常用 CSS 样式属性
+        { word: 'fill:', type: '属性', desc: '节点背景填充色' },
+        { word: 'stroke:', type: '属性', desc: '节点边框颜色' },
+        { word: 'stroke-width:', type: '属性', desc: '边框粗细(如:2px)' },
+        { word: 'stroke-dasharray:', type: '属性', desc: '边框虚线样式(如:5 5)' },
+        { word: 'color:', type: '属性', desc: '节点文字颜色' },
+        { word: 'font-size:', type: '属性', desc: '字体大小' },
+        { word: 'font-weight:', type: '属性', desc: '字体粗细(如:bold)' },
+        { word: 'font-style:', type: '属性', desc: '字体样式(如:italic)' },
+        { word: 'text-align:', type: '属性', desc: '文本对齐方式' },
+        // 节点内联样式简写
+        { word: ':::', type: '语法', desc: '节点内联应用样式类(如 A:::myClass)' }
+    ];
+
+    let activeSuggestionIndex = -1;
+    let currentFilter = '';
+
+    function getCursorWord(textarea) {
+        const pos = textarea.selectionStart;
+        const text = textarea.value;
+        // 往前找单词边界
+        let start = pos;
+        while (start > 0 && /[a-zA-Z0-9_\[\]\(\)\{\}\->\.]/.test(text[start - 1])) {
+            start--;
+        }
+        return {
+            word: text.substring(start, pos),
+            start: start,
+            end: pos
+        };
+    }
+
+    function showSuggestions(filter, cursorStart, cursorEnd) {
+        if (!filter) {
             suggestions.style.display = 'none';
-            // 触发渲染
-            clearTimeout(renderTimer);
-            renderTimer = setTimeout(renderMermaid, 300);
+            return;
         }
+        const filtered = MERMAID_KEYWORDS.filter(k =>
+            k.word.toLowerCase().startsWith(filter.toLowerCase()) ||
+            k.word.toLowerCase().includes(filter.toLowerCase())
+        );
+        if (filtered.length === 0) {
+            suggestions.style.display = 'none';
+            return;
+        }
+        // 最多显示10个
+        const display = filtered.slice(0, 10);
+        currentFilter = filter;
+        activeSuggestionIndex = -1;
 
-        // 监听编辑器的按键
-        editor.addEventListener('keydown', function(e) {
-            const isVisible = suggestions.style.display === 'block';
-            if (isVisible) {
-                const items = suggestions.querySelectorAll('.suggestion-item');
-                if (e.key === 'Tab' || e.key === 'Enter') {
-                    e.preventDefault();
-                    if (activeSuggestionIndex >= 0 && items[activeSuggestionIndex]) {
-                        const word = items[activeSuggestionIndex].dataset.word;
-                        const cursorWord = getCursorWord(editor);
-                        insertSuggestion(word, cursorWord.start, cursorWord.end);
-                    } else if (items.length > 0) {
-                        const word = items[0].dataset.word;
-                        const cursorWord = getCursorWord(editor);
-                        insertSuggestion(word, cursorWord.start, cursorWord.end);
-                    }
-                    return;
-                }
-                if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    activeSuggestionIndex = Math.min(activeSuggestionIndex + 1, items.length - 1);
-                    items.forEach(el => el.classList.remove('active'));
-                    if (items[activeSuggestionIndex]) {
-                        items[activeSuggestionIndex].classList.add('active');
-                        items[activeSuggestionIndex].scrollIntoView({ block: 'nearest' });
-                    }
-                    return;
-                }
-                if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    activeSuggestionIndex = Math.max(activeSuggestionIndex - 1, -1);
-                    items.forEach(el => el.classList.remove('active'));
-                    if (activeSuggestionIndex >= 0 && items[activeSuggestionIndex]) {
-                        items[activeSuggestionIndex].classList.add('active');
-                        items[activeSuggestionIndex].scrollIntoView({ block: 'nearest' });
-                    }
-                    return;
-                }
-                if (e.key === 'Escape') {
-                    suggestions.style.display = 'none';
-                    return;
-                }
-            }
+        suggestions.innerHTML = '';
+        display.forEach((item, index) => {
+            const div = document.createElement('div');
+            div.className = 'suggestion-item';
+            div.dataset.index = index;
+            div.dataset.word = item.word;
+            div.innerHTML = `<strong>${item.word}</strong> <span class="keyword-type">${item.type} · ${item.desc}</span>`;
+            div.addEventListener('click', function() {
+                insertSuggestion(item.word, cursorStart, cursorEnd);
+            });
+            div.addEventListener('mouseenter', function() {
+                document.querySelectorAll('.suggestion-item').forEach(el => el.classList.remove('active'));
+                div.classList.add('active');
+                activeSuggestionIndex = index;
+            });
+            suggestions.appendChild(div);
+        });
 
-            // Tab 键触发提示
-            if (e.key === 'Tab' && !isVisible) {
+        // 定位下拉框
+        var editor = document.getElementById('mermaid-editor');  // 改这里！
+        const textareaRect = editor.getBoundingClientRect();
+        const editorRect = editorPanel.getBoundingClientRect();
+        // 估算光标位置的行高
+        const lineHeight = 24;
+        const lines = editor.value.substring(0, cursorStart).split('\n');
+        const lineNum = lines.length;
+        const colNum = lines[lines.length - 1].length;
+        const top = (lineNum * lineHeight) + 16; // 16 padding
+        const left = Math.min(colNum * 9, textareaRect.width - 200);
+        suggestions.style.left = left + 'px';
+        suggestions.style.top = top + 'px';
+        suggestions.style.display = 'block';
+    }
+
+    function insertSuggestion(word, cursorStart, cursorEnd) {
+        const text = editor.value;
+        editor.value = text.substring(0, cursorStart) + word + text.substring(cursorEnd);
+        const newPos = cursorStart + word.length;
+        editor.setSelectionRange(newPos, newPos);
+        editor.focus();
+        suggestions.style.display = 'none';
+        // 触发渲染
+        clearTimeout(renderTimer);
+        renderTimer = setTimeout(renderMermaid, 300);
+    }
+
+    // 监听编辑器的按键
+    editor.addEventListener('keydown', function(e) {
+        const isVisible = suggestions.style.display === 'block';
+        if (isVisible) {
+            const items = suggestions.querySelectorAll('.suggestion-item');
+            if (e.key === 'Tab' || e.key === 'Enter') {
                 e.preventDefault();
-                const cursorWord = getCursorWord(editor);
-                if (cursorWord.word) {
-                    showSuggestions(cursorWord.word, cursorWord.start, cursorWord.end);
-                } else {
-                    // 插入两个空格（缩进）
-                    const pos = editor.selectionStart;
-                    editor.value = editor.value.substring(0, pos) + '    ' + editor.value.substring(pos);
-                    editor.setSelectionRange(pos + 4, pos + 4);
+                if (activeSuggestionIndex >= 0 && items[activeSuggestionIndex]) {
+                    const word = items[activeSuggestionIndex].dataset.word;
+                    const cursorWord = getCursorWord(editor);
+                    insertSuggestion(word, cursorWord.start, cursorWord.end);
+                } else if (items.length > 0) {
+                    const word = items[0].dataset.word;
+                    const cursorWord = getCursorWord(editor);
+                    insertSuggestion(word, cursorWord.start, cursorWord.end);
                 }
                 return;
             }
-        });
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                activeSuggestionIndex = Math.min(activeSuggestionIndex + 1, items.length - 1);
+                items.forEach(el => el.classList.remove('active'));
+                if (items[activeSuggestionIndex]) {
+                    items[activeSuggestionIndex].classList.add('active');
+                    items[activeSuggestionIndex].scrollIntoView({ block: 'nearest' });
+                }
+                return;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                activeSuggestionIndex = Math.max(activeSuggestionIndex - 1, -1);
+                items.forEach(el => el.classList.remove('active'));
+                if (activeSuggestionIndex >= 0 && items[activeSuggestionIndex]) {
+                    items[activeSuggestionIndex].classList.add('active');
+                    items[activeSuggestionIndex].scrollIntoView({ block: 'nearest' });
+                }
+                return;
+            }
+            if (e.key === 'Escape') {
+                suggestions.style.display = 'none';
+                return;
+            }
+        }
 
-        // 输入时触发提示
-        editor.addEventListener('input', function() {
+        // Tab 键触发提示
+        if (e.key === 'Tab' && !isVisible) {
+            e.preventDefault();
             const cursorWord = getCursorWord(editor);
-            if (cursorWord.word && cursorWord.word.length >= 1) {
+            if (cursorWord.word) {
                 showSuggestions(cursorWord.word, cursorWord.start, cursorWord.end);
             } else {
-                suggestions.style.display = 'none';
+                // 插入两个空格（缩进）
+                const pos = editor.selectionStart;
+                editor.value = editor.value.substring(0, pos) + '    ' + editor.value.substring(pos);
+                editor.setSelectionRange(pos + 4, pos + 4);
             }
-        });
-
-        // 点击其他地方关闭提示
-        document.addEventListener('click', function(e) {
-            if (!e.target.closest('#editorPanel')) {
-                suggestions.style.display = 'none';
-            }
-        });
-
-        // 失去焦点时关闭提示
-        editor.addEventListener('blur', function() {
-            setTimeout(() => {
-                suggestions.style.display = 'none';
-            }, 200);
-        });
-
-        // Ctrl+Enter 手动触发渲染
-        editor.addEventListener('keydown', function(e) {
-            if (e.ctrlKey && e.key === 'Enter') {
-                e.preventDefault();
-                renderMermaid();
-            }
-        });
-
-        // =============================================
-        // 7. 窗口自适应
-        // =============================================
-        function resetFlex() {
-            const container = document.querySelector('.container');
-            const previewPanel = document.querySelector('.preview-panel');
-            if (!editorPanel.style.flex) {
-                editorPanel.style.flex = '1 1 50%';
-                previewPanel.style.flex = '1 1 50%';
-            }
+            return;
         }
-        // 在加载时设置
-        resetFlex();
+    });
 
-        console.log('✨ Mermaid 编辑器已启动！');
-        console.log('📝 提示：按 Tab 键触发代码提示');
-        console.log('🔄 拖拽分割线调整左右比例');
-        console.log('⌨️ Ctrl+Enter 手动触发渲染');
+    // 输入时触发提示
+    editor.addEventListener('input', function() {
+        const cursorWord = getCursorWord(editor);
+        if (cursorWord.word && cursorWord.word.length >= 1) {
+            showSuggestions(cursorWord.word, cursorWord.start, cursorWord.end);
+        } else {
+            suggestions.style.display = 'none';
+        }
+    });
+
+    // 点击其他地方关闭提示
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('#editorPanel')) {
+            suggestions.style.display = 'none';
+        }
+    });
+
+    // 失去焦点时关闭提示
+    editor.addEventListener('blur', function() {
+        setTimeout(() => {
+            suggestions.style.display = 'none';
+        }, 200);
+    });
+
+    // Ctrl+Enter 手动触发渲染
+    editor.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.key === 'Enter') {
+            e.preventDefault();
+            renderMermaid();
+        }
+    });
+
+    // =============================================
+    // 7. 窗口自适应
+    // =============================================
+    function resetFlex() {
+        const container = document.querySelector('.container');
+        const previewPanel = document.querySelector('.preview-panel');
+        if (!editorPanel.style.flex) {
+            editorPanel.style.flex = '1 1 50%';
+            previewPanel.style.flex = '1 1 50%';
+        }
+    }
+    // 在加载时设置
+    resetFlex();
+
+    console.log('✨ Mermaid 编辑器已启动！');
+    console.log('📝 提示：按 Tab 键触发代码提示');
+    console.log('🔄 拖拽分割线调整左右比例');
+    console.log('⌨️ Ctrl+Enter 手动触发渲染');
     </script>
-</body>
-</html>
+    </body>
+    </html>
