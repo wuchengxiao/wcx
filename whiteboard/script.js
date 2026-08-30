@@ -993,6 +993,8 @@ class UMLDrawer {
                 break;
             case 'line':
             case 'arrow':
+            case 'curved-arrow':
+            case 'orthogonal-arrow':
                 this.startDrawingLine(x, y);
                 break;
             case 'text':
@@ -1190,11 +1192,11 @@ class UMLDrawer {
         
         if (!element || !handle) return;
 
-        if ((element.type === 'line' || element.type === 'arrow') && (handle === 'start' || handle === 'end')) {
+        if ((['line', 'arrow', 'curved-arrow', 'orthogonal-arrow'].includes(element.type)) && (handle === 'start' || handle === 'end')) {
             const xKey = handle === 'start' ? 'x1' : 'x2';
             const yKey = handle === 'start' ? 'y1' : 'y2';
 
-            if (element.type === 'arrow') {
+            if (['arrow', 'curved-arrow', 'orthogonal-arrow'].includes(element.type)) {
                 const snap = this.getNearestSnapTarget(x, y);
                 if (snap) {
                     this.applyAttachmentToArrowEnd(element, handle, snap);
@@ -1386,6 +1388,50 @@ class UMLDrawer {
         switch (element.type) {
             case 'line':
             case 'arrow':
+            case 'curved-arrow':
+            case 'orthogonal-arrow':
+                if (element.type === 'curved-arrow') {
+                    const control = this.getCurvedArrowControlPoint(element);
+                    const sampleCount = 20;
+                    let minX = Infinity;
+                    let minY = Infinity;
+                    let maxX = -Infinity;
+                    let maxY = -Infinity;
+
+                    for (let i = 0; i <= sampleCount; i++) {
+                        const t = i / sampleCount;
+                        const p = this.getQuadraticBezierPoint(
+                            t,
+                            { x: element.x1, y: element.y1 },
+                            control,
+                            { x: element.x2, y: element.y2 }
+                        );
+                        minX = Math.min(minX, p.x);
+                        minY = Math.min(minY, p.y);
+                        maxX = Math.max(maxX, p.x);
+                        maxY = Math.max(maxY, p.y);
+                    }
+
+                    return {
+                        x: minX,
+                        y: minY,
+                        width: maxX - minX,
+                        height: maxY - minY
+                    };
+                }
+
+                if (element.type === 'orthogonal-arrow') {
+                    const points = this.getOrthogonalArrowPathPoints(element);
+                    const xs = points.map(p => p.x);
+                    const ys = points.map(p => p.y);
+                    return {
+                        x: Math.min(...xs),
+                        y: Math.min(...ys),
+                        width: Math.max(...xs) - Math.min(...xs),
+                        height: Math.max(...ys) - Math.min(...ys)
+                    };
+                }
+
                 return {
                     x: Math.min(element.x1, element.x2),
                     y: Math.min(element.y1, element.y2),
@@ -1568,7 +1614,7 @@ class UMLDrawer {
         let best = null;
 
         diagram.elements.forEach(element => {
-            if (['line', 'arrow', 'pen'].includes(element.type)) return;
+            if (['line', 'arrow', 'curved-arrow', 'orthogonal-arrow', 'pen'].includes(element.type)) return;
 
             const anchors = this.getElementAnchorPoints(element);
             Object.entries(anchors).forEach(([anchorKey, point]) => {
@@ -1636,7 +1682,7 @@ class UMLDrawer {
         this.ensureDiagramElementIds(diagram);
 
         diagram.elements.forEach(element => {
-            if (element.type !== 'arrow') return;
+            if (!['arrow', 'curved-arrow', 'orthogonal-arrow'].includes(element.type)) return;
 
             if (element.sourceAttachment && elementIds.has(element.sourceAttachment.elementId)) {
                 this.updateArrowEndpointFromAttachment(element, 'start', diagram);
@@ -1745,7 +1791,7 @@ class UMLDrawer {
     
     startDrawingLine(x, y) {
         this.isDrawing = true;
-        if (this.currentTool === 'arrow') {
+        if (['arrow', 'curved-arrow', 'orthogonal-arrow'].includes(this.currentTool)) {
             const startSnap = this.getNearestSnapTarget(x, y);
             this.tempElement = {
                 type: this.currentTool,
@@ -1962,7 +2008,7 @@ class UMLDrawer {
         } else if (this.tempElement.type === 'line') {
             this.tempElement.x2 = x;
             this.tempElement.y2 = y;
-        } else if (this.tempElement.type === 'arrow') {
+        } else if (['arrow', 'curved-arrow', 'orthogonal-arrow'].includes(this.tempElement.type)) {
             const snap = this.getNearestSnapTarget(x, y);
             if (snap) {
                 this.applyAttachmentToArrowEnd(this.tempElement, 'end', snap);
@@ -1989,7 +2035,7 @@ class UMLDrawer {
                 if (this.tempElement.width > 10 && this.tempElement.height > 10) {
                     this.addElementToDiagram(this.diagrams[this.currentDiagram], this.tempElement);
                 }
-            } else if (['line', 'arrow'].includes(this.tempElement.type)) {
+            } else if (['line', 'arrow', 'curved-arrow', 'orthogonal-arrow'].includes(this.tempElement.type)) {
                 const distance = Math.sqrt(
                     Math.pow(this.tempElement.x2 - this.tempElement.x1, 2) +
                     Math.pow(this.tempElement.y2 - this.tempElement.y1, 2)
@@ -2058,6 +2104,29 @@ class UMLDrawer {
                     element.x2, element.y2
                 );
                 return distance <= 5;
+            case 'orthogonal-arrow':
+                const orthPoints = this.getOrthogonalArrowPathPoints(element);
+                const orthDist1 = this.getDistanceToLine(x, y, orthPoints[0].x, orthPoints[0].y, orthPoints[1].x, orthPoints[1].y);
+                const orthDist2 = this.getDistanceToLine(x, y, orthPoints[1].x, orthPoints[1].y, orthPoints[2].x, orthPoints[2].y);
+                return Math.min(orthDist1, orthDist2) <= 5;
+            case 'curved-arrow':
+                const control = this.getCurvedArrowControlPoint(element);
+                let minDist = Infinity;
+                const segments = 24;
+                let prev = { x: element.x1, y: element.y1 };
+                for (let i = 1; i <= segments; i++) {
+                    const t = i / segments;
+                    const next = this.getQuadraticBezierPoint(
+                        t,
+                        { x: element.x1, y: element.y1 },
+                        control,
+                        { x: element.x2, y: element.y2 }
+                    );
+                    const segDist = this.getDistanceToLine(x, y, prev.x, prev.y, next.x, next.y);
+                    minDist = Math.min(minDist, segDist);
+                    prev = next;
+                }
+                return minDist <= 6;
             case 'pen':
                 if (element.path.length < 2) return false;
                 for (let i = 0; i < element.path.length - 1; i++) {
@@ -2116,6 +2185,60 @@ class UMLDrawer {
             if (intersect) inside = !inside;
         }
         return inside;
+    }
+
+    getOrthogonalArrowPathPoints(element) {
+        const dx = element.x2 - element.x1;
+        const dy = element.y2 - element.y1;
+
+        // Auto route: choose the bend direction that better matches current drag geometry.
+        const preferHorizontalFirst = Math.abs(dx) >= Math.abs(dy);
+        let midX = preferHorizontalFirst ? element.x2 : element.x1;
+        let midY = preferHorizontalFirst ? element.y1 : element.y2;
+
+        // Avoid a zero-length final segment so arrowhead angle remains stable.
+        const finalSegLen = Math.hypot(element.x2 - midX, element.y2 - midY);
+        if (finalSegLen < 0.01) {
+            midX = preferHorizontalFirst ? element.x1 : element.x2;
+            midY = preferHorizontalFirst ? element.y2 : element.y1;
+        }
+
+        return [
+            { x: element.x1, y: element.y1 },
+            { x: midX, y: midY },
+            { x: element.x2, y: element.y2 }
+        ];
+    }
+
+    getCurvedArrowControlPoint(element) {
+        const dx = element.x2 - element.x1;
+        const dy = element.y2 - element.y1;
+        const distance = Math.sqrt(dx * dx + dy * dy) || 1;
+        const nx = -dy / distance;
+        const ny = dx / distance;
+
+        // Auto flip curvature by endpoint quadrant to keep bend direction adaptive.
+        const bendSign = dx * dy >= 0 ? 1 : -1;
+        const bend = Math.min(80, Math.max(25, distance * 0.25));
+        return {
+            x: (element.x1 + element.x2) / 2 + nx * bend * bendSign,
+            y: (element.y1 + element.y2) / 2 + ny * bend * bendSign
+        };
+    }
+
+    getQuadraticBezierPoint(t, p0, p1, p2) {
+        const mt = 1 - t;
+        return {
+            x: mt * mt * p0.x + 2 * mt * t * p1.x + t * t * p2.x,
+            y: mt * mt * p0.y + 2 * mt * t * p1.y + t * t * p2.y
+        };
+    }
+
+    getQuadraticBezierDerivative(t, p0, p1, p2) {
+        return {
+            x: 2 * (1 - t) * (p1.x - p0.x) + 2 * t * (p2.x - p1.x),
+            y: 2 * (1 - t) * (p1.y - p0.y) + 2 * t * (p2.y - p1.y)
+        };
     }
     
     createNewDiagram() {
@@ -2608,6 +2731,70 @@ class UMLDrawer {
                 ctx.lineTo(
                     element.x2 - arrowLength * Math.cos(angle + Math.PI / 6),
                     element.y2 - arrowLength * Math.sin(angle + Math.PI / 6)
+                );
+                ctx.stroke();
+                break;
+
+            case 'curved-arrow':
+                ctx.strokeStyle = element.stroke;
+                ctx.lineWidth = element.strokeWidth;
+                const curvedControl = this.getCurvedArrowControlPoint(element);
+                ctx.beginPath();
+                ctx.moveTo(element.x1, element.y1);
+                ctx.quadraticCurveTo(curvedControl.x, curvedControl.y, element.x2, element.y2);
+                ctx.stroke();
+
+                const curvedTangent = this.getQuadraticBezierDerivative(
+                    1,
+                    { x: element.x1, y: element.y1 },
+                    curvedControl,
+                    { x: element.x2, y: element.y2 }
+                );
+                const curvedAngle = Math.atan2(curvedTangent.y, curvedTangent.x);
+                const curvedArrowLength = 10;
+                ctx.beginPath();
+                ctx.moveTo(element.x2, element.y2);
+                ctx.lineTo(
+                    element.x2 - curvedArrowLength * Math.cos(curvedAngle - Math.PI / 6),
+                    element.y2 - curvedArrowLength * Math.sin(curvedAngle - Math.PI / 6)
+                );
+                ctx.moveTo(element.x2, element.y2);
+                ctx.lineTo(
+                    element.x2 - curvedArrowLength * Math.cos(curvedAngle + Math.PI / 6),
+                    element.y2 - curvedArrowLength * Math.sin(curvedAngle + Math.PI / 6)
+                );
+                ctx.stroke();
+                break;
+
+            case 'orthogonal-arrow':
+                ctx.strokeStyle = element.stroke;
+                ctx.lineWidth = element.strokeWidth;
+                const orthoPoints = this.getOrthogonalArrowPathPoints(element);
+                ctx.beginPath();
+                ctx.moveTo(orthoPoints[0].x, orthoPoints[0].y);
+                ctx.lineTo(orthoPoints[1].x, orthoPoints[1].y);
+                ctx.lineTo(orthoPoints[2].x, orthoPoints[2].y);
+                ctx.stroke();
+
+                const segDx = orthoPoints[2].x - orthoPoints[1].x;
+                const segDy = orthoPoints[2].y - orthoPoints[1].y;
+                const tailDx = orthoPoints[1].x - orthoPoints[0].x;
+                const tailDy = orthoPoints[1].y - orthoPoints[0].y;
+                const orthoAngle = Math.atan2(
+                    Math.abs(segDx) + Math.abs(segDy) < 0.01 ? tailDy : segDy,
+                    Math.abs(segDx) + Math.abs(segDy) < 0.01 ? tailDx : segDx
+                );
+                const orthoArrowLength = 10;
+                ctx.beginPath();
+                ctx.moveTo(element.x2, element.y2);
+                ctx.lineTo(
+                    element.x2 - orthoArrowLength * Math.cos(orthoAngle - Math.PI / 6),
+                    element.y2 - orthoArrowLength * Math.sin(orthoAngle - Math.PI / 6)
+                );
+                ctx.moveTo(element.x2, element.y2);
+                ctx.lineTo(
+                    element.x2 - orthoArrowLength * Math.cos(orthoAngle + Math.PI / 6),
+                    element.y2 - orthoArrowLength * Math.sin(orthoAngle + Math.PI / 6)
                 );
                 ctx.stroke();
                 break;
