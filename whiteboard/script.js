@@ -987,6 +987,8 @@ class UMLDrawer {
             case 'actor':
             case 'package':
             case 'sticky':
+            case 'triangle':
+            case 'diamond':
                 this.startDrawingShape(x, y);
                 break;
             case 'line':
