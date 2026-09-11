@@ -51,11 +51,13 @@
     }
 
     .wrap {
-      display: grid;
-      grid-template-columns: 300px minmax(360px, 1fr) minmax(340px, 1.1fr);
+      display: flex;
+      align-items: stretch;
       gap: 16px;
       padding: 16px;
       height: calc(100vh - 154px);
+      min-height: calc(100vh - 154px);
+      overflow: hidden;
     }
 
     .top-toolbar {
@@ -84,11 +86,15 @@
     }
 
     .panel {
+      position: relative;
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
       min-height: 0;
+      min-width: 10%;
+      height: 100%;
+      flex: 0 0 auto;
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -96,6 +102,10 @@
 
     .panel.hidden {
       display: none;
+    }
+
+    .panel.resizing {
+      box-shadow: 0 18px 44px rgba(15, 23, 42, 0.18);
     }
 
     .panel-header {
@@ -117,6 +127,24 @@
       padding: 14px 16px;
       overflow: auto;
       min-height: 0;
+      flex: 1;
+    }
+
+    .resize-handle {
+      position: absolute;
+      right: 0;
+      top: 0;
+      width: 10px;
+      height: 100%;
+      cursor: col-resize;
+      background:
+        linear-gradient(90deg, transparent 0 35%, rgba(148, 163, 184, 0.55) 35% 65%, transparent 65% 100%);
+      opacity: 0.7;
+      z-index: 2;
+    }
+
+    .resize-handle.disabled {
+      display: none;
     }
 
     .toolbar {
@@ -520,11 +548,22 @@
 
     @media (max-width: 1180px) {
       .wrap {
-        grid-template-columns: 1fr;
+        display: block;
         height: auto;
+        min-height: 0;
+        overflow: visible;
       }
-      .panel { min-height: 280px; }
+      .panel {
+        width: 100% !important;
+        min-width: 100%;
+        height: 100vh !important;
+        min-height: 100vh;
+        margin-bottom: 16px;
+      }
+      .panel:last-child { margin-bottom: 0; }
+      .stats-grid { grid-template-columns: 1fr; }
       .table-wrap { max-height: 55vh; }
+      .resize-handle { display: none !important; }
     }
   </style>
 </head>
@@ -565,6 +604,7 @@
         <div id='fileList' class='file-list'></div>
         <div class='footer-note'>支持文件：<code>.xlsx</code>、<code>.xls</code>、<code>.xlsm</code>、<code>.xlsb</code>。解析依赖浏览器和 SheetJS，结果保存在 <code>IndexedDB</code> 中。</div>
       </div>
+      <div class='resize-handle' data-resize='panel-maintenance'></div>
     </section>
 
     <section class='panel' id='panel-query'>
@@ -591,6 +631,7 @@
         </div>
         <div id='results' class='results'></div>
       </div>
+      <div class='resize-handle' data-resize='panel-query'></div>
     </section>
 
     <section class='panel' id='panel-stats'>
@@ -629,6 +670,7 @@
           <div id='statsSummary' class='stats-summary' style='margin-top:8px;'></div>
           <div id='statsResults' class='stats-table-wrap' style='margin-top:8px;'></div>
       </div>
+      <div class='resize-handle' data-resize='panel-stats'></div>
     </section>
 
     <section class='panel' id='panel-preview'>
@@ -640,6 +682,7 @@
         <div id='previewEmpty' class='empty'>请选择左侧文件，或点击搜索结果中的“打开完整文件”。</div>
         <div id='previewContent' style='display:none;'></div>
       </div>
+      <div class='resize-handle' data-resize='panel-preview'></div>
     </section>
   </main>
 
@@ -667,6 +710,7 @@
     const DB_VERSION = 1;
     const STORE_NAME = 'files';
     const MODULE_VISIBILITY_KEY = 'excel_knowledge_module_visibility_v1';
+    const PANEL_WIDTH_KEY = 'excel_knowledge_panel_widths_v1';
 
     const app = {
       db: null,
@@ -674,6 +718,7 @@
       results: [],
       statResults: [],
       statSelectedFields: [],
+      panelWidths: {},
       query: '',
       activeFileId: '',
       activeSheetName: '',
@@ -719,8 +764,220 @@
       modalFooterInfo: document.getElementById('modalFooterInfo'),
       modalCloseBtn: document.getElementById('modalCloseBtn'),
       modalPrevBtn: document.getElementById('modalPrevBtn'),
-      modalNextBtn: document.getElementById('modalNextBtn')
+      modalNextBtn: document.getElementById('modalNextBtn'),
+      wrap: document.querySelector('.wrap')
     };
+
+    function getPanelIds() {
+      return ['panel-maintenance', 'panel-query', 'panel-stats', 'panel-preview'];
+    }
+
+    function getPanelEl(panelId) {
+      return document.getElementById(panelId);
+    }
+
+    function isMobileLayout() {
+      return window.innerWidth <= 1180;
+    }
+
+    function getVisiblePanelIds() {
+      return getPanelIds().filter((panelId) => {
+        const panel = getPanelEl(panelId);
+        return panel && !panel.classList.contains('hidden');
+      });
+    }
+
+    function clamp(value, min, max) {
+      return Math.min(Math.max(value, min), max);
+    }
+
+    function savePanelWidths() {
+      try {
+        localStorage.setItem(PANEL_WIDTH_KEY, JSON.stringify(app.panelWidths));
+      } catch (err) {
+        // Ignore persistence failures.
+      }
+    }
+
+    function loadPanelWidths() {
+      try {
+        const raw = localStorage.getItem(PANEL_WIDTH_KEY);
+        app.panelWidths = raw ? JSON.parse(raw) : {};
+      } catch (err) {
+        app.panelWidths = {};
+      }
+    }
+
+    function setEqualVisiblePanelWidths() {
+      const visibleIds = getVisiblePanelIds();
+      if (!visibleIds.length) return;
+      const width = 100 / visibleIds.length;
+      visibleIds.forEach((panelId) => {
+        app.panelWidths[panelId] = width;
+      });
+      savePanelWidths();
+    }
+
+    function normalizeVisiblePanelWidths(forceEqual) {
+      const visibleIds = getVisiblePanelIds();
+      if (!visibleIds.length) return;
+      if (visibleIds.length === 1) {
+        app.panelWidths[visibleIds[0]] = 100;
+        savePanelWidths();
+        return;
+      }
+
+      if (forceEqual) {
+        setEqualVisiblePanelWidths();
+        return;
+      }
+
+      const minWidth = 10;
+      const fallback = 100 / visibleIds.length;
+      let widths = visibleIds.map((panelId) => {
+        const value = Number(app.panelWidths[panelId]);
+        return Number.isFinite(value) && value > 0 ? value : fallback;
+      });
+
+      let sum = widths.reduce((total, value) => total + value, 0);
+      widths = widths.map((value) => (value / sum) * 100);
+
+      let adjusted = true;
+      while (adjusted) {
+        adjusted = false;
+        const smallIndexes = widths.map((value, index) => ({ value, index })).filter((item) => item.value < minWidth);
+        if (!smallIndexes.length) break;
+        adjusted = true;
+        const fixedIndexes = {};
+        let fixedTotal = 0;
+        smallIndexes.forEach((item) => {
+          fixedIndexes[item.index] = true;
+          widths[item.index] = minWidth;
+          fixedTotal += minWidth;
+        });
+        const restIndexes = widths.map((_, index) => index).filter((index) => !fixedIndexes[index]);
+        const restCurrent = restIndexes.reduce((total, index) => total + widths[index], 0) || 1;
+        const restTarget = Math.max(100 - fixedTotal, minWidth * restIndexes.length);
+        restIndexes.forEach((index) => {
+          widths[index] = (widths[index] / restCurrent) * restTarget;
+        });
+      }
+
+      sum = widths.reduce((total, value) => total + value, 0) || 1;
+      widths = widths.map((value) => (value / sum) * 100);
+      visibleIds.forEach((panelId, index) => {
+        app.panelWidths[panelId] = widths[index];
+      });
+      savePanelWidths();
+    }
+
+    function updateResizeHandleVisibility() {
+      const visibleIds = getVisiblePanelIds();
+      getPanelIds().forEach((panelId) => {
+        const panel = getPanelEl(panelId);
+        const handle = panel ? panel.querySelector('.resize-handle') : null;
+        if (!handle) return;
+        const disabled = isMobileLayout() || visibleIds.length <= 1 || visibleIds[visibleIds.length - 1] === panelId || panel.classList.contains('hidden');
+        handle.classList.toggle('disabled', disabled);
+      });
+    }
+
+    function applyDesktopPanelWidths() {
+      const visibleIds = getVisiblePanelIds();
+      const gapPx = 16;
+      const wrapStyle = window.getComputedStyle(els.wrap);
+      const paddingLeft = parseFloat(wrapStyle.paddingLeft || '0') || 0;
+      const paddingRight = parseFloat(wrapStyle.paddingRight || '0') || 0;
+      const innerWidth = Math.max(els.wrap.clientWidth - paddingLeft - paddingRight, 0);
+      const availableWidth = Math.max(innerWidth - gapPx * Math.max(visibleIds.length - 1, 0), 0);
+
+      visibleIds.forEach((panelId) => {
+        const panel = getPanelEl(panelId);
+        if (!panel) return;
+        const widthPercent = Number(app.panelWidths[panelId]) || (100 / visibleIds.length);
+        panel.style.width = `${(availableWidth * widthPercent) / 100}px`;
+        panel.style.height = '100%';
+      });
+
+      getPanelIds().filter((panelId) => visibleIds.indexOf(panelId) === -1).forEach((panelId) => {
+        const panel = getPanelEl(panelId);
+        if (!panel) return;
+        panel.style.width = '';
+      });
+    }
+
+    function syncPanelLayout(forceEqual) {
+      if (isMobileLayout()) {
+        getPanelIds().forEach((panelId) => {
+          const panel = getPanelEl(panelId);
+          if (!panel) return;
+          panel.style.width = '';
+          panel.style.height = '';
+        });
+        updateResizeHandleVisibility();
+        return;
+      }
+
+      normalizeVisiblePanelWidths(Boolean(forceEqual));
+      applyDesktopPanelWidths();
+      updateResizeHandleVisibility();
+    }
+
+    function bindPanelInteractions(panel) {
+      const resizeHandle = panel.querySelector('.resize-handle');
+      if (!resizeHandle) return;
+
+      resizeHandle.addEventListener('mousedown', (evt) => {
+        if (isMobileLayout()) return;
+        const visibleIds = getVisiblePanelIds();
+        const currentIndex = visibleIds.indexOf(panel.id);
+        if (currentIndex === -1 || currentIndex >= visibleIds.length - 1) return;
+
+        evt.preventDefault();
+        evt.stopPropagation();
+        panel.classList.add('resizing');
+
+        const startX = evt.clientX;
+        const nextPanelId = visibleIds[currentIndex + 1];
+        const gapPx = 16;
+        const totalWidth = Math.max(els.wrap.clientWidth - gapPx * Math.max(visibleIds.length - 1, 0), 1);
+        const startCurrent = Number(app.panelWidths[panel.id]) || (100 / visibleIds.length);
+        const startNext = Number(app.panelWidths[nextPanelId]) || (100 / visibleIds.length);
+        const minWidth = 10;
+
+        function onMove(moveEvt) {
+          const deltaPercent = ((moveEvt.clientX - startX) / totalWidth) * 100;
+          const combined = startCurrent + startNext;
+          const nextCurrent = clamp(startCurrent + deltaPercent, minWidth, combined - minWidth);
+          const nextSibling = combined - nextCurrent;
+          app.panelWidths[panel.id] = nextCurrent;
+          app.panelWidths[nextPanelId] = nextSibling;
+          applyDesktopPanelWidths();
+          updateResizeHandleVisibility();
+        }
+
+        function onUp() {
+          panel.classList.remove('resizing');
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+          savePanelWidths();
+        }
+
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+      });
+    }
+
+    function initPanels() {
+      loadPanelWidths();
+      getPanelIds().forEach((panelId) => {
+        const panel = getPanelEl(panelId);
+        if (!panel) return;
+        bindPanelInteractions(panel);
+      });
+      syncPanelLayout(false);
+      window.addEventListener('resize', () => syncPanelLayout(false));
+    }
 
     function getModuleButtons() {
       return Array.from(els.moduleToolbar.querySelectorAll('button[data-target]'));
@@ -1528,6 +1785,13 @@
       renderPreview(fileId, sheetName, highlightRowIndex);
       const file = findFile(fileId);
       if (!file) return;
+      const previewPanel = getPanelEl('panel-preview');
+      if (previewPanel && previewPanel.classList.contains('hidden')) {
+        previewPanel.classList.remove('hidden');
+        updateModuleToolbarStyles();
+        saveModuleVisibility();
+        syncPanelLayout(true);
+      }
       setStatus(`正在打开文件预览：${file.fileName}`, 'success');
     }
 
@@ -1682,6 +1946,7 @@
         panel.classList.toggle('hidden');
         updateModuleToolbarStyles();
         saveModuleVisibility();
+        syncPanelLayout(true);
       });
 
       els.fileInput.addEventListener('change', (event) => {
@@ -1753,6 +2018,7 @@
     async function bootstrap() {
       bindEvents();
       applySavedModuleVisibility();
+      initPanels();
       updateModuleToolbarStyles();
       setPreviewEmpty('请选择左侧文件，或点击搜索结果中的“打开完整文件”。');
       try {
