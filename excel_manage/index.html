@@ -128,6 +128,7 @@
       overflow: auto;
       min-height: 0;
       flex: 1;
+      min-width: 0;
     }
 
     .resize-handle {
@@ -450,12 +451,13 @@
       border-radius: 12px;
       max-height: calc(92vh - 170px);
       background: #fff;
+      max-width: 100%;
     }
 
     table {
       border-collapse: collapse;
-      width: max-content;
-      min-width: 100%;
+      width: 100%;
+      table-layout: fixed;
     }
 
     th, td {
@@ -463,7 +465,8 @@
       padding: 8px 10px;
       font-size: 13px;
       vertical-align: top;
-      white-space: nowrap;
+      white-space: normal;
+      word-break: break-all;
     }
 
     th {
@@ -506,11 +509,93 @@
       border-radius: 12px;
       padding: 12px;
       background: #fff;
+      min-width: 0;
     }
 
     .detail-title {
       font-weight: 700;
       margin-bottom: 10px;
+    }
+
+    .modal-action-bar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    .sticky-preview-actions {
+      position: sticky;
+      top: 0;
+      z-index: 4;
+      margin-top: 0;
+      margin-bottom: 10px;
+      padding: 10px 0;
+      background: #fff;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .sticky-modal-actions {
+      position: sticky;
+      bottom: 0;
+      z-index: 4;
+      margin-top: 12px;
+      padding: 12px 0 4px;
+      background: linear-gradient(to top, #fff 82%, rgba(255,255,255,0.88) 100%);
+      border-top: 1px solid #e5e7eb;
+    }
+
+    .editor-grid {
+      display: grid;
+      gap: 10px;
+      padding-bottom: 8px;
+    }
+
+    .editor-item {
+      display: grid;
+      gap: 6px;
+    }
+
+    .editor-item label {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .preview-table {
+      width: max-content;
+      min-width: 100%;
+      table-layout: auto;
+    }
+
+    .preview-table th,
+    .preview-table td {
+      white-space: nowrap;
+      word-break: normal;
+    }
+
+    .preview-table tbody tr {
+      cursor: pointer;
+    }
+
+    .preview-table th.row-head,
+    .preview-table td.row-head {
+      width: 72px;
+      min-width: 72px;
+      max-width: 72px;
+    }
+
+    .preview-table tr.highlight-row td,
+    .preview-table tr.highlight-row th.row-head {
+      background: #fef3c7;
+    }
+
+    .selectable-table tbody tr {
+      cursor: pointer;
+    }
+
+    .selectable-table tbody tr.selected-row td,
+    .selectable-table tbody tr.selected-row th.row-head {
+      background: #dbeafe;
     }
 
     .kv {
@@ -718,6 +803,7 @@
       results: [],
       statResults: [],
       statSelectedFields: [],
+      statDetailSelectedIndex: null,
       panelWidths: {},
       query: '',
       activeFileId: '',
@@ -767,6 +853,61 @@
       modalNextBtn: document.getElementById('modalNextBtn'),
       wrap: document.querySelector('.wrap')
     };
+
+    function toArray(list) {
+      return Array.prototype.slice.call(list || []);
+    }
+
+    function matchesSelector(element, selector) {
+      if (!element || element.nodeType !== 1) return false;
+      const fn = element.matches || element.msMatchesSelector || element.webkitMatchesSelector;
+      return fn ? fn.call(element, selector) : false;
+    }
+
+    function closestElement(element, selector) {
+      let current = element && element.nodeType === 1 ? element : (element ? element.parentElement : null);
+      while (current) {
+        if (matchesSelector(current, selector)) return current;
+        current = current.parentElement;
+      }
+      return null;
+    }
+
+    function toggleClass(element, className, force) {
+      if (!element) return;
+      if (force) {
+        element.classList.add(className);
+      } else {
+        element.classList.remove(className);
+      }
+    }
+
+    function findInArray(list, predicate) {
+      for (let i = 0; i < list.length; i += 1) {
+        if (predicate(list[i], i)) return list[i];
+      }
+      return null;
+    }
+
+    function findIndexInArray(list, predicate) {
+      for (let i = 0; i < list.length; i += 1) {
+        if (predicate(list[i], i)) return i;
+      }
+      return -1;
+    }
+
+    function isFiniteNumber(value) {
+      return typeof value === 'number' && isFinite(value);
+    }
+
+    function getFirstSheet(file) {
+      return file && file.sheets && file.sheets.length ? file.sheets[0] : null;
+    }
+
+    function getFirstSheetName(file) {
+      const firstSheet = getFirstSheet(file);
+      return firstSheet ? firstSheet.sheetName : '';
+    }
 
     function getPanelIds() {
       return ['panel-maintenance', 'panel-query', 'panel-stats', 'panel-preview'];
@@ -836,7 +977,7 @@
       const fallback = 100 / visibleIds.length;
       let widths = visibleIds.map((panelId) => {
         const value = Number(app.panelWidths[panelId]);
-        return Number.isFinite(value) && value > 0 ? value : fallback;
+        return isFiniteNumber(value) && value > 0 ? value : fallback;
       });
 
       let sum = widths.reduce((total, value) => total + value, 0);
@@ -878,7 +1019,7 @@
         const handle = panel ? panel.querySelector('.resize-handle') : null;
         if (!handle) return;
         const disabled = isMobileLayout() || visibleIds.length <= 1 || visibleIds[visibleIds.length - 1] === panelId || panel.classList.contains('hidden');
-        handle.classList.toggle('disabled', disabled);
+        toggleClass(handle, 'disabled', disabled);
       });
     }
 
@@ -980,7 +1121,7 @@
     }
 
     function getModuleButtons() {
-      return Array.from(els.moduleToolbar.querySelectorAll('button[data-target]'));
+      return toArray(els.moduleToolbar.querySelectorAll('button[data-target]'));
     }
 
     function updateModuleToolbarStyles() {
@@ -988,7 +1129,7 @@
         const targetId = btn.getAttribute('data-target');
         const panel = document.getElementById(targetId);
         const hidden = panel ? panel.classList.contains('hidden') : true;
-        btn.classList.toggle('inactive', hidden);
+        toggleClass(btn, 'inactive', hidden);
       });
     }
 
@@ -1017,7 +1158,7 @@
           const targetId = btn.getAttribute('data-target');
           const panel = document.getElementById(targetId);
           if (!panel || !(targetId in data)) return;
-          panel.classList.toggle('hidden', data[targetId] === false);
+          toggleClass(panel, 'hidden', data[targetId] === false);
         });
       } catch (err) {
         // Ignore invalid cached data.
@@ -1042,7 +1183,7 @@
     }
 
     function formatBytes(bytes) {
-      if (bytes == null || Number.isNaN(bytes)) return '-';
+      if (bytes == null || isNaN(bytes)) return '-';
       const units = ['B', 'KB', 'MB', 'GB'];
       let size = bytes;
       let idx = 0;
@@ -1260,11 +1401,284 @@
     }
 
     function findFile(fileId) {
-      return app.files.find((item) => item.fileId === fileId) || null;
+      return findInArray(app.files, (item) => item.fileId === fileId);
     }
 
     function findSheet(file, sheetName) {
-      return (file?.sheets || []).find((sheet) => sheet.sheetName === sheetName) || null;
+      return findInArray((file && file.sheets) || [], (sheet) => sheet.sheetName === sheetName);
+    }
+
+    function getSheetHeaders(sheet) {
+      const headerRow = sheet && sheet.rows && sheet.rows[0] ? sheet.rows[0] : null;
+      const columnCount = Math.max((sheet && sheet.columnCount) || 0, (headerRow && headerRow.cells ? headerRow.cells.length : 0));
+      const headers = [];
+      for (let c = 0; c < columnCount; c += 1) {
+        const cell = headerRow && headerRow.cells && headerRow.cells[c] ? headerRow.cells[c] : null;
+        const text = cell && cell.displayValue != null ? String(cell.displayValue).trim() : '';
+        headers.push(text || `列${XLSX.utils.encode_col(c)}`);
+      }
+      return headers;
+    }
+
+    function rebuildSheetRows(sheet) {
+      const rows = sheet && sheet.rows ? sheet.rows : [];
+      let maxCols = 0;
+      rows.forEach((row, rowIndex) => {
+        row.rowIndex = rowIndex;
+        row.cells = row.cells || [];
+        row.cells.forEach((cell, colIndex) => {
+          cell.colIndex = colIndex;
+          cell.address = XLSX.utils.encode_cell({ r: rowIndex, c: colIndex });
+          cell.displayValue = cell.displayValue == null ? '' : String(cell.displayValue);
+          cell.value = cell.displayValue;
+        });
+        row.rowText = row.cells.map((cell) => cell.displayValue || '').join(' | ');
+        maxCols = Math.max(maxCols, row.cells.length);
+      });
+      sheet.rowCount = rows.length;
+      sheet.columnCount = maxCols;
+      sheet.range = rows.length && maxCols ? XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length - 1, c: maxCols - 1 } }) : '';
+    }
+
+    function createBlankRow(sheet) {
+      return {
+        rowIndex: (sheet.rows || []).length,
+        cells: getSheetHeaders(sheet).map((_, index) => ({
+          colIndex: index,
+          address: '',
+          value: '',
+          displayValue: ''
+        })),
+        rowText: ''
+      };
+    }
+
+    async function persistFileChanges(file, options) {
+      const payload = options || {};
+      await idbPut(file);
+      const index = findIndexInArray(app.files, (item) => item.fileId === file.fileId);
+      if (index !== -1) app.files[index] = file;
+      app.activeFileId = file.fileId;
+      app.activeSheetName = payload.sheetName || app.activeSheetName || (file.sheets && file.sheets[0] ? file.sheets[0].sheetName : '');
+      app.activePreviewRow = typeof payload.highlightRowIndex === 'number' ? payload.highlightRowIndex : null;
+      renderAll();
+      setStatus(payload.message || '数据已保存。', 'success');
+    }
+
+    function getRowModalPayload(fileId, sheetName, rowIndex, mode) {
+      return { fileId, sheetName, rowIndex, mode: mode || 'view' };
+    }
+
+    function hasSelectedPreviewRow() {
+      return isFiniteNumber(app.activePreviewRow);
+    }
+
+    function editSelectedPreviewRow() {
+      if (!app.activeFileId || !app.activeSheetName || !hasSelectedPreviewRow()) {
+        setStatus('请先在“完整文件预览”中点击选中一行。', 'warning');
+        return;
+      }
+      renderRowModal(getRowModalPayload(app.activeFileId, app.activeSheetName, app.activePreviewRow, 'edit'));
+    }
+
+    async function deleteRowByRef(fileId, sheetName, rowIndex, message) {
+      const file = findFile(fileId);
+      const sheet = file ? findSheet(file, sheetName) : null;
+      if (!file || !sheet) {
+        setStatus('删除失败，未找到目标文件。', 'error');
+        return;
+      }
+      if (!isFiniteNumber(rowIndex) || rowIndex <= 0) {
+        setStatus('当前行不支持删除。', 'warning');
+        return;
+      }
+      if (!confirm('确定删除当前行数据吗？此操作不可恢复。')) return;
+      sheet.rows.splice(rowIndex, 1);
+      rebuildSheetRows(sheet);
+      await persistFileChanges(file, {
+        sheetName: sheet.sheetName,
+        highlightRowIndex: null,
+        message: message || '已删除当前行数据。'
+      });
+      closeModal();
+    }
+
+    function deleteSelectedPreviewRow() {
+      if (!app.activeFileId || !app.activeSheetName || !hasSelectedPreviewRow()) {
+        setStatus('请先在“完整文件预览”中点击选中一行。', 'warning');
+        return;
+      }
+      deleteRowByRef(app.activeFileId, app.activeSheetName, app.activePreviewRow, '已删除选中行数据。').catch((err) => {
+        setStatus(err.message || '删除失败', 'error');
+      });
+    }
+
+    function hasSelectedStatDetailRow() {
+      return isFiniteNumber(app.statDetailSelectedIndex);
+    }
+
+    function locateSelectedStatDetailRow() {
+      const group = isFiniteNumber(app.modalIndex) ? app.statResults[app.modalIndex] : null;
+      const detail = group && group.details && hasSelectedStatDetailRow() ? group.details[app.statDetailSelectedIndex] : null;
+      if (!detail) {
+        setStatus('请先在“统计分组明细反查”中点击选中一行。', 'warning');
+        return;
+      }
+      closeModal();
+      openFullFile(detail.fileId, detail.sheetName, detail.rowIndex0);
+      setStatus('已从统计结果反查并定位到对应明细行。', 'success');
+    }
+
+    function getModalInputValues() {
+      return toArray(els.modalBody.querySelectorAll('[data-edit-input]')).map((node) => node.value);
+    }
+
+    function renderRowModal(payload) {
+      const file = findFile(payload.fileId);
+      const sheet = file ? findSheet(file, payload.sheetName) : null;
+      if (!file || !sheet) {
+        setStatus('未找到可编辑的数据。', 'error');
+        closeModal();
+        return;
+      }
+
+      const headers = getSheetHeaders(sheet);
+      const isAdd = payload.mode === 'add';
+      const row = isAdd ? createBlankRow(sheet) : findInArray(sheet.rows || [], (item) => item.rowIndex === payload.rowIndex);
+      if (!row) {
+        setStatus('未找到目标数据行。', 'error');
+        closeModal();
+        return;
+      }
+
+      const values = headers.map((_, index) => {
+        const cell = row.cells && row.cells[index] ? row.cells[index] : null;
+        return cell && cell.displayValue != null ? String(cell.displayValue) : '';
+      });
+
+      let body = '';
+      if (payload.mode === 'view') {
+        const rowHtml = headers.map((header, index) => `
+          <tr>
+            <th class='row-head'>${index + 1}</th>
+            <td>${escapeHtml(header)}</td>
+            <td>${escapeHtml(values[index])}</td>
+          </tr>
+        `).join('');
+        body = `
+          <div class='detail-grid'>
+            <div class='detail-card'>
+              <div class='detail-title'>行信息</div>
+              <div class='kv'>
+                <div>文件名</div><div>${escapeHtml(file.fileName)}</div>
+                <div>工作表</div><div>${escapeHtml(sheet.sheetName)}</div>
+                <div>行号</div><div>${row.rowIndex + 1}</div>
+              </div>
+              <div class='modal-action-bar'>
+                <button class='btn small' type='button' data-action='row-modal-edit'>编辑此行</button>
+                ${row.rowIndex > 0 ? `<button class='btn small danger' type='button' data-action='row-modal-delete'>删除此行</button>` : ''}
+              </div>
+            </div>
+            <div class='detail-card'>
+              <div class='detail-title'>整行数据</div>
+              <div class='table-wrap'>
+                <table>
+                  <thead>
+                    <tr><th class='row-head'>序号</th><th>字段</th><th>内容</th></tr>
+                  </thead>
+                  <tbody>${rowHtml}</tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        `;
+      } else {
+        const editorHtml = headers.map((header, index) => `
+          <div class='editor-item'>
+            <label>${escapeHtml(header)}</label>
+            <textarea class='input' rows='2' data-edit-input='1' data-field-index='${index}'>${escapeHtml(values[index])}</textarea>
+          </div>
+        `).join('');
+        body = `
+          <div class='detail-grid'>
+            <div class='detail-card'>
+              <div class='detail-title'>${isAdd ? '新增数据行' : '编辑数据行'}</div>
+              <div class='meta'>文件：${escapeHtml(file.fileName)} ｜ 工作表：${escapeHtml(sheet.sheetName)}${isAdd ? '' : ` ｜ 第 ${row.rowIndex + 1} 行`}</div>
+            </div>
+            <div class='detail-card'>
+              <div class='detail-title'>字段编辑</div>
+              <div class='editor-grid'>${editorHtml}</div>
+              <div class='modal-action-bar sticky-modal-actions'>
+                <button class='btn small success' type='button' data-action='row-modal-save'>${isAdd ? '保存新增' : '保存修改'}</button>
+                <button class='btn small ghost' type='button' data-action='row-modal-cancel'>${isAdd ? '取消新增' : '取消编辑'}</button>
+                ${!isAdd && row.rowIndex > 0 ? `<button class='btn small danger' type='button' data-action='row-modal-delete'>删除此行</button>` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      openModal({
+        title: isAdd ? '新增知识库数据' : (payload.mode === 'edit' ? '编辑知识库数据' : '显示整行数据'),
+        footer: `${file.fileName} / ${sheet.sheetName}${isAdd ? '' : ` / 第 ${row.rowIndex + 1} 行`}`,
+        body
+      });
+      app.modalPayload = payload;
+    }
+
+    async function saveRowModalChanges() {
+      const payload = app.modalPayload;
+      if (!payload) return;
+      const file = findFile(payload.fileId);
+      const sheet = file ? findSheet(file, payload.sheetName) : null;
+      if (!file || !sheet) {
+        setStatus('保存失败，未找到目标文件。', 'error');
+        return;
+      }
+      const values = getModalInputValues();
+      const headers = getSheetHeaders(sheet);
+      const cells = headers.map((_, index) => ({
+        colIndex: index,
+        address: '',
+        value: values[index] == null ? '' : String(values[index]),
+        displayValue: values[index] == null ? '' : String(values[index])
+      }));
+
+      if (payload.mode === 'add') {
+        sheet.rows = sheet.rows || [];
+        sheet.rows.push({ rowIndex: sheet.rows.length, cells, rowText: '' });
+        rebuildSheetRows(sheet);
+        await persistFileChanges(file, {
+          sheetName: sheet.sheetName,
+          highlightRowIndex: sheet.rows.length - 1,
+          message: '已新增一行知识库数据。'
+        });
+        closeModal();
+        return;
+      }
+
+      const row = findInArray(sheet.rows || [], (item) => item.rowIndex === payload.rowIndex);
+      if (!row) {
+        setStatus('保存失败，未找到目标行。', 'error');
+        return;
+      }
+      row.cells = cells;
+      rebuildSheetRows(sheet);
+      await persistFileChanges(file, {
+        sheetName: sheet.sheetName,
+        highlightRowIndex: row.rowIndex,
+        message: '已保存行数据修改。'
+      });
+      closeModal();
+    }
+
+    async function deleteRowFromModal() {
+      const payload = app.modalPayload;
+      if (!payload || payload.mode === 'add') {
+        closeModal();
+        return;
+      }
+      await deleteRowByRef(payload.fileId, payload.sheetName, Number(payload.rowIndex), '已删除当前行数据。');
     }
 
     function flattenResults(query) {
@@ -1354,7 +1768,7 @@
     }
 
     function getSelectedStatFields() {
-      return Array.from(els.statFieldList.querySelectorAll('input[type="checkbox"]:checked')).map((node) => node.value);
+      return toArray(els.statFieldList.querySelectorAll('input[type="checkbox"]:checked')).map((node) => node.value);
     }
 
     function renderStatFieldOptions(fields) {
@@ -1411,28 +1825,22 @@
     function openStatGroupDetails(index) {
       const row = app.statResults[index];
       if (!row) return;
+      if (!isFiniteNumber(app.statDetailSelectedIndex) || app.statDetailSelectedIndex < 0 || app.statDetailSelectedIndex >= (row.details || []).length) {
+        app.statDetailSelectedIndex = null;
+      }
 
       const groupFields = app.statSelectedFields || [];
       const headerCells = groupFields.map((name) => `<th>${escapeHtml(name)}</th>`).join('');
       const bodyRows = (row.details || []).map((item, detailIndex) => {
         const values = groupFields.map((name) => `<td>${escapeHtml(item.values[name] || '(空)')}</td>`).join('');
+        const selectedClass = app.statDetailSelectedIndex === detailIndex ? 'selected-row' : '';
         return `
-          <tr>
+          <tr class='${selectedClass}' data-detail-index='${detailIndex}'>
             <th class='row-head'>${detailIndex + 1}</th>
             <td>${escapeHtml(item.fileName)}</td>
             <td>${escapeHtml(item.sheetName)}</td>
             <td>${item.rowIndex}</td>
             ${values}
-            <td>
-              <button
-                class='btn small'
-                type='button'
-                data-action='stat-open-row'
-                data-file-id='${escapeHtml(item.fileId)}'
-                data-sheet-name='${escapeHtml(item.sheetName)}'
-                data-row-index='${item.rowIndex0}'
-              >定位该行</button>
-            </td>
           </tr>
         `;
       }).join('');
@@ -1449,8 +1857,12 @@
             </div>
             <div class='detail-card'>
               <div class='detail-title'>反查明细</div>
+              <div class='modal-action-bar sticky-preview-actions'>
+                <button class='btn small' type='button' data-action='stat-detail-open-selected'>定位选中行</button>
+                <span class='hint'>${hasSelectedStatDetailRow() ? `当前已选中第 ${app.statDetailSelectedIndex + 1} 行` : '请先点击表格行进行选中'}</span>
+              </div>
               <div class='table-wrap'>
-                <table>
+                <table class='selectable-table'>
                   <thead>
                     <tr>
                       <th class='row-head'>序号</th>
@@ -1458,16 +1870,17 @@
                       <th>工作表</th>
                       <th>行号</th>
                       ${headerCells}
-                      <th>操作</th>
                     </tr>
                   </thead>
-                  <tbody>${bodyRows || `<tr><td colspan='6'>无明细数据</td></tr>`}</tbody>
+                  <tbody>${bodyRows || `<tr><td colspan='${groupFields.length + 4}'>无明细数据</td></tr>`}</tbody>
                 </table>
               </div>
             </div>
           </div>
         `
       });
+      app.modalIndex = index;
+      app.modalPayload = { mode: 'stat-detail', groupIndex: index };
     }
 
     function runStats() {
@@ -1595,10 +2008,10 @@
           </div>
         `;
         card.querySelector('[data-action="view"]').addEventListener('click', () => openFullFile(file.fileId));
-        card.querySelector('[data-action="preview"]').addEventListener('click', () => openFullFile(file.fileId, file.sheets?.[0]?.sheetName || ''));
+        card.querySelector('[data-action="preview"]').addEventListener('click', () => openFullFile(file.fileId, getFirstSheetName(file)));
         card.querySelector('[data-action="delete"]').addEventListener('click', () => deleteFile(file.fileId));
         card.addEventListener('click', (evt) => {
-          if (evt.target.closest('button')) return;
+          if (closestElement(evt.target, 'button')) return;
           openFullFile(file.fileId);
         });
         els.fileList.appendChild(card);
@@ -1651,7 +2064,7 @@
         card.querySelector('[data-action="row"]').addEventListener('click', () => openRowDetail(item));
         card.querySelector('[data-action="file"]').addEventListener('click', () => openFullFile(item.fileId, item.sheetName, item.rowIndex));
         card.addEventListener('click', (evt) => {
-          if (evt.target.closest('button')) return;
+          if (closestElement(evt.target, 'button')) return;
           openRowDetail(item);
         });
         els.results.appendChild(card);
@@ -1665,10 +2078,10 @@
         return;
       }
       app.activeFileId = fileId;
-      app.activeSheetName = sheetName || file.sheets?.[0]?.sheetName || '';
+      app.activeSheetName = sheetName || getFirstSheetName(file) || '';
       app.activePreviewRow = highlightRowIndex;
 
-      const selectedSheet = findSheet(file, app.activeSheetName) || file.sheets?.[0] || null;
+      const selectedSheet = findSheet(file, app.activeSheetName) || getFirstSheet(file) || null;
       if (!selectedSheet) {
         setPreviewEmpty('该文件没有可显示的工作表。');
         return;
@@ -1683,12 +2096,19 @@
       }).join('');
 
       const rows = selectedSheet.rows || [];
+      if (highlightRowIndex !== null && (!isFiniteNumber(highlightRowIndex) || highlightRowIndex < 0 || highlightRowIndex >= rows.length)) {
+        highlightRowIndex = null;
+        app.activePreviewRow = null;
+      }
       const maxCols = rows.reduce((max, row) => Math.max(max, (row.cells || []).length), 0);
-      const colHeaders = Array.from({ length: maxCols }, (_, i) => `<th>${escapeHtml(XLSX.utils.encode_col(i))}</th>`).join('');
+      const colHeaders = [];
+      for (let i = 0; i < maxCols; i += 1) {
+        colHeaders.push(`<th>${escapeHtml(XLSX.utils.encode_col(i))}</th>`);
+      }
       const tableRows = rows.map((row) => {
         const cells = (row.cells || []).map((cell) => `<td>${escapeHtml(cell.displayValue)}</td>`).join('');
         const rowClass = highlightRowIndex !== null && row.rowIndex === highlightRowIndex ? 'highlight-row' : '';
-        return `<tr id='preview-row-${row.rowIndex}' class='${rowClass}'><th class='row-head'>${row.rowIndex + 1}</th>${cells}</tr>`;
+        return `<tr id='preview-row-${row.rowIndex}' class='${rowClass}' data-row-index='${row.rowIndex}'><th class='row-head'>${row.rowIndex + 1}</th>${cells}</tr>`;
       }).join('');
 
       els.previewContent.innerHTML = `
@@ -1709,12 +2129,18 @@
           </div>
           <div class='detail-card'>
             <div class='detail-title'>完整文件预览</div>
+            <div class='modal-action-bar sticky-preview-actions'>
+              <button class='btn small success' type='button' data-action='add-row' data-file-id='${escapeHtml(fileId)}' data-sheet-name='${escapeHtml(selectedSheet.sheetName)}'>新增一行</button>
+              <button class='btn small' type='button' data-action='edit-selected-row'>编辑</button>
+              <button class='btn small danger' type='button' data-action='delete-selected-row'>删除</button>
+              <span class='hint'>${hasSelectedPreviewRow() ? `当前已选中第 ${app.activePreviewRow + 1} 行` : '请先点击下方某一行进行选中'}</span>
+            </div>
             <div class='table-wrap'>
-              <table>
+              <table class='preview-table'>
                 <thead>
                   <tr>
                     <th class='row-head'>行号</th>
-                    ${colHeaders}
+                    ${colHeaders.join('')}
                   </tr>
                 </thead>
                 <tbody>${tableRows || `<tr><td colspan='${maxCols + 1}'>无数据</td></tr>`}</tbody>
@@ -1724,7 +2150,7 @@
         </div>
       `;
 
-      els.previewContent.querySelectorAll('[data-sheet]').forEach((tab) => {
+      toArray(els.previewContent.querySelectorAll('[data-sheet]')).forEach((tab) => {
         tab.addEventListener('click', () => renderPreview(fileId, tab.getAttribute('data-sheet'), highlightRowIndex));
       });
 
@@ -1737,48 +2163,7 @@
     }
 
     function openRowDetail(result) {
-      const file = findFile(result.fileId);
-      const sheet = file ? findSheet(file, result.sheetName) : null;
-      const row = sheet ? (sheet.rows || []).find((item) => item.rowIndex === result.rowIndex) : null;
-      const cells = row ? (row.cells || []) : [];
-      const rowHtml = cells.length ? cells.map((cell, index) => `
-        <tr>
-          <th class='row-head'>${index + 1}</th>
-          <td>${escapeHtml(cell.address)}</td>
-          <td>${escapeHtml(cell.displayValue)}</td>
-        </tr>
-      `).join('') : `<tr><td colspan='3'>没有找到行数据。</td></tr>`;
-
-      openModal({
-        title: '显示整行数据',
-        footer: `${result.fileName} / ${result.sheetName} / 第 ${result.rowIndex + 1} 行`,
-        body: `
-          <div class='detail-grid'>
-            <div class='detail-card'>
-              <div class='detail-title'>命中信息</div>
-              <div class='kv'>
-                <div>文件名</div><div>${escapeHtml(result.fileName)}</div>
-                <div>工作表</div><div>${escapeHtml(result.sheetName)}</div>
-                <div>行号</div><div>${result.rowIndex + 1}</div>
-                <div>列号</div><div>${result.colIndex + 1}</div>
-                <div>单元格</div><div>${escapeHtml(result.address)}</div>
-                <div>命中值</div><div>${escapeHtml(result.cellValue)}</div>
-              </div>
-            </div>
-            <div class='detail-card'>
-              <div class='detail-title'>整行数据</div>
-              <div class='table-wrap'>
-                <table>
-                  <thead>
-                    <tr><th class='row-head'>序号</th><th>单元格</th><th>内容</th></tr>
-                  </thead>
-                  <tbody>${rowHtml}</tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        `
-      });
+      renderRowModal(getRowModalPayload(result.fileId, result.sheetName, result.rowIndex, 'view'));
     }
 
     function openFullFile(fileId, sheetName = '', highlightRowIndex = null) {
@@ -1875,7 +2260,7 @@
       if (app.activeFileId) {
         const file = findFile(app.activeFileId);
         if (file) {
-          renderPreview(app.activeFileId, app.activeSheetName || file.sheets?.[0]?.sheetName || '', app.activePreviewRow);
+          renderPreview(app.activeFileId, app.activeSheetName || getFirstSheetName(file) || '', app.activePreviewRow);
         } else {
           setPreviewEmpty('请选择左侧文件，或点击搜索结果中的“打开完整文件”。');
         }
@@ -1883,7 +2268,7 @@
     }
 
     async function handleUpload(files) {
-      const list = Array.from(files || []);
+      const list = toArray(files || []);
       if (!list.length) return;
       if (typeof XLSX === 'undefined') {
         setStatus('SheetJS 未加载成功，无法解析 Excel 文件。请检查网络或 CDN 访问。', 'error');
@@ -1927,7 +2312,7 @@
 
     function bindEvents() {
       els.moduleToolbar.addEventListener('click', (evt) => {
-        const btn = evt.target.closest('button[data-target]');
+        const btn = closestElement(evt.target, 'button[data-target]');
         if (!btn) return;
         const targetId = btn.getAttribute('data-target');
         const panel = document.getElementById(targetId);
@@ -1981,29 +2366,86 @@
       });
       els.statFieldList.addEventListener('change', (evt) => {
         const target = evt.target;
-        if (target && target.matches('input[type="checkbox"]')) {
+        if (target && matchesSelector(target, 'input[type="checkbox"]')) {
           app.statSelectedFields = getSelectedStatFields();
           runStats();
         }
       });
 
       els.statsResults.addEventListener('click', (evt) => {
-        const btn = evt.target.closest('button[data-action="stat-detail"]');
+        const btn = closestElement(evt.target, 'button[data-action="stat-detail"]');
         if (!btn) return;
         const idx = Number(btn.getAttribute('data-index'));
-        if (!Number.isNaN(idx)) openStatGroupDetails(idx);
+        if (!isFiniteNumber(idx)) return;
+        app.statDetailSelectedIndex = null;
+        openStatGroupDetails(idx);
+      });
+
+      els.previewContent.addEventListener('click', (evt) => {
+        const addBtn = closestElement(evt.target, 'button[data-action="add-row"]');
+        if (addBtn) {
+          renderRowModal(getRowModalPayload(addBtn.getAttribute('data-file-id') || '', addBtn.getAttribute('data-sheet-name') || '', null, 'add'));
+          return;
+        }
+        const editBtn = closestElement(evt.target, 'button[data-action="edit-selected-row"]');
+        if (editBtn) {
+          editSelectedPreviewRow();
+          return;
+        }
+        const deleteBtn = closestElement(evt.target, 'button[data-action="delete-selected-row"]');
+        if (deleteBtn) {
+          deleteSelectedPreviewRow();
+          return;
+        }
+        const rowEl = closestElement(evt.target, 'tr[data-row-index]');
+        if (!rowEl) return;
+        const rowIndex = Number(rowEl.getAttribute('data-row-index'));
+        if (!isFiniteNumber(rowIndex)) return;
+        renderPreview(app.activeFileId, app.activeSheetName, rowIndex);
       });
 
       els.modalBody.addEventListener('click', (evt) => {
-        const btn = evt.target.closest('button[data-action="stat-open-row"]');
-        if (!btn) return;
-        const fileId = btn.getAttribute('data-file-id') || '';
-        const sheetName = btn.getAttribute('data-sheet-name') || '';
-        const rowIndex = Number(btn.getAttribute('data-row-index'));
-        closeModal();
-        if (!fileId || Number.isNaN(rowIndex)) return;
-        openFullFile(fileId, sheetName, rowIndex);
-        setStatus('已从统计结果反查并定位到对应明细行。', 'success');
+        const openSelectedBtn = closestElement(evt.target, 'button[data-action="stat-detail-open-selected"]');
+        if (openSelectedBtn) {
+          locateSelectedStatDetailRow();
+          return;
+        }
+
+        if (app.modalPayload && app.modalPayload.mode === 'stat-detail') {
+          const detailRow = closestElement(evt.target, 'tr[data-detail-index]');
+          if (detailRow) {
+            const detailIndex = Number(detailRow.getAttribute('data-detail-index'));
+            if (!isFiniteNumber(detailIndex)) return;
+            app.statDetailSelectedIndex = detailIndex;
+            openStatGroupDetails(app.modalPayload.groupIndex);
+            return;
+          }
+        }
+
+        const actionBtn = closestElement(evt.target, 'button[data-action^="row-modal-"]');
+        if (!actionBtn) return;
+        const action = actionBtn.getAttribute('data-action');
+        if (action === 'row-modal-edit') {
+          if (!app.modalPayload) return;
+          renderRowModal(getRowModalPayload(app.modalPayload.fileId, app.modalPayload.sheetName, app.modalPayload.rowIndex, 'edit'));
+          return;
+        }
+        if (action === 'row-modal-cancel') {
+          if (!app.modalPayload) return;
+          if (app.modalPayload.mode === 'add') {
+            closeModal();
+            return;
+          }
+          renderRowModal(getRowModalPayload(app.modalPayload.fileId, app.modalPayload.sheetName, app.modalPayload.rowIndex, 'view'));
+          return;
+        }
+        if (action === 'row-modal-save') {
+          saveRowModalChanges().catch((err) => setStatus(err.message || '保存失败', 'error'));
+          return;
+        }
+        if (action === 'row-modal-delete') {
+          deleteRowFromModal().catch((err) => setStatus(err.message || '删除失败', 'error'));
+        }
       });
 
       els.modalCloseBtn.addEventListener('click', closeModal);
