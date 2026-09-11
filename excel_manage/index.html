@@ -223,6 +223,18 @@
       background: #eff6ff;
     }
 
+    .file-card.selected {
+      border-color: #3b82f6;
+      background: #eff6ff;
+      box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.35);
+    }
+
+    .file-actions {
+      margin-top: 10px;
+      border-top: 1px dashed var(--border);
+      padding-top: 10px;
+    }
+
     .file-title {
       font-weight: 700;
       font-size: 14px;
@@ -686,6 +698,15 @@
           <strong>已导入文件</strong>
           <span id='fileCount' class='chip'>0 个</span>
         </div>
+        <div class='file-actions'>
+          <div class='row'>
+            <button id='fileViewBtn' class='btn small' type='button'>查看</button>
+            <button id='filePreviewBtn' class='btn small ghost' type='button'>预览</button>
+            <button id='fileDownloadBtn' class='btn small secondary' type='button'>下载知识库</button>
+            <button id='fileDeleteBtn' class='btn small danger' type='button'>删除</button>
+          </div>
+          <div id='selectedFileHint' class='hint' style='margin-top:8px;'>请先在上方选择一个知识库文件。</div>
+        </div>
         <div id='fileList' class='file-list'></div>
         <div class='footer-note'>支持文件：<code>.xlsx</code>、<code>.xls</code>、<code>.xlsm</code>、<code>.xlsb</code>。解析依赖浏览器和 SheetJS，结果保存在 <code>IndexedDB</code> 中。</div>
       </div>
@@ -804,6 +825,7 @@
       statResults: [],
       statSelectedFields: [],
       statDetailSelectedIndex: null,
+      selectedFileId: '',
       panelWidths: {},
       query: '',
       activeFileId: '',
@@ -822,6 +844,11 @@
       statusBox: document.getElementById('statusBox'),
       fileList: document.getElementById('fileList'),
       fileCount: document.getElementById('fileCount'),
+      fileViewBtn: document.getElementById('fileViewBtn'),
+      filePreviewBtn: document.getElementById('filePreviewBtn'),
+      fileDownloadBtn: document.getElementById('fileDownloadBtn'),
+      fileDeleteBtn: document.getElementById('fileDeleteBtn'),
+      selectedFileHint: document.getElementById('selectedFileHint'),
       queryInput: document.getElementById('queryInput'),
       searchBtn: document.getElementById('searchBtn'),
       resetSearchBtn: document.getElementById('resetSearchBtn'),
@@ -1408,6 +1435,123 @@
       return findInArray((file && file.sheets) || [], (sheet) => sheet.sheetName === sheetName);
     }
 
+    function getSelectedFile() {
+      return app.selectedFileId ? findFile(app.selectedFileId) : null;
+    }
+
+    function syncSelectedFileState() {
+      const selected = getSelectedFile();
+      if (!selected) {
+        app.selectedFileId = app.files.length ? app.files[0].fileId : '';
+      }
+      const selectedNow = getSelectedFile();
+      els.selectedFileHint.textContent = selectedNow ? `当前选中：${selectedNow.fileName}` : '请先在上方选择一个知识库文件。';
+    }
+
+    function selectFile(fileId, silent) {
+      if (!fileId || !findFile(fileId)) return;
+      app.selectedFileId = fileId;
+      renderFiles();
+      if (!silent) {
+        const file = findFile(fileId);
+        if (file) setStatus(`已选中知识库：${file.fileName}`, 'success');
+      }
+    }
+
+    function requireSelectedFile(actionLabel) {
+      const file = getSelectedFile();
+      if (!file) {
+        setStatus(`请先选中一个知识库文件，再执行“${actionLabel}”。`, 'warning');
+        return null;
+      }
+      return file;
+    }
+
+    function getDownloadFileName(fileName) {
+      const name = String(fileName || 'knowledge');
+      const dot = name.lastIndexOf('.');
+      const base = dot > 0 ? name.slice(0, dot) : name;
+      return `${base}_edited.xlsx`;
+    }
+
+    function buildWorkbookFromFileRecord(file) {
+      const wb = XLSX.utils.book_new();
+      (file.sheets || []).forEach((sheet) => {
+        const aoa = (sheet.rows || []).map((row) => {
+          return (row.cells || []).map((cell) => (cell && cell.displayValue != null ? String(cell.displayValue) : ''));
+        });
+        const ws = XLSX.utils.aoa_to_sheet(aoa.length ? aoa : [[]]);
+        XLSX.utils.book_append_sheet(wb, ws, sheet.sheetName || 'Sheet1');
+      });
+      if (!wb.SheetNames.length) {
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[]]), 'Sheet1');
+      }
+      return wb;
+    }
+
+    function downloadSelectedFile() {
+      const file = requireSelectedFile('下载知识库');
+      if (!file) return;
+      if (typeof XLSX === 'undefined') {
+        setStatus('SheetJS 未加载成功，无法下载知识库。', 'error');
+        return;
+      }
+      const wb = buildWorkbookFromFileRecord(file);
+      const downloadName = getDownloadFileName(file.fileName);
+      if (typeof XLSX.writeFile === 'function') {
+        XLSX.writeFile(wb, downloadName, { compression: true });
+        setStatus(`已下载知识库：${downloadName}`, 'success');
+        return;
+      }
+      const bytes = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+        window.navigator.msSaveOrOpenBlob(blob, downloadName);
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = downloadName;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+      setStatus(`已下载知识库：${downloadName}`, 'success');
+    }
+
+    function viewSelectedFile() {
+      const file = requireSelectedFile('查看');
+      if (!file) return;
+      openFullFile(file.fileId);
+    }
+
+    function previewSelectedFile() {
+      const file = requireSelectedFile('预览');
+      if (!file) return;
+      openFullFile(file.fileId, getFirstSheetName(file));
+    }
+
+    function removeFileById(fileId, successMessage) {
+      const file = findFile(fileId);
+      if (!file) return Promise.resolve();
+      return idbDelete(fileId)
+        .then(() => {
+          app.files = app.files.filter((item) => item.fileId !== fileId);
+          if (app.activeFileId === fileId) setPreviewEmpty('已删除当前文件。请选择其他文件继续查看。');
+          if (app.selectedFileId === fileId) app.selectedFileId = '';
+          renderAll();
+          setStatus(successMessage || `已删除：${file.fileName}`, 'success');
+        });
+    }
+
+    function deleteSelectedFile() {
+      const file = requireSelectedFile('删除');
+      if (!file) return;
+      if (!confirm(`确定删除文件“${file.fileName}”及其全部本地数据吗？`)) return;
+      if (!confirm('请再次确认：删除后不可恢复，是否继续？')) return;
+      removeFileById(file.fileId, `已删除：${file.fileName}`)
+        .catch((err) => setStatus(err.message || '删除失败', 'error'));
+    }
+
     function getSheetHeaders(sheet) {
       const headerRow = sheet && sheet.rows && sheet.rows[0] ? sheet.rows[0] : null;
       const columnCount = Math.max((sheet && sheet.columnCount) || 0, (headerRow && headerRow.cells ? headerRow.cells.length : 0));
@@ -1977,9 +2121,11 @@
     }
 
     function renderFiles() {
+      syncSelectedFileState();
       els.fileCount.textContent = `${app.files.length} 个`;
       els.fileList.innerHTML = '';
       if (!app.files.length) {
+        els.selectedFileHint.textContent = '请先在上方选择一个知识库文件。';
         els.fileList.innerHTML = `<div class='empty'>还没有导入任何 Excel 文件。</div>`;
         return;
       }
@@ -1987,9 +2133,9 @@
       app.files.forEach((file) => {
         const sheetCount = file.sheets ? file.sheets.length : 0;
         const cellCount = countCells(file);
-        const isActive = file.fileId === app.activeFileId;
+        const isSelected = file.fileId === app.selectedFileId;
         const card = document.createElement('div');
-        card.className = `file-card ${isActive ? 'active' : ''}`;
+        card.className = `file-card ${isSelected ? 'selected' : ''}`;
         card.innerHTML = `
           <div class='file-title'>${escapeHtml(file.fileName)}</div>
           <div class='meta'>
@@ -2001,19 +2147,8 @@
             ${sheetCount ? `<span class='chip'>${sheetCount} 个工作表</span>` : ''}
             <span class='chip'>${cellCount} 个单元格</span>
           </div>
-          <div class='row'>
-            <button class='btn small' type='button' data-action='view'>查看</button>
-            <button class='btn small ghost' type='button' data-action='preview'>预览</button>
-            <button class='btn small danger' type='button' data-action='delete'>删除</button>
-          </div>
         `;
-        card.querySelector('[data-action="view"]').addEventListener('click', () => openFullFile(file.fileId));
-        card.querySelector('[data-action="preview"]').addEventListener('click', () => openFullFile(file.fileId, getFirstSheetName(file)));
-        card.querySelector('[data-action="delete"]').addEventListener('click', () => deleteFile(file.fileId));
-        card.addEventListener('click', (evt) => {
-          if (closestElement(evt.target, 'button')) return;
-          openFullFile(file.fileId);
-        });
+        card.addEventListener('click', () => selectFile(file.fileId, false));
         els.fileList.appendChild(card);
       });
     }
@@ -2208,14 +2343,7 @@
       const file = findFile(fileId);
       if (!file) return;
       if (!confirm(`确定删除文件“${file.fileName}”及其全部本地数据吗？`)) return;
-      idbDelete(fileId)
-        .then(() => {
-          app.files = app.files.filter((item) => item.fileId !== fileId);
-          if (app.activeFileId === fileId) setPreviewEmpty('已删除当前文件。请选择其他文件继续查看。');
-          renderAll();
-          setStatus(`已删除：${file.fileName}`, 'success');
-          renderResults();
-        })
+      removeFileById(fileId, `已删除：${file.fileName}`)
         .catch((err) => setStatus(err.message || '删除失败', 'error'));
     }
 
@@ -2229,6 +2357,7 @@
         .then(() => {
           app.files = [];
           app.results = [];
+          app.selectedFileId = '';
           setPreviewEmpty('请选择左侧文件，或点击搜索结果中的“打开完整文件”。');
           renderAll();
           renderResults();
@@ -2342,6 +2471,10 @@
 
       els.clearAllBtn.addEventListener('click', clearAll);
       els.exportJsonBtn.addEventListener('click', exportJson);
+      els.fileViewBtn.addEventListener('click', viewSelectedFile);
+      els.filePreviewBtn.addEventListener('click', previewSelectedFile);
+      els.fileDownloadBtn.addEventListener('click', downloadSelectedFile);
+      els.fileDeleteBtn.addEventListener('click', deleteSelectedFile);
       els.refreshBtn.addEventListener('click', () => loadFilesFromStore().catch((err) => setStatus(err.message || '刷新失败', 'error')));
       els.searchBtn.addEventListener('click', renderResults);
       els.resetSearchBtn.addEventListener('click', () => {
