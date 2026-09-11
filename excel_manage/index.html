@@ -55,7 +55,32 @@
       grid-template-columns: 300px minmax(360px, 1fr) minmax(340px, 1.1fr);
       gap: 16px;
       padding: 16px;
-      height: calc(100vh - 96px);
+      height: calc(100vh - 154px);
+    }
+
+    .top-toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 10px 16px 0;
+      background: var(--bg);
+    }
+
+    .module-toggle {
+      border: 1px solid #93c5fd;
+      background: #eff6ff;
+      color: #1d4ed8;
+      padding: 7px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .module-toggle.inactive {
+      border-color: #cbd5e1;
+      background: #f8fafc;
+      color: #64748b;
     }
 
     .panel {
@@ -67,6 +92,10 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
+    }
+
+    .panel.hidden {
+      display: none;
     }
 
     .panel-header {
@@ -220,6 +249,45 @@
     .results {
       display: grid;
       gap: 10px;
+    }
+
+    .field-check-list {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      display: grid;
+      gap: 6px;
+      max-height: 140px;
+      overflow: auto;
+      background: #fff;
+    }
+
+    .check-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text);
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(120px, 1fr));
+      gap: 8px;
+    }
+
+    .stats-summary {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .stats-table-wrap {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: auto;
+      max-height: 260px;
+      background: #fff;
     }
 
     .result-card {
@@ -438,6 +506,18 @@
       line-height: 1.6;
     }
 
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
     @media (max-width: 1180px) {
       .wrap {
         grid-template-columns: 1fr;
@@ -454,8 +534,15 @@
     <p>单文件 HTML 实现：支持上传多个 Excel 文件、浏览器本地持久化、全量搜索、整行查看和完整文件预览。数据仅保存在本地浏览器，不依赖后端。</p>
   </header>
 
+  <div class='top-toolbar' id='moduleToolbar'>
+    <button type='button' class='module-toggle' data-target='panel-maintenance'>知识库维护</button>
+    <button type='button' class='module-toggle' data-target='panel-query'>全量查询</button>
+    <button type='button' class='module-toggle' data-target='panel-stats'>统计</button>
+    <button type='button' class='module-toggle' data-target='panel-preview'>文件预览/行详情</button>
+  </div>
+
   <main class='wrap'>
-    <section class='panel'>
+    <section class='panel' id='panel-maintenance'>
       <div class='panel-header'>
         <h2>知识库维护</h2>
         <button id='refreshBtn' class='btn small ghost' type='button'>刷新</button>
@@ -480,13 +567,14 @@
       </div>
     </section>
 
-    <section class='panel'>
+    <section class='panel' id='panel-query'>
       <div class='panel-header'>
         <h2>全量查询</h2>
         <span id='resultCount' class='chip'>0 条结果</span>
       </div>
       <div class='panel-body'>
         <div class='search-box'>
+          <label for='queryInput' class='sr-only'>查询关键词</label>
           <input id='queryInput' class='input' type='search' placeholder='输入关键词，检索所有文件、工作表和单元格内容' />
           <div class='row'>
             <button id='searchBtn' class='btn' type='button'>查询</button>
@@ -505,7 +593,45 @@
       </div>
     </section>
 
-    <section class='panel'>
+    <section class='panel' id='panel-stats'>
+      <div class='panel-header'>
+        <h2>统计</h2>
+        <span id='statsCount' class='chip'>0 组</span>
+      </div>
+      <div class='panel-body'>
+          <div class='row' style='margin-bottom:8px;'>
+            <strong>统计汇总</strong>
+          </div>
+          <div class='hint' style='margin-bottom:8px;'>选择多个字段后，可对所有导入数据进行分组统计，并支持条件筛选与排序。</div>
+
+          <div id='statFieldList' class='field-check-list'></div>
+
+          <div class='stats-grid' style='margin-top:10px;'>
+            <label for='statFilterField' class='sr-only'>统计筛选字段</label>
+            <select id='statFilterField' class='select'>
+              <option value=''>筛选字段（可选）</option>
+            </select>
+            <label for='statFilterValue' class='sr-only'>统计筛选值</label>
+            <input id='statFilterValue' class='input' type='text' placeholder='筛选值（包含匹配）' />
+            <label for='statSort' class='sr-only'>统计排序方式</label>
+            <select id='statSort' class='select'>
+              <option value='desc'>按数量降序</option>
+              <option value='asc'>按数量升序</option>
+            </select>
+          </div>
+
+          <div class='row' style='margin-top:10px;'>
+            <button id='statRunBtn' class='btn success' type='button'>执行统计</button>
+            <button id='statResetBtn' class='btn ghost' type='button'>重置统计条件</button>
+            <button id='statExportBtn' class='btn secondary' type='button'>导出统计 JSON</button>
+          </div>
+
+          <div id='statsSummary' class='stats-summary' style='margin-top:8px;'></div>
+          <div id='statsResults' class='stats-table-wrap' style='margin-top:8px;'></div>
+      </div>
+    </section>
+
+    <section class='panel' id='panel-preview'>
       <div class='panel-header'>
         <h2>文件预览 / 行详情</h2>
         <span id='previewLabel' class='chip'>未打开</span>
@@ -540,11 +666,14 @@
     const DB_NAME = 'excel_knowledge_base_db';
     const DB_VERSION = 1;
     const STORE_NAME = 'files';
+    const MODULE_VISIBILITY_KEY = 'excel_knowledge_module_visibility_v1';
 
     const app = {
       db: null,
       files: [],
       results: [],
+      statResults: [],
+      statSelectedFields: [],
       query: '',
       activeFileId: '',
       activeSheetName: '',
@@ -570,6 +699,17 @@
       queryHint: document.getElementById('queryHint'),
       caseSensitiveChk: document.getElementById('caseSensitiveChk'),
       autoSearchChk: document.getElementById('autoSearchChk'),
+      moduleToolbar: document.getElementById('moduleToolbar'),
+      statFieldList: document.getElementById('statFieldList'),
+      statFilterField: document.getElementById('statFilterField'),
+      statFilterValue: document.getElementById('statFilterValue'),
+      statSort: document.getElementById('statSort'),
+      statRunBtn: document.getElementById('statRunBtn'),
+      statResetBtn: document.getElementById('statResetBtn'),
+      statExportBtn: document.getElementById('statExportBtn'),
+      statsCount: document.getElementById('statsCount'),
+      statsSummary: document.getElementById('statsSummary'),
+      statsResults: document.getElementById('statsResults'),
       previewEmpty: document.getElementById('previewEmpty'),
       previewContent: document.getElementById('previewContent'),
       previewLabel: document.getElementById('previewLabel'),
@@ -582,13 +722,58 @@
       modalNextBtn: document.getElementById('modalNextBtn')
     };
 
+    function getModuleButtons() {
+      return Array.from(els.moduleToolbar.querySelectorAll('button[data-target]'));
+    }
+
+    function updateModuleToolbarStyles() {
+      getModuleButtons().forEach((btn) => {
+        const targetId = btn.getAttribute('data-target');
+        const panel = document.getElementById(targetId);
+        const hidden = panel ? panel.classList.contains('hidden') : true;
+        btn.classList.toggle('inactive', hidden);
+      });
+    }
+
+    function saveModuleVisibility() {
+      const payload = {};
+      getModuleButtons().forEach((btn) => {
+        const targetId = btn.getAttribute('data-target');
+        const panel = document.getElementById(targetId);
+        payload[targetId] = panel ? !panel.classList.contains('hidden') : false;
+      });
+      try {
+        localStorage.setItem(MODULE_VISIBILITY_KEY, JSON.stringify(payload));
+      } catch (err) {
+        // Ignore persistence failures (private mode / storage quota).
+      }
+    }
+
+    function applySavedModuleVisibility() {
+      try {
+        const raw = localStorage.getItem(MODULE_VISIBILITY_KEY);
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        if (!data || typeof data !== 'object') return;
+
+        getModuleButtons().forEach((btn) => {
+          const targetId = btn.getAttribute('data-target');
+          const panel = document.getElementById(targetId);
+          if (!panel || !(targetId in data)) return;
+          panel.classList.toggle('hidden', data[targetId] === false);
+        });
+      } catch (err) {
+        // Ignore invalid cached data.
+      }
+    }
+
     function escapeHtml(value) {
       return String(value ?? '')
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
 
     function formatTime(ts) {
@@ -858,6 +1043,269 @@
       return matches;
     }
 
+    function collectStatsContext() {
+      const fieldMap = {};
+      const records = [];
+
+      app.files.forEach((file) => {
+        (file.sheets || []).forEach((sheet) => {
+          const rows = sheet.rows || [];
+          if (!rows.length) return;
+
+          const headerRow = rows[0] || { cells: [] };
+          const colCount = Math.max(sheet.columnCount || 0, (headerRow.cells || []).length);
+          const headers = [];
+          const used = {};
+
+          for (let c = 0; c < colCount; c += 1) {
+            const cell = headerRow.cells && headerRow.cells[c] ? headerRow.cells[c] : null;
+            const raw = cell && cell.displayValue != null ? String(cell.displayValue).trim() : '';
+            const base = raw || `列${XLSX.utils.encode_col(c)}`;
+            let name = base;
+            let seq = 2;
+            while (used[name]) {
+              name = `${base}_${seq}`;
+              seq += 1;
+            }
+            used[name] = true;
+            headers.push(name);
+            fieldMap[name] = true;
+          }
+
+          for (let r = 1; r < rows.length; r += 1) {
+            const row = rows[r];
+            const record = {
+              __fileId: file.fileId,
+              __fileName: file.fileName,
+              __sheetName: sheet.sheetName,
+              __rowIndex: (row.rowIndex || 0) + 1,
+              __rowIndex0: row.rowIndex || 0
+            };
+
+            for (let c = 0; c < headers.length; c += 1) {
+              const item = row.cells && row.cells[c] ? row.cells[c] : null;
+              record[headers[c]] = item && item.displayValue != null ? String(item.displayValue) : '';
+            }
+
+            records.push(record);
+          }
+        });
+      });
+
+      const fields = Object.keys(fieldMap).sort((a, b) => a.localeCompare(b, 'zh-CN'));
+      return { fields, records };
+    }
+
+    function getSelectedStatFields() {
+      return Array.from(els.statFieldList.querySelectorAll('input[type="checkbox"]:checked')).map((node) => node.value);
+    }
+
+    function renderStatFieldOptions(fields) {
+      const validPrev = (app.statSelectedFields || []).filter((name) => fields.includes(name));
+      app.statSelectedFields = validPrev.length ? validPrev : (fields.length ? [fields[0]] : []);
+
+      if (!fields.length) {
+        els.statFieldList.innerHTML = `<div class='hint'>暂无可用于统计的字段，请先上传包含表头的 Excel 文件。</div>`;
+      } else {
+        els.statFieldList.innerHTML = fields.map((name) => {
+          const checked = app.statSelectedFields.includes(name) ? 'checked' : '';
+          return `<label class='check-item'><input type='checkbox' value='${escapeHtml(name)}' ${checked} /> ${escapeHtml(name)}</label>`;
+        }).join('');
+      }
+
+      const prevFilter = els.statFilterField.value;
+      els.statFilterField.innerHTML = [`<option value=''>筛选字段（可选）</option>`]
+        .concat(fields.map((name) => `<option value='${escapeHtml(name)}'>${escapeHtml(name)}</option>`))
+        .join('');
+      if (prevFilter && fields.includes(prevFilter)) {
+        els.statFilterField.value = prevFilter;
+      }
+    }
+
+    function renderStatsTable(groupFields, rows, matchedCount) {
+      els.statsCount.textContent = `${rows.length} 组`;
+      if (!rows.length) {
+        els.statsResults.innerHTML = `<div class='empty'>当前统计条件下无结果。</div>`;
+        return;
+      }
+
+      const headers = groupFields.map((field) => `<th>${escapeHtml(field)}</th>`).join('');
+      const body = rows.map((row, index) => {
+        const keys = groupFields.map((field) => `<td>${escapeHtml(row.group[field] || '(空)')}</td>`).join('');
+        const ratio = matchedCount ? `${((row.count / matchedCount) * 100).toFixed(2)}%` : '0%';
+        return `
+          <tr>
+            ${keys}
+            <td>${row.count}</td>
+            <td>${ratio}</td>
+            <td><button class='btn small ghost' type='button' data-action='stat-detail' data-index='${index}'>查看明细</button></td>
+          </tr>
+        `;
+      }).join('');
+
+      els.statsResults.innerHTML = `
+        <table>
+          <thead><tr>${headers}<th>数量</th><th>占比</th><th>操作</th></tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+      `;
+    }
+
+    function openStatGroupDetails(index) {
+      const row = app.statResults[index];
+      if (!row) return;
+
+      const groupFields = app.statSelectedFields || [];
+      const headerCells = groupFields.map((name) => `<th>${escapeHtml(name)}</th>`).join('');
+      const bodyRows = (row.details || []).map((item, detailIndex) => {
+        const values = groupFields.map((name) => `<td>${escapeHtml(item.values[name] || '(空)')}</td>`).join('');
+        return `
+          <tr>
+            <th class='row-head'>${detailIndex + 1}</th>
+            <td>${escapeHtml(item.fileName)}</td>
+            <td>${escapeHtml(item.sheetName)}</td>
+            <td>${item.rowIndex}</td>
+            ${values}
+            <td>
+              <button
+                class='btn small'
+                type='button'
+                data-action='stat-open-row'
+                data-file-id='${escapeHtml(item.fileId)}'
+                data-sheet-name='${escapeHtml(item.sheetName)}'
+                data-row-index='${item.rowIndex0}'
+              >定位该行</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      const groupDesc = groupFields.map((name) => `${name}: ${row.group[name] || '(空)'}`).join('，');
+      openModal({
+        title: '统计分组明细反查',
+        footer: `分组记录数 ${row.count} 条`,
+        body: `
+          <div class='detail-grid'>
+            <div class='detail-card'>
+              <div class='detail-title'>分组信息</div>
+              <div class='meta'>${escapeHtml(groupDesc || '未设置分组字段')}</div>
+            </div>
+            <div class='detail-card'>
+              <div class='detail-title'>反查明细</div>
+              <div class='table-wrap'>
+                <table>
+                  <thead>
+                    <tr>
+                      <th class='row-head'>序号</th>
+                      <th>文件</th>
+                      <th>工作表</th>
+                      <th>行号</th>
+                      ${headerCells}
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>${bodyRows || `<tr><td colspan='6'>无明细数据</td></tr>`}</tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        `
+      });
+    }
+
+    function runStats() {
+      const ctx = collectStatsContext();
+      renderStatFieldOptions(ctx.fields);
+
+      const selectedFields = getSelectedStatFields();
+      app.statSelectedFields = selectedFields;
+
+      if (!ctx.records.length) {
+        app.statResults = [];
+        els.statsCount.textContent = '0 组';
+        els.statsSummary.textContent = '总记录数 0，暂无可统计的数据。';
+        els.statsResults.innerHTML = `<div class='empty'>请先上传 Excel 文件。</div>`;
+        return;
+      }
+
+      if (!selectedFields.length) {
+        app.statResults = [];
+        els.statsCount.textContent = '0 组';
+        els.statsSummary.textContent = `总记录数 ${ctx.records.length}，请至少选择一个统计字段。`;
+        els.statsResults.innerHTML = `<div class='empty'>请选择至少一个字段后执行统计。</div>`;
+        return;
+      }
+
+      const filterField = els.statFilterField.value;
+      const filterValue = String(els.statFilterValue.value || '').trim().toLowerCase();
+      const filtered = ctx.records.filter((rec) => {
+        if (!filterField || !filterValue) return true;
+        return String(rec[filterField] || '').toLowerCase().indexOf(filterValue) !== -1;
+      });
+
+      const map = {};
+      filtered.forEach((rec) => {
+        const key = selectedFields.map((f) => rec[f] || '').join('\u001f');
+        if (!map[key]) {
+          const group = {};
+          selectedFields.forEach((f) => { group[f] = rec[f] || ''; });
+          map[key] = { group, count: 0, details: [] };
+        }
+        map[key].count += 1;
+        const detailValues = {};
+        selectedFields.forEach((f) => { detailValues[f] = rec[f] || ''; });
+        map[key].details.push({
+          fileId: rec.__fileId,
+          fileName: rec.__fileName,
+          sheetName: rec.__sheetName,
+          rowIndex: rec.__rowIndex,
+          rowIndex0: rec.__rowIndex0,
+          values: detailValues
+        });
+      });
+
+      const rows = Object.keys(map).map((k) => map[k]);
+      const sortMode = els.statSort.value === 'asc' ? 'asc' : 'desc';
+      rows.sort((a, b) => (sortMode === 'asc' ? a.count - b.count : b.count - a.count));
+
+      app.statResults = rows;
+      const filterText = filterField && filterValue ? `，筛选条件：${filterField} 包含 "${filterValue}"` : '';
+      els.statsSummary.textContent = `总记录数 ${ctx.records.length}，命中记录数 ${filtered.length}，分组字段：${selectedFields.join('、')}${filterText}。可点击“查看明细”反查到具体行。`;
+      renderStatsTable(selectedFields, rows, filtered.length);
+    }
+
+    function resetStats() {
+      app.statSelectedFields = [];
+      els.statFilterField.value = '';
+      els.statFilterValue.value = '';
+      els.statSort.value = 'desc';
+      runStats();
+    }
+
+    function exportStats() {
+      if (!app.statResults.length) {
+        setStatus('没有可导出的统计结果，请先执行统计。', 'warning');
+        return;
+      }
+
+      const payload = {
+        generatedAt: new Date().toISOString(),
+        groupFields: app.statSelectedFields,
+        filterField: els.statFilterField.value,
+        filterValue: els.statFilterValue.value,
+        rows: app.statResults
+      };
+
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `excel-stats-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatus('已导出统计结果 JSON。', 'success');
+    }
+
     function renderFiles() {
       els.fileCount.textContent = `${app.files.length} 个`;
       els.fileList.innerHTML = '';
@@ -921,7 +1369,7 @@
         return;
       }
 
-      app.results.forEach((item, index) => {
+      app.results.forEach((item) => {
         const card = document.createElement('div');
         card.className = 'result-card';
         card.innerHTML = `
@@ -1159,6 +1607,7 @@
     function renderAll() {
       renderFiles();
       renderResults();
+      runStats();
       if (app.activeFileId) {
         const file = findFile(app.activeFileId);
         if (file) {
@@ -1213,6 +1662,28 @@
     }
 
     function bindEvents() {
+      els.moduleToolbar.addEventListener('click', (evt) => {
+        const btn = evt.target.closest('button[data-target]');
+        if (!btn) return;
+        const targetId = btn.getAttribute('data-target');
+        const panel = document.getElementById(targetId);
+        if (!panel) return;
+
+        const allPanels = getModuleButtons()
+          .map((item) => document.getElementById(item.getAttribute('data-target')))
+          .filter(Boolean);
+        const visibleCount = allPanels.filter((item) => !item.classList.contains('hidden')).length;
+        const isHiding = !panel.classList.contains('hidden');
+        if (isHiding && visibleCount <= 1) {
+          setStatus('至少保留一个模块显示。', 'warning');
+          return;
+        }
+
+        panel.classList.toggle('hidden');
+        updateModuleToolbarStyles();
+        saveModuleVisibility();
+      });
+
       els.fileInput.addEventListener('change', (event) => {
         handleUpload(event.target.files).finally(() => {
           event.target.value = '';
@@ -1234,6 +1705,42 @@
         if (els.autoSearchChk.checked) renderResults();
       });
 
+      els.statRunBtn.addEventListener('click', runStats);
+      els.statResetBtn.addEventListener('click', resetStats);
+      els.statExportBtn.addEventListener('click', exportStats);
+      els.statSort.addEventListener('change', runStats);
+      els.statFilterField.addEventListener('change', runStats);
+      els.statFilterValue.addEventListener('input', () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => runStats(), 220);
+      });
+      els.statFieldList.addEventListener('change', (evt) => {
+        const target = evt.target;
+        if (target && target.matches('input[type="checkbox"]')) {
+          app.statSelectedFields = getSelectedStatFields();
+          runStats();
+        }
+      });
+
+      els.statsResults.addEventListener('click', (evt) => {
+        const btn = evt.target.closest('button[data-action="stat-detail"]');
+        if (!btn) return;
+        const idx = Number(btn.getAttribute('data-index'));
+        if (!Number.isNaN(idx)) openStatGroupDetails(idx);
+      });
+
+      els.modalBody.addEventListener('click', (evt) => {
+        const btn = evt.target.closest('button[data-action="stat-open-row"]');
+        if (!btn) return;
+        const fileId = btn.getAttribute('data-file-id') || '';
+        const sheetName = btn.getAttribute('data-sheet-name') || '';
+        const rowIndex = Number(btn.getAttribute('data-row-index'));
+        closeModal();
+        if (!fileId || Number.isNaN(rowIndex)) return;
+        openFullFile(fileId, sheetName, rowIndex);
+        setStatus('已从统计结果反查并定位到对应明细行。', 'success');
+      });
+
       els.modalCloseBtn.addEventListener('click', closeModal);
       els.overlay.addEventListener('click', (evt) => {
         if (evt.target === els.overlay) closeModal();
@@ -1245,6 +1752,8 @@
 
     async function bootstrap() {
       bindEvents();
+      applySavedModuleVisibility();
+      updateModuleToolbarStyles();
       setPreviewEmpty('请选择左侧文件，或点击搜索结果中的“打开完整文件”。');
       try {
         await getDb();
