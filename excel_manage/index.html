@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang='zh-CN'>
+<head>
+  <meta charset='UTF-8' />
+  <meta name='viewport' content='width=device-width, initial-scale=1.0' />
+  <title>Excel 知识库维护与全量查询</title>
+  <script src='./xlsx.full.min.js'></script>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --border: #d9e1ec;
+      --text: #1f2937;
+      --muted: #64748b;
+      --primary: #2563eb;
+      --primary-2: #1d4ed8;
+      --success: #0f9d58;
+      --warning: #b45309;
+      --danger: #dc2626;
+      --shadow: 0 8px 30px rgba(15, 23, 42, 0.08);
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    header {
+      background: linear-gradient(135deg, #0f172a, #1e3a8a);
+      color: #fff;
+      padding: 18px 24px;
+      box-shadow: var(--shadow);
+    }
+
+    header h1 {
+      margin: 0 0 8px;
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    header p {
+      margin: 0;
+      opacity: 0.9;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .wrap {
+      display: grid;
+      grid-template-columns: 300px minmax(360px, 1fr) minmax(340px, 1.1fr);
+      gap: 16px;
+      padding: 16px;
+      height: calc(100vh - 96px);
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      background: #f8fafc;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .panel-header h2 {
+      margin: 0;
+      font-size: 15px;
+    }
+
+    .panel-body {
+      padding: 14px 16px;
+      overflow: auto;
+      min-height: 0;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    input[type='text'], input[type='search'], select, button, textarea {
+      font: inherit;
+    }
+
+    .input, .select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+      background: #fff;
+    }
+
+    .input:focus, .select:focus, textarea:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    }
+
+    .btn {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: transform .06s ease, opacity .15s, background .15s;
+      color: #fff;
+      background: var(--primary);
+      box-shadow: 0 6px 16px rgba(37, 99, 235, 0.22);
+      white-space: nowrap;
+    }
+
+    .btn:hover { background: var(--primary-2); }
+    .btn:active { transform: translateY(1px); }
+    .btn.secondary { background: #475569; box-shadow: none; }
+    .btn.secondary:hover { background: #334155; }
+    .btn.success { background: var(--success); box-shadow: none; }
+    .btn.success:hover { background: #0b7a42; }
+    .btn.danger { background: var(--danger); box-shadow: none; }
+    .btn.danger:hover { background: #b91c1c; }
+    .btn.ghost { background: #e2e8f0; color: #0f172a; box-shadow: none; }
+    .btn.ghost:hover { background: #cbd5e1; }
+    .btn.small { padding: 7px 10px; font-size: 12px; border-radius: 8px; }
+
+    .file-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .file-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fff;
+      display: grid;
+      gap: 8px;
+    }
+
+    .file-card.active {
+      border-color: rgba(37, 99, 235, 0.55);
+      background: #eff6ff;
+    }
+
+    .file-title {
+      font-weight: 700;
+      font-size: 14px;
+      word-break: break-all;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .chip {
+      font-size: 12px;
+      border-radius: 999px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      padding: 4px 8px;
+      border: 1px solid #bfdbfe;
+    }
+
+    .status {
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 13px;
+      line-height: 1.5;
+      border: 1px solid var(--border);
+      background: #f8fafc;
+      color: var(--text);
+    }
+
+    .status.success { border-color: #bbf7d0; background: #f0fdf4; color: #166534; }
+    .status.warning { border-color: #fed7aa; background: #fff7ed; color: #9a3412; }
+    .status.error { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
+
+    .hint {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .search-box {
+      display: grid;
+      gap: 10px;
+    }
+
+    .results {
+      display: grid;
+      gap: 10px;
+    }
+
+    .result-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fff;
+      display: grid;
+      gap: 8px;
+    }
+
+    .result-card:hover {
+      border-color: rgba(37, 99, 235, 0.35);
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+    }
+
+    .result-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .result-title {
+      font-weight: 700;
+      font-size: 14px;
+      line-height: 1.5;
+      word-break: break-all;
+    }
+
+    .result-snippet {
+      font-size: 13px;
+      color: #111827;
+      line-height: 1.7;
+      word-break: break-all;
+    }
+
+    .result-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    mark {
+      background: #fef08a;
+      color: #111827;
+      padding: 0 2px;
+      border-radius: 4px;
+    }
+
+    .empty {
+      padding: 18px;
+      text-align: center;
+      color: var(--muted);
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      background: #fafafa;
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.52);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      z-index: 1000;
+    }
+
+    .overlay.show { display: flex; }
+
+    .modal {
+      width: min(1200px, 100%);
+      height: min(92vh, 920px);
+      background: #fff;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .modal-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      background: #f8fafc;
+    }
+
+    .modal-header h3 {
+      margin: 0;
+      font-size: 15px;
+    }
+
+    .modal-body {
+      padding: 14px 16px;
+      overflow: auto;
+      min-height: 0;
+      flex: 1;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .tab {
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text);
+      border-radius: 999px;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+
+    .tab.active {
+      background: #dbeafe;
+      border-color: #93c5fd;
+      color: #1d4ed8;
+      font-weight: 700;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      max-height: calc(92vh - 170px);
+      background: #fff;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: max-content;
+      min-width: 100%;
+    }
+
+    th, td {
+      border: 1px solid #e5e7eb;
+      padding: 8px 10px;
+      font-size: 13px;
+      vertical-align: top;
+      white-space: nowrap;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: #f8fafc;
+      z-index: 1;
+    }
+
+    .row-head {
+      position: sticky;
+      left: 0;
+      background: #f8fafc;
+      z-index: 1;
+    }
+
+    tr.highlight-row td,
+    tr.highlight-row th.row-head {
+      background: #fef3c7;
+    }
+
+    .modal-footer {
+      border-top: 1px solid var(--border);
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      background: #f8fafc;
+      flex-wrap: wrap;
+    }
+
+    .detail-grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    .detail-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fff;
+    }
+
+    .detail-title {
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .kv {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 8px 12px;
+      font-size: 13px;
+    }
+
+    .kv div:nth-child(odd) { color: var(--muted); }
+
+    .scroll-note {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .footer-note {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 1180px) {
+      .wrap {
+        grid-template-columns: 1fr;
+        height: auto;
+      }
+      .panel { min-height: 280px; }
+      .table-wrap { max-height: 55vh; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Excel 知识库维护与全量查询</h1>
+    <p>单文件 HTML 实现：支持上传多个 Excel 文件、浏览器本地持久化、全量搜索、整行查看和完整文件预览。数据仅保存在本地浏览器，不依赖后端。</p>
+  </header>
+
+  <main class='wrap'>
+    <section class='panel'>
+      <div class='panel-header'>
+        <h2>知识库维护</h2>
+        <button id='refreshBtn' class='btn small ghost' type='button'>刷新</button>
+      </div>
+      <div class='panel-body'>
+        <div class='toolbar'>
+          <input id='fileInput' class='input' type='file' accept='.xlsx,.xls,.xlsm,.xlsb' multiple />
+          <div class='row'>
+            <button id='clearAllBtn' class='btn danger' type='button'>清空知识库</button>
+            <button id='exportJsonBtn' class='btn secondary' type='button'>导出 JSON</button>
+          </div>
+          <div id='statusBox' class='status'>等待导入 Excel 文件。导入后会自动保存到浏览器本地，下次打开可直接恢复。</div>
+          <div class='hint'>建议：若文件很大，可分批上传。浏览器本地存储空间不足时会给出提示。</div>
+        </div>
+
+        <div style='margin: 16px 0 10px;' class='row'>
+          <strong>已导入文件</strong>
+          <span id='fileCount' class='chip'>0 个</span>
+        </div>
+        <div id='fileList' class='file-list'></div>
+        <div class='footer-note'>支持文件：<code>.xlsx</code>、<code>.xls</code>、<code>.xlsm</code>、<code>.xlsb</code>。解析依赖浏览器和 SheetJS，结果保存在 <code>IndexedDB</code> 中。</div>
+      </div>
+    </section>
+
+    <section class='panel'>
+      <div class='panel-header'>
+        <h2>全量查询</h2>
+        <span id='resultCount' class='chip'>0 条结果</span>
+      </div>
+      <div class='panel-body'>
+        <div class='search-box'>
+          <input id='queryInput' class='input' type='search' placeholder='输入关键词，检索所有文件、工作表和单元格内容' />
+          <div class='row'>
+            <button id='searchBtn' class='btn' type='button'>查询</button>
+            <button id='resetSearchBtn' class='btn ghost' type='button'>清空条件</button>
+            <label class='meta'><input id='caseSensitiveChk' type='checkbox' /> 区分大小写</label>
+            <label class='meta'><input id='autoSearchChk' type='checkbox' checked /> 输入即搜</label>
+          </div>
+          <div class='hint'>结果会显示文件名、行、列位置，并支持“显示整行数据”和“打开完整文件”。</div>
+        </div>
+
+        <div style='margin: 14px 0 10px;' class='row'>
+          <strong>搜索结果</strong>
+          <span class='hint' id='queryHint'></span>
+        </div>
+        <div id='results' class='results'></div>
+      </div>
+    </section>
+
+    <section class='panel'>
+      <div class='panel-header'>
+        <h2>文件预览 / 行详情</h2>
+        <span id='previewLabel' class='chip'>未打开</span>
+      </div>
+      <div class='panel-body'>
+        <div id='previewEmpty' class='empty'>请选择左侧文件，或点击搜索结果中的“打开完整文件”。</div>
+        <div id='previewContent' style='display:none;'></div>
+      </div>
+    </section>
+  </main>
+
+  <div id='overlay' class='overlay' aria-hidden='true'>
+    <div class='modal'>
+      <div class='modal-header'>
+        <h3 id='modalTitle'>详情</h3>
+        <div class='row'>
+          <button id='modalCloseBtn' class='btn small ghost' type='button'>关闭</button>
+        </div>
+      </div>
+      <div id='modalBody' class='modal-body'></div>
+      <div class='modal-footer'>
+        <span id='modalFooterInfo' class='scroll-note'></span>
+        <div class='row'>
+          <button id='modalPrevBtn' class='btn small ghost' type='button' style='display:none;'>上一条</button>
+          <button id='modalNextBtn' class='btn small ghost' type='button' style='display:none;'>下一条</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const DB_NAME = 'excel_knowledge_base_db';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'files';
+
+    const app = {
+      db: null,
+      files: [],
+      results: [],
+      query: '',
+      activeFileId: '',
+      activeSheetName: '',
+      activePreviewRow: null,
+      modalMode: '',
+      modalIndex: -1,
+      modalPayload: null
+    };
+
+    const els = {
+      fileInput: document.getElementById('fileInput'),
+      clearAllBtn: document.getElementById('clearAllBtn'),
+      exportJsonBtn: document.getElementById('exportJsonBtn'),
+      refreshBtn: document.getElementById('refreshBtn'),
+      statusBox: document.getElementById('statusBox'),
+      fileList: document.getElementById('fileList'),
+      fileCount: document.getElementById('fileCount'),
+      queryInput: document.getElementById('queryInput'),
+      searchBtn: document.getElementById('searchBtn'),
+      resetSearchBtn: document.getElementById('resetSearchBtn'),
+      resultCount: document.getElementById('resultCount'),
+      results: document.getElementById('results'),
+      queryHint: document.getElementById('queryHint'),
+      caseSensitiveChk: document.getElementById('caseSensitiveChk'),
+      autoSearchChk: document.getElementById('autoSearchChk'),
+      previewEmpty: document.getElementById('previewEmpty'),
+      previewContent: document.getElementById('previewContent'),
+      previewLabel: document.getElementById('previewLabel'),
+      overlay: document.getElementById('overlay'),
+      modalTitle: document.getElementById('modalTitle'),
+      modalBody: document.getElementById('modalBody'),
+      modalFooterInfo: document.getElementById('modalFooterInfo'),
+      modalCloseBtn: document.getElementById('modalCloseBtn'),
+      modalPrevBtn: document.getElementById('modalPrevBtn'),
+      modalNextBtn: document.getElementById('modalNextBtn')
+    };
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    function formatTime(ts) {
+      if (!ts) return '-';
+      return new Intl.DateTimeFormat('zh-CN', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+      }).format(new Date(ts));
+    }
+
+    function formatBytes(bytes) {
+      if (bytes == null || Number.isNaN(bytes)) return '-';
+      const units = ['B', 'KB', 'MB', 'GB'];
+      let size = bytes;
+      let idx = 0;
+      while (size >= 1024 && idx < units.length - 1) {
+        size /= 1024;
+        idx += 1;
+      }
+      return `${size.toFixed(size >= 10 || idx === 0 ? 0 : 1)} ${units[idx]}`;
+    }
+
+    function normalizeText(value, caseSensitive) {
+      const text = value == null ? '' : String(value);
+      return caseSensitive ? text : text.toLowerCase();
+    }
+
+    function makeId() {
+      return `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    }
+
+    function safeCellText(cell) {
+      if (!cell) return '';
+      if (cell.w != null && cell.w !== '') return String(cell.w);
+      if (cell.v == null) return '';
+      if (cell.t === 'd' && cell.v instanceof Date) return cell.v.toISOString();
+      if (typeof cell.v === 'object') {
+        try { return JSON.stringify(cell.v); } catch (err) { return String(cell.v); }
+      }
+      return String(cell.v);
+    }
+
+    function createHighlightHtml(text, keyword, caseSensitive) {
+      const source = String(text ?? '');
+      const needle = String(keyword ?? '');
+      if (!needle) return escapeHtml(source);
+      const src = caseSensitive ? source : source.toLowerCase();
+      const ndl = caseSensitive ? needle : needle.toLowerCase();
+      let start = 0;
+      let html = '';
+      while (start < source.length) {
+        const idx = src.indexOf(ndl, start);
+        if (idx === -1) {
+          html += escapeHtml(source.slice(start));
+          break;
+        }
+        html += escapeHtml(source.slice(start, idx));
+        html += `<mark>${escapeHtml(source.slice(idx, idx + needle.length))}</mark>`;
+        start = idx + Math.max(needle.length, 1);
+      }
+      return html || escapeHtml(source);
+    }
+
+    function getQuery() {
+      return els.queryInput.value.trim();
+    }
+
+    function setStatus(message, type = '') {
+      els.statusBox.className = type ? `status ${type}` : 'status';
+      els.statusBox.textContent = message;
+    }
+
+    function setPreviewEmpty(text) {
+      els.previewEmpty.textContent = text;
+      els.previewEmpty.style.display = 'block';
+      els.previewContent.style.display = 'none';
+      els.previewContent.innerHTML = '';
+      els.previewLabel.textContent = '未打开';
+      app.activeFileId = '';
+      app.activeSheetName = '';
+      app.activePreviewRow = null;
+    }
+
+    function showPreviewContainer(label) {
+      els.previewLabel.textContent = label;
+      els.previewEmpty.style.display = 'none';
+      els.previewContent.style.display = 'block';
+    }
+
+    function getDb() {
+      if (app.db) return Promise.resolve(app.db);
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onupgradeneeded = () => {
+          const db = request.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            db.createObjectStore(STORE_NAME, { keyPath: 'fileId' });
+          }
+        };
+        request.onsuccess = () => {
+          app.db = request.result;
+          resolve(app.db);
+        };
+        request.onerror = () => reject(request.error || new Error('IndexedDB 打开失败'));
+      });
+    }
+
+    async function idbTx(mode, runner) {
+      const db = await getDb();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, mode);
+        const store = tx.objectStore(STORE_NAME);
+        const result = runner(store, resolve, reject, tx);
+        if (result !== undefined) result;
+        tx.onerror = () => reject(tx.error || new Error('IndexedDB 事务失败'));
+      });
+    }
+
+    async function idbGetAll() {
+      return idbTx('readonly', (store, resolve, reject) => {
+        const req = store.getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => reject(req.error || new Error('读取本地数据失败'));
+      });
+    }
+
+    async function idbPut(record) {
+      return idbTx('readwrite', (store, resolve, reject) => {
+        const req = store.put(record);
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => reject(req.error || new Error('保存本地数据失败'));
+      });
+    }
+
+    async function idbDelete(fileId) {
+      return idbTx('readwrite', (store, resolve, reject) => {
+        const req = store.delete(fileId);
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => reject(req.error || new Error('删除本地数据失败'));
+      });
+    }
+
+    async function idbClear() {
+      return idbTx('readwrite', (store, resolve, reject) => {
+        const req = store.clear();
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => reject(req.error || new Error('清空本地数据失败'));
+      });
+    }
+
+    async function loadFilesFromStore() {
+      const list = await idbGetAll();
+      app.files = list.sort((a, b) => (b.uploadTime || 0) - (a.uploadTime || 0));
+      renderAll();
+      if (app.files.length) {
+        setStatus(`已从浏览器本地恢复 ${app.files.length} 个文件，共 ${countSheets(app.files)} 个工作表。`, 'success');
+      } else {
+        setStatus('本地暂无知识库数据，请上传 Excel 文件开始使用。');
+      }
+    }
+
+    function countSheets(files) {
+      return files.reduce((sum, file) => sum + (file.sheets ? file.sheets.length : 0), 0);
+    }
+
+    function countCells(file) {
+      return (file.sheets || []).reduce((sum, sheet) => {
+        return sum + (sheet.rows || []).reduce((rowSum, row) => rowSum + (row.cells ? row.cells.length : 0), 0);
+      }, 0);
+    }
+
+    function buildSerializableWorkbook(file, workbook) {
+      const sheets = workbook.SheetNames.map((sheetName) => {
+        const ws = workbook.Sheets[sheetName];
+        const range = ws['!ref'] ? XLSX.utils.decode_range(ws['!ref']) : { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } };
+        const rows = [];
+        let maxCols = 0;
+        for (let r = range.s.r; r <= range.e.r; r += 1) {
+          const cells = [];
+          for (let c = range.s.c; c <= range.e.c; c += 1) {
+            const address = XLSX.utils.encode_cell({ r, c });
+            const cell = ws[address];
+            const displayValue = safeCellText(cell);
+            const value = cell ? cell.v : null;
+            cells.push({
+              colIndex: c,
+              address,
+              value,
+              displayValue
+            });
+          }
+          maxCols = Math.max(maxCols, cells.length);
+          rows.push({
+            rowIndex: r,
+            cells,
+            rowText: cells.map((item) => item.displayValue).join(' | ')
+          });
+        }
+        return {
+          sheetName,
+          range: ws['!ref'] || '',
+          rowCount: rows.length,
+          columnCount: maxCols,
+          rows
+        };
+      });
+
+      return {
+        fileId: makeId(),
+        fileName: file.name,
+        fileSize: file.size,
+        mimeType: file.type || '',
+        uploadTime: Date.now(),
+        sheets
+      };
+    }
+
+    async function parseFile(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, {
+        type: 'array',
+        cellDates: true,
+        cellNF: true,
+        cellText: true
+      });
+      return buildSerializableWorkbook(file, workbook);
+    }
+
+    function findFile(fileId) {
+      return app.files.find((item) => item.fileId === fileId) || null;
+    }
+
+    function findSheet(file, sheetName) {
+      return (file?.sheets || []).find((sheet) => sheet.sheetName === sheetName) || null;
+    }
+
+    function flattenResults(query) {
+      const caseSensitive = els.caseSensitiveChk.checked;
+      const needle = normalizeText(query, caseSensitive);
+      const matches = [];
+      if (!needle) return matches;
+
+      app.files.forEach((file) => {
+        (file.sheets || []).forEach((sheet) => {
+          (sheet.rows || []).forEach((row) => {
+            (row.cells || []).forEach((cell) => {
+              const text = normalizeText(cell.displayValue, caseSensitive);
+              if (text.includes(needle)) {
+                matches.push({
+                  fileId: file.fileId,
+                  fileName: file.fileName,
+                  uploadTime: file.uploadTime,
+                  fileSize: file.fileSize,
+                  sheetName: sheet.sheetName,
+                  rowIndex: row.rowIndex,
+                  colIndex: cell.colIndex,
+                  address: cell.address,
+                  cellValue: cell.displayValue,
+                  rowText: row.rowText,
+                  matchText: cell.displayValue
+                });
+              }
+            });
+          });
+        });
+      });
+      return matches;
+    }
+
+    function renderFiles() {
+      els.fileCount.textContent = `${app.files.length} 个`;
+      els.fileList.innerHTML = '';
+      if (!app.files.length) {
+        els.fileList.innerHTML = `<div class='empty'>还没有导入任何 Excel 文件。</div>`;
+        return;
+      }
+
+      app.files.forEach((file) => {
+        const sheetCount = file.sheets ? file.sheets.length : 0;
+        const cellCount = countCells(file);
+        const isActive = file.fileId === app.activeFileId;
+        const card = document.createElement('div');
+        card.className = `file-card ${isActive ? 'active' : ''}`;
+        card.innerHTML = `
+          <div class='file-title'>${escapeHtml(file.fileName)}</div>
+          <div class='meta'>
+            导入时间：${escapeHtml(formatTime(file.uploadTime))}<br />
+            文件大小：${escapeHtml(formatBytes(file.fileSize))}<br />
+            工作表：${sheetCount} 个，单元格：${cellCount} 个
+          </div>
+          <div class='chips'>
+            ${sheetCount ? `<span class='chip'>${sheetCount} 个工作表</span>` : ''}
+            <span class='chip'>${cellCount} 个单元格</span>
+          </div>
+          <div class='row'>
+            <button class='btn small' type='button' data-action='view'>查看</button>
+            <button class='btn small ghost' type='button' data-action='preview'>预览</button>
+            <button class='btn small danger' type='button' data-action='delete'>删除</button>
+          </div>
+        `;
+        card.querySelector('[data-action="view"]').addEventListener('click', () => openFullFile(file.fileId));
+        card.querySelector('[data-action="preview"]').addEventListener('click', () => openFullFile(file.fileId, file.sheets?.[0]?.sheetName || ''));
+        card.querySelector('[data-action="delete"]').addEventListener('click', () => deleteFile(file.fileId));
+        card.addEventListener('click', (evt) => {
+          if (evt.target.closest('button')) return;
+          openFullFile(file.fileId);
+        });
+        els.fileList.appendChild(card);
+      });
+    }
+
+    function renderResults() {
+      const query = getQuery();
+      app.query = query;
+      if (!query) {
+        app.results = [];
+        els.resultCount.textContent = '0 条结果';
+        els.queryHint.textContent = '请输入关键词开始检索。';
+        els.results.innerHTML = `<div class='empty'>请输入关键词后进行全量查询。也可以勾选“输入即搜”直接实时查询。</div>`;
+        return;
+      }
+
+      app.results = flattenResults(query);
+      els.resultCount.textContent = `${app.results.length} 条结果`;
+      els.queryHint.textContent = app.results.length ? `命中 ${app.results.length} 条` : '未找到匹配项';
+      els.results.innerHTML = '';
+
+      if (!app.results.length) {
+        els.results.innerHTML = `<div class='empty'>没有找到匹配的数据，请尝试更换关键词。</div>`;
+        return;
+      }
+
+      app.results.forEach((item, index) => {
+        const card = document.createElement('div');
+        card.className = 'result-card';
+        card.innerHTML = `
+          <div class='result-top'>
+            <div class='result-title'>
+              ${escapeHtml(item.fileName)} / ${escapeHtml(item.sheetName)} / 第 ${item.rowIndex + 1} 行，第 ${item.colIndex + 1} 列
+            </div>
+            <span class='chip'>${escapeHtml(item.address)}</span>
+          </div>
+          <div class='meta'>
+            导入时间：${escapeHtml(formatTime(item.uploadTime))} ｜ 文件大小：${escapeHtml(formatBytes(item.fileSize))}
+          </div>
+          <div class='result-snippet'>
+            命中内容：${createHighlightHtml(item.cellValue, query, els.caseSensitiveChk.checked)}
+          </div>
+          <div class='meta'>行内容：${createHighlightHtml(item.rowText, query, els.caseSensitiveChk.checked)}</div>
+          <div class='result-actions'>
+            <button class='btn small' type='button' data-action='row'>显示整行数据</button>
+            <button class='btn small ghost' type='button' data-action='file'>打开完整文件</button>
+          </div>
+        `;
+        card.querySelector('[data-action="row"]').addEventListener('click', () => openRowDetail(item));
+        card.querySelector('[data-action="file"]').addEventListener('click', () => openFullFile(item.fileId, item.sheetName, item.rowIndex));
+        card.addEventListener('click', (evt) => {
+          if (evt.target.closest('button')) return;
+          openRowDetail(item);
+        });
+        els.results.appendChild(card);
+      });
+    }
+
+    function renderPreview(fileId, sheetName = '', highlightRowIndex = null) {
+      const file = findFile(fileId);
+      if (!file) {
+        setPreviewEmpty('未找到文件，请刷新页面后重试。');
+        return;
+      }
+      app.activeFileId = fileId;
+      app.activeSheetName = sheetName || file.sheets?.[0]?.sheetName || '';
+      app.activePreviewRow = highlightRowIndex;
+
+      const selectedSheet = findSheet(file, app.activeSheetName) || file.sheets?.[0] || null;
+      if (!selectedSheet) {
+        setPreviewEmpty('该文件没有可显示的工作表。');
+        return;
+      }
+
+      showPreviewContainer(`${file.fileName} · ${selectedSheet.sheetName}`);
+      renderFiles();
+
+      const tabsHtml = (file.sheets || []).map((sheet) => {
+        const active = sheet.sheetName === selectedSheet.sheetName ? 'active' : '';
+        return `<button class='tab ${active}' type='button' data-sheet='${escapeHtml(sheet.sheetName)}'>${escapeHtml(sheet.sheetName)}</button>`;
+      }).join('');
+
+      const rows = selectedSheet.rows || [];
+      const maxCols = rows.reduce((max, row) => Math.max(max, (row.cells || []).length), 0);
+      const colHeaders = Array.from({ length: maxCols }, (_, i) => `<th>${escapeHtml(XLSX.utils.encode_col(i))}</th>`).join('');
+      const tableRows = rows.map((row) => {
+        const cells = (row.cells || []).map((cell) => `<td>${escapeHtml(cell.displayValue)}</td>`).join('');
+        const rowClass = highlightRowIndex !== null && row.rowIndex === highlightRowIndex ? 'highlight-row' : '';
+        return `<tr id='preview-row-${row.rowIndex}' class='${rowClass}'><th class='row-head'>${row.rowIndex + 1}</th>${cells}</tr>`;
+      }).join('');
+
+      els.previewContent.innerHTML = `
+        <div class='detail-grid'>
+          <div class='detail-card'>
+            <div class='detail-title'>文件信息</div>
+            <div class='kv'>
+              <div>文件名</div><div>${escapeHtml(file.fileName)}</div>
+              <div>导入时间</div><div>${escapeHtml(formatTime(file.uploadTime))}</div>
+              <div>文件大小</div><div>${escapeHtml(formatBytes(file.fileSize))}</div>
+              <div>工作表数量</div><div>${escapeHtml(file.sheets.length)}</div>
+            </div>
+          </div>
+          <div class='detail-card'>
+            <div class='detail-title'>工作表切换</div>
+            <div class='tabs'>${tabsHtml}</div>
+            <div class='scroll-note'>当前工作表：${escapeHtml(selectedSheet.sheetName)} ｜ 行数：${rows.length} ｜ 列数：${maxCols}</div>
+          </div>
+          <div class='detail-card'>
+            <div class='detail-title'>完整文件预览</div>
+            <div class='table-wrap'>
+              <table>
+                <thead>
+                  <tr>
+                    <th class='row-head'>行号</th>
+                    ${colHeaders}
+                  </tr>
+                </thead>
+                <tbody>${tableRows || `<tr><td colspan='${maxCols + 1}'>无数据</td></tr>`}</tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      `;
+
+      els.previewContent.querySelectorAll('[data-sheet]').forEach((tab) => {
+        tab.addEventListener('click', () => renderPreview(fileId, tab.getAttribute('data-sheet'), highlightRowIndex));
+      });
+
+      if (highlightRowIndex !== null) {
+        requestAnimationFrame(() => {
+          const rowEl = document.getElementById(`preview-row-${highlightRowIndex}`);
+          if (rowEl) rowEl.scrollIntoView({ block: 'center' });
+        });
+      }
+    }
+
+    function openRowDetail(result) {
+      const file = findFile(result.fileId);
+      const sheet = file ? findSheet(file, result.sheetName) : null;
+      const row = sheet ? (sheet.rows || []).find((item) => item.rowIndex === result.rowIndex) : null;
+      const cells = row ? (row.cells || []) : [];
+      const rowHtml = cells.length ? cells.map((cell, index) => `
+        <tr>
+          <th class='row-head'>${index + 1}</th>
+          <td>${escapeHtml(cell.address)}</td>
+          <td>${escapeHtml(cell.displayValue)}</td>
+        </tr>
+      `).join('') : `<tr><td colspan='3'>没有找到行数据。</td></tr>`;
+
+      openModal({
+        title: '显示整行数据',
+        footer: `${result.fileName} / ${result.sheetName} / 第 ${result.rowIndex + 1} 行`,
+        body: `
+          <div class='detail-grid'>
+            <div class='detail-card'>
+              <div class='detail-title'>命中信息</div>
+              <div class='kv'>
+                <div>文件名</div><div>${escapeHtml(result.fileName)}</div>
+                <div>工作表</div><div>${escapeHtml(result.sheetName)}</div>
+                <div>行号</div><div>${result.rowIndex + 1}</div>
+                <div>列号</div><div>${result.colIndex + 1}</div>
+                <div>单元格</div><div>${escapeHtml(result.address)}</div>
+                <div>命中值</div><div>${escapeHtml(result.cellValue)}</div>
+              </div>
+            </div>
+            <div class='detail-card'>
+              <div class='detail-title'>整行数据</div>
+              <div class='table-wrap'>
+                <table>
+                  <thead>
+                    <tr><th class='row-head'>序号</th><th>单元格</th><th>内容</th></tr>
+                  </thead>
+                  <tbody>${rowHtml}</tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        `
+      });
+    }
+
+    function openFullFile(fileId, sheetName = '', highlightRowIndex = null) {
+      renderPreview(fileId, sheetName, highlightRowIndex);
+      const file = findFile(fileId);
+      if (!file) return;
+      setStatus(`正在打开文件预览：${file.fileName}`, 'success');
+    }
+
+    function openModal({ title, body, footer }) {
+      app.modalTitle = title;
+      els.modalTitle.textContent = title;
+      els.modalBody.innerHTML = body;
+      els.modalFooterInfo.textContent = footer || '';
+      app.modalMode = 'custom';
+      app.modalPayload = null;
+      app.modalIndex = -1;
+      els.modalPrevBtn.style.display = 'none';
+      els.modalNextBtn.style.display = 'none';
+      els.overlay.classList.add('show');
+      els.overlay.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeModal() {
+      els.overlay.classList.remove('show');
+      els.overlay.setAttribute('aria-hidden', 'true');
+      els.modalBody.innerHTML = '';
+      els.modalFooterInfo.textContent = '';
+      app.modalMode = '';
+      app.modalPayload = null;
+      app.modalIndex = -1;
+    }
+
+    function deleteFile(fileId) {
+      const file = findFile(fileId);
+      if (!file) return;
+      if (!confirm(`确定删除文件“${file.fileName}”及其全部本地数据吗？`)) return;
+      idbDelete(fileId)
+        .then(() => {
+          app.files = app.files.filter((item) => item.fileId !== fileId);
+          if (app.activeFileId === fileId) setPreviewEmpty('已删除当前文件。请选择其他文件继续查看。');
+          renderAll();
+          setStatus(`已删除：${file.fileName}`, 'success');
+          renderResults();
+        })
+        .catch((err) => setStatus(err.message || '删除失败', 'error'));
+    }
+
+    function clearAll() {
+      if (!app.files.length) {
+        setStatus('当前没有可清空的数据。');
+        return;
+      }
+      if (!confirm('确定清空全部本地知识库数据吗？此操作不可恢复。')) return;
+      idbClear()
+        .then(() => {
+          app.files = [];
+          app.results = [];
+          setPreviewEmpty('请选择左侧文件，或点击搜索结果中的“打开完整文件”。');
+          renderAll();
+          renderResults();
+          setStatus('已清空全部本地知识库数据。', 'success');
+        })
+        .catch((err) => setStatus(err.message || '清空失败', 'error'));
+    }
+
+    function exportJson() {
+      if (!app.files.length) {
+        setStatus('没有可导出的数据。', 'warning');
+        return;
+      }
+      const data = JSON.stringify(app.files, null, 2);
+      const blob = new Blob([data], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `excel-knowledge-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatus('已导出本地知识库 JSON 备份。', 'success');
+    }
+
+    function renderAll() {
+      renderFiles();
+      renderResults();
+      if (app.activeFileId) {
+        const file = findFile(app.activeFileId);
+        if (file) {
+          renderPreview(app.activeFileId, app.activeSheetName || file.sheets?.[0]?.sheetName || '', app.activePreviewRow);
+        } else {
+          setPreviewEmpty('请选择左侧文件，或点击搜索结果中的“打开完整文件”。');
+        }
+      }
+    }
+
+    async function handleUpload(files) {
+      const list = Array.from(files || []);
+      if (!list.length) return;
+      if (typeof XLSX === 'undefined') {
+        setStatus('SheetJS 未加载成功，无法解析 Excel 文件。请检查网络或 CDN 访问。', 'error');
+        return;
+      }
+
+      setStatus(`开始读取 ${list.length} 个文件，请稍候...`, 'warning');
+      let successCount = 0;
+      const failed = [];
+
+      for (const file of list) {
+        try {
+          const record = await parseFile(file);
+          await idbPut(record);
+          app.files.unshift(record);
+          successCount += 1;
+        } catch (err) {
+          failed.push(`${file.name}：${err.message || '读取失败'}`);
+        }
+      }
+
+      app.files.sort((a, b) => (b.uploadTime || 0) - (a.uploadTime || 0));
+      renderAll();
+      renderResults();
+
+      if (successCount && failed.length) {
+        setStatus(`成功导入 ${successCount} 个文件，失败 ${failed.length} 个：${failed.join('；')}`, 'warning');
+      } else if (successCount) {
+        setStatus(`成功导入 ${successCount} 个文件，并已保存到浏览器本地。`, 'success');
+      } else {
+        setStatus(`全部导入失败：${failed.join('；')}`, 'error');
+      }
+    }
+
+    let searchTimer = null;
+    function scheduleSearch() {
+      if (!els.autoSearchChk.checked) return;
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => renderResults(), 220);
+    }
+
+    function bindEvents() {
+      els.fileInput.addEventListener('change', (event) => {
+        handleUpload(event.target.files).finally(() => {
+          event.target.value = '';
+        });
+      });
+
+      els.clearAllBtn.addEventListener('click', clearAll);
+      els.exportJsonBtn.addEventListener('click', exportJson);
+      els.refreshBtn.addEventListener('click', () => loadFilesFromStore().catch((err) => setStatus(err.message || '刷新失败', 'error')));
+      els.searchBtn.addEventListener('click', renderResults);
+      els.resetSearchBtn.addEventListener('click', () => {
+        els.queryInput.value = '';
+        renderResults();
+      });
+
+      els.queryInput.addEventListener('input', scheduleSearch);
+      els.caseSensitiveChk.addEventListener('change', renderResults);
+      els.autoSearchChk.addEventListener('change', () => {
+        if (els.autoSearchChk.checked) renderResults();
+      });
+
+      els.modalCloseBtn.addEventListener('click', closeModal);
+      els.overlay.addEventListener('click', (evt) => {
+        if (evt.target === els.overlay) closeModal();
+      });
+      document.addEventListener('keydown', (evt) => {
+        if (evt.key === 'Escape') closeModal();
+      });
+    }
+
+    async function bootstrap() {
+      bindEvents();
+      setPreviewEmpty('请选择左侧文件，或点击搜索结果中的“打开完整文件”。');
+      try {
+        await getDb();
+        await loadFilesFromStore();
+      } catch (err) {
+        setStatus(err.message || '初始化失败', 'error');
+      }
+    }
+
+    bootstrap();
+  </script>
+</body>
+</html>
+
