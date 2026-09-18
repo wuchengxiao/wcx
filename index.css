@@ -48,3 +48,16 @@ body {
 .coming-soon {
     opacity: 0.6;
 }
+.site-footer {
+    margin: 32px auto 0;
+    color: #666;
+    font-size: 14px;
+    text-align: center;
+}
+.site-footer a {
+    color: #1890ff;
+    text-decoration: none;
+}
+.site-footer a:hover {
+    text-decoration: underline;
+}
