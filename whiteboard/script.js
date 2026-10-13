@@ -50,13 +50,18 @@ class UMLDrawer {
         this.snapThreshold = 18;
         this.newElementSelectDelayMs = 2000;
         this.recentlyCreatedElements = new Map();
-        
+        this.inlineTextEditor = null;
+        this.inlineEditingElement = null;
+        this.clipboardSignature = 'uml-drawer-elements';
+        this.clipboardVersion = 1;
+
         this.init();
     }
     
     init() {
         this.resizeCanvas();
         this.loadCustomShapes();
+        this.setupInlineTextEditor();
         this.setupEventListeners();
         this.setupToolListeners();
         this.setupDiagramListeners();
@@ -132,10 +137,14 @@ class UMLDrawer {
         document.addEventListener('keydown', this.handleKeyDown.bind(this));
         document.addEventListener('keyup', this.handleKeyUp.bind(this));
         
-        window.addEventListener('resize', this.handleResize.bind(this));
+        window.addEventListener('resize', this.handleWindowResize.bind(this));
     }
     
     handleDoubleClick(e) {
+        if (this.isInlineTextEditingActive()) {
+            this.commitInlineTextEdit();
+        }
+
         const coords = this.getCanvasCoordinates(e.clientX, e.clientY);
         const x = coords.x;
         const y = coords.y;
@@ -182,7 +191,137 @@ class UMLDrawer {
         document.getElementById('property-dialog').classList.remove('show');
         this.currentEditingElement = null;
     }
-    
+
+    setupInlineTextEditor() {
+        this.inlineTextEditor = document.getElementById('inline-text-editor');
+        if (!this.inlineTextEditor) return;
+
+        this.inlineTextEditor.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                this.cancelInlineTextEdit();
+                e.preventDefault();
+                return;
+            }
+
+            if (e.key === 'Enter' && !e.shiftKey) {
+                this.commitInlineTextEdit();
+                e.preventDefault();
+            }
+        });
+
+        this.inlineTextEditor.addEventListener('blur', () => {
+            if (this.isInlineTextEditingActive()) {
+                this.commitInlineTextEdit();
+            }
+        });
+    }
+
+    isInlineTextEditingActive() {
+        if (!this.inlineTextEditor || !this.inlineEditingElement) return false;
+        return window.getComputedStyle(this.inlineTextEditor).display !== 'none';
+    }
+
+    isEditableTarget(target) {
+        if (!target) return false;
+        const tagName = target.tagName ? target.tagName.toLowerCase() : '';
+        return tagName === 'input' || tagName === 'textarea' || !!target.isContentEditable;
+    }
+
+    canEditElementText(element) {
+        return !!element && element.type !== 'pen';
+    }
+
+    getElementTextLayoutBounds(element) {
+        if (!element) {
+            return { x: 0, y: 0, width: 120, height: 40 };
+        }
+
+        if (element.type === 'text') {
+            this.ctx.font = `${element.fontSize || 14}px ${element.fontFamily || 'Arial'}`;
+            const lines = String(element.text || '').split('\n');
+            const widths = lines.map(line => this.ctx.measureText(line).width);
+            const width = Math.max(40, ...(widths.length ? widths : [0]));
+            const lineHeight = (element.fontSize || 14) * 1.2;
+            return {
+                x: element.x,
+                y: element.y - (element.fontSize || 14),
+                width,
+                height: Math.max(lineHeight, lines.length * lineHeight)
+            };
+        }
+
+        const bounds = this.getElementBounds(element);
+        return {
+            x: bounds.x,
+            y: bounds.y,
+            width: Math.max(bounds.width, 120),
+            height: Math.max(bounds.height, 40)
+        };
+    }
+
+    positionInlineTextEditor(element) {
+        if (!this.inlineTextEditor || !element) return;
+
+        const container = this.canvas.parentElement;
+        if (!container) return;
+
+        const canvasRect = this.canvas.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        const bounds = this.getElementTextLayoutBounds(element);
+
+        const screenLeft = canvasRect.left - containerRect.left + (bounds.x + this.canvasOffsetX) * this.canvasScale * this.viewZoom;
+        const screenTop = canvasRect.top - containerRect.top + (bounds.y + this.canvasOffsetY) * this.canvasScale * this.viewZoom;
+        const screenWidth = Math.max(120, bounds.width * this.canvasScale * this.viewZoom);
+        const screenHeight = Math.max(40, bounds.height * this.canvasScale * this.viewZoom);
+
+        this.inlineTextEditor.style.left = `${screenLeft}px`;
+        this.inlineTextEditor.style.top = `${screenTop}px`;
+        this.inlineTextEditor.style.width = `${screenWidth}px`;
+        this.inlineTextEditor.style.height = `${screenHeight}px`;
+        this.inlineTextEditor.style.fontSize = `${Math.max(12, Math.round((element.fontSize || 14) * this.viewZoom))}px`;
+    }
+
+    startInlineTextEdit(element, options = {}) {
+        if (!this.canEditElementText(element) || !this.inlineTextEditor) return false;
+
+        this.inlineEditingElement = element;
+        this.inlineTextEditor.value = element.text || '';
+        this.positionInlineTextEditor(element);
+        this.inlineTextEditor.style.display = 'block';
+        this.inlineTextEditor.focus();
+
+        const initialCharacter = options.initialCharacter;
+        if (typeof initialCharacter === 'string' && initialCharacter.length === 1) {
+            const end = this.inlineTextEditor.value.length;
+            this.inlineTextEditor.setSelectionRange(end, end);
+            this.inlineTextEditor.setRangeText(initialCharacter, end, end, 'end');
+        } else if (options.selectAll) {
+            this.inlineTextEditor.select();
+        } else {
+            const end = this.inlineTextEditor.value.length;
+            this.inlineTextEditor.setSelectionRange(end, end);
+        }
+
+        return true;
+    }
+
+    commitInlineTextEdit() {
+        if (!this.inlineEditingElement || !this.inlineTextEditor) return;
+
+        this.inlineEditingElement.text = this.inlineTextEditor.value;
+        this.inlineTextEditor.style.display = 'none';
+        this.inlineEditingElement = null;
+        this.render();
+    }
+
+    cancelInlineTextEdit() {
+        if (!this.inlineTextEditor) return;
+
+        this.inlineTextEditor.style.display = 'none';
+        this.inlineEditingElement = null;
+        this.render();
+    }
+
     applyPropertyChanges() {
         if (!this.currentEditingElement) return;
         
@@ -219,8 +358,11 @@ class UMLDrawer {
         this.render();
     }
     
-    handleResize() {
+    handleWindowResize() {
         this.resizeCanvas();
+        if (this.isInlineTextEditingActive() && this.inlineEditingElement) {
+            this.positionInlineTextEditor(this.inlineEditingElement);
+        }
         this.render();
     }
     
@@ -305,8 +447,8 @@ class UMLDrawer {
             'btn-delete': this.deleteSelectedElements.bind(this),
             'btn-tools': this.toggleToolsPanel.bind(this),
             'btn-property': this.showPropertyForSelected.bind(this),
-            'btn-copy': this.copySelectedElements.bind(this),
-            'quick-paste': this.pasteClipboardElements.bind(this),
+            'btn-copy': this.handleCopyButtonClick.bind(this),
+            'quick-paste': this.handlePasteButtonClick.bind(this),
             'download-shapes': this.downloadCustomShapes.bind(this),
             'import-shapes': this.openImportCustomShapesDialog.bind(this),
             'create-custom-shape': this.createCustomShapeFromSelection.bind(this),
@@ -418,7 +560,15 @@ class UMLDrawer {
             this.showPropertyDialog(diagram.selectedElements[0]);
         }
     }
-    
+
+    async handleCopyButtonClick() {
+        await this.copySelectedElementsToSystemClipboard();
+    }
+
+    async handlePasteButtonClick() {
+        await this.pasteFromSystemClipboard();
+    }
+
     updateBottomToolbar() {
         const diagram = this.diagrams[this.currentDiagram];
         const bottomToolbar = document.getElementById('bottom-toolbar');
@@ -806,16 +956,35 @@ class UMLDrawer {
         document.getElementById('help-dialog').classList.remove('show');
     }
     
-    handleKeyDown(e) {
+    async handleKeyDown(e) {
         if (e.key === 'Control') {
             this.ctrlPressed = true;
         }
 
-        // 禁用复制/粘贴键盘快捷键（除非在输入框内）
-        if (this.ctrlPressed && (e.key === 'c' || e.key === 'C' || e.key === 'v' || e.key === 'V')) {
-            const tagName = (e.target && e.target.tagName ? e.target.tagName.toLowerCase() : '');
-            const isEditable = tagName === 'input' || tagName === 'textarea' || (e.target && e.target.isContentEditable);
-            if (!isEditable) {
+        const hasCtrlModifier = e.ctrlKey || this.ctrlPressed;
+        const isEditable = this.isEditableTarget(e.target) || this.isInlineTextEditingActive();
+
+        if (hasCtrlModifier && !isEditable) {
+            if (e.key === 'c' || e.key === 'C') {
+                e.preventDefault();
+                await this.copySelectedElementsToSystemClipboard();
+                return;
+            }
+
+            if (e.key === 'v' || e.key === 'V') {
+                e.preventDefault();
+                await this.pasteFromSystemClipboard();
+                return;
+            }
+
+            if (e.key === 'g' || e.key === 'G') {
+                this.createCustomShapeFromSelection();
+                e.preventDefault();
+                return;
+            }
+
+            if (e.key === 'u' || e.key === 'U') {
+                this.ungroupSelectedElements();
                 e.preventDefault();
                 return;
             }
@@ -823,27 +992,32 @@ class UMLDrawer {
 
         // 为安全起见：不允许通过键盘删除图形，只能使用删除工具
         if (e.key === 'Delete' || e.key === 'Backspace') {
-            const tagName = (e.target && e.target.tagName ? e.target.tagName.toLowerCase() : '');
-            const isEditable =
-                tagName === 'input' ||
-                tagName === 'textarea' ||
-                (e.target && e.target.isContentEditable);
-
             // 非输入状态下阻止默认行为（避免浏览器后退等）
             if (!isEditable) {
                 e.preventDefault();
             }
             return;
         }
-        
-        if (e.key === 'g' && this.ctrlPressed) {
-            this.createCustomShapeFromSelection();
-            e.preventDefault();
+
+        if (isEditable) {
+            return;
         }
-        
-        if (e.key === 'u' && this.ctrlPressed) {
-            this.ungroupSelectedElements();
-            e.preventDefault();
+
+        const diagram = this.diagrams[this.currentDiagram];
+        const singleSelected = diagram.selectedElements.length === 1 ? diagram.selectedElements[0] : null;
+
+        if ((e.key === 'Enter' || e.key === 'F2') && singleSelected) {
+            if (this.startInlineTextEdit(singleSelected, { selectAll: false })) {
+                e.preventDefault();
+            }
+            return;
+        }
+
+        if (e.key.length === 1 && !e.altKey && !e.metaKey && singleSelected) {
+            if (this.startInlineTextEdit(singleSelected, { initialCharacter: e.key })) {
+                e.preventDefault();
+                return;
+            }
         }
     }
     
@@ -853,85 +1027,148 @@ class UMLDrawer {
         }
     }
     
-    handleCopy(e) {
-        const selected = this.diagrams[this.currentDiagram].selectedElements;
-        if (selected.length > 0) {
-            this.clipboard = selected.map(el => JSON.parse(JSON.stringify(el)));
-            e.preventDefault();
-        }
-    }
-    
-    handlePaste(e) {
-        if (this.clipboard.length > 0) {
-            const diagram = this.diagrams[this.currentDiagram];
-            const offsetX = 20;
-            const offsetY = 20;
-            
-            this.clipboard.forEach(el => {
-                const newElement = JSON.parse(JSON.stringify(el));
-                if (newElement.x !== undefined) newElement.x += offsetX;
-                if (newElement.y !== undefined) newElement.y += offsetY;
-                if (newElement.x1 !== undefined) newElement.x1 += offsetX;
-                if (newElement.y1 !== undefined) newElement.y1 += offsetY;
-                if (newElement.x2 !== undefined) newElement.x2 += offsetX;
-                if (newElement.y2 !== undefined) newElement.y2 += offsetY;
-                if (newElement.path && newElement.path.length > 0) {
-                    newElement.path = newElement.path.map(p => ({
-                        x: p.x + offsetX,
-                        y: p.y + offsetY
-                    }));
-                }
-                this.addElementToDiagram(diagram, newElement);
-            });
-            
-            diagram.selectedElements = [];
-            const startIndex = diagram.elements.length - this.clipboard.length;
-            for (let i = 0; i < this.clipboard.length; i++) {
-                diagram.selectedElements.push(diagram.elements[startIndex + i]);
-            }
-            
-            this.render();
-            e.preventDefault();
-        }
-    }
-    
-
     copySelectedElements() {
         const selected = this.diagrams[this.currentDiagram].selectedElements;
-        if (selected.length > 0) {
-            this.clipboard = selected.map(el => JSON.parse(JSON.stringify(el)));
+        if (selected.length === 0) {
+            return false;
         }
+
+        this.clipboard = selected.map(el => this.cloneElement(el));
+        return true;
+    }
+
+    serializeSelectionForClipboard() {
+        const selected = this.diagrams[this.currentDiagram].selectedElements;
+        if (selected.length === 0) return '';
+
+        return JSON.stringify({
+            type: this.clipboardSignature,
+            version: this.clipboardVersion,
+            elements: selected.map(el => this.cloneElement(el))
+        });
+    }
+
+    parseClipboardPayload(text) {
+        if (!text) return null;
+
+        try {
+            const parsed = JSON.parse(text);
+            if (parsed && parsed.type === this.clipboardSignature && Array.isArray(parsed.elements)) {
+                return parsed.elements;
+            }
+        } catch (error) {
+            // ignore invalid clipboard payloads
+        }
+
+        return null;
+    }
+
+    async copySelectedElementsToSystemClipboard() {
+        if (!this.copySelectedElements()) {
+            alert('请先选中要复制的图形。');
+            return false;
+        }
+
+        const payload = this.serializeSelectionForClipboard();
+        if (!payload) {
+            alert('请先选中要复制的图形。');
+            return false;
+        }
+
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(payload);
+            }
+        } catch (error) {
+            console.warn('写入系统剪贴板失败，将继续保留页面内复制内容:', error);
+        }
+
+        return true;
+    }
+
+    collectElementTreeIds(element, callback) {
+        if (!element) return;
+        callback(element);
+        if (Array.isArray(element.elements)) {
+            element.elements.forEach(subElement => this.collectElementTreeIds(subElement, callback));
+        }
+    }
+
+    createElementsForPaste(elements, offsetX = 20, offsetY = 20) {
+        const idMap = new Map();
+        const clones = elements.map(element => {
+            const clone = this.cloneElement(element);
+            this.translateElement(clone, offsetX, offsetY);
+            return clone;
+        });
+
+        clones.forEach(clone => {
+            this.collectElementTreeIds(clone, (entry) => {
+                if (entry.id) {
+                    const oldId = entry.id;
+                    const newId = this.assignNewElementId(entry);
+                    idMap.set(oldId, newId);
+                }
+            });
+        });
+
+        clones.forEach(clone => {
+            this.collectElementTreeIds(clone, (entry) => {
+                if (entry.sourceAttachment) {
+                    entry.sourceAttachment = idMap.has(entry.sourceAttachment.elementId)
+                        ? { ...entry.sourceAttachment, elementId: idMap.get(entry.sourceAttachment.elementId) }
+                        : null;
+                }
+                if (entry.targetAttachment) {
+                    entry.targetAttachment = idMap.has(entry.targetAttachment.elementId)
+                        ? { ...entry.targetAttachment, elementId: idMap.get(entry.targetAttachment.elementId) }
+                        : null;
+                }
+            });
+        });
+
+        return clones;
+    }
+
+    async pasteFromSystemClipboard() {
+        let clipboardElements = null;
+
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                const text = await navigator.clipboard.readText();
+                clipboardElements = this.parseClipboardPayload(text);
+            }
+        } catch (error) {
+            console.warn('读取系统剪贴板失败，将尝试页面内复制内容:', error);
+        }
+
+        if (clipboardElements && clipboardElements.length > 0) {
+            this.clipboard = clipboardElements.map(element => this.cloneElement(element));
+        }
+
+        return this.pasteClipboardElements();
     }
 
     pasteClipboardElements() {
-        if (this.clipboard.length > 0) {
-            const diagram = this.diagrams[this.currentDiagram];
-            const offsetX = 20;
-            const offsetY = 20;
-            this.clipboard.forEach(el => {
-                const newElement = JSON.parse(JSON.stringify(el));
-                if (newElement.x !== undefined) newElement.x += offsetX;
-                if (newElement.y !== undefined) newElement.y += offsetY;
-                if (newElement.x1 !== undefined) newElement.x1 += offsetX;
-                if (newElement.y1 !== undefined) newElement.y1 += offsetY;
-                if (newElement.x2 !== undefined) newElement.x2 += offsetX;
-                if (newElement.y2 !== undefined) newElement.y2 += offsetY;
-                if (newElement.path && newElement.path.length > 0) {
-                    newElement.path = newElement.path.map(p => ({ x: p.x + offsetX, y: p.y + offsetY }));
-                }
-                this.addElementToDiagram(diagram, newElement);
-            });
-
-            diagram.selectedElements = [];
-            const startIndex = diagram.elements.length - this.clipboard.length;
-            for (let i = 0; i < this.clipboard.length; i++) {
-                diagram.selectedElements.push(diagram.elements[startIndex + i]);
-            }
-
-            this.render();
+        if (this.clipboard.length === 0) {
+            alert('当前没有可粘贴的图形，请先在画板中复制元素。');
+            return false;
         }
+
+        const diagram = this.diagrams[this.currentDiagram];
+        const pastedElements = this.createElementsForPaste(this.clipboard, 20, 20);
+        pastedElements.forEach(element => this.addElementToDiagram(diagram, element));
+
+        diagram.selectedElements = [...pastedElements];
+
+        this.render();
+        return true;
     }
     handleMouseDown(e) {
+        if (this.isInlineTextEditingActive() && !this.isEditableTarget(e.target)) {
+            this.commitInlineTextEdit();
+        }
+
         if (window.innerWidth <= 768) {
             const sidebar = document.querySelector('.sidebar');
             sidebar.classList.remove('show');
@@ -1036,7 +1273,7 @@ class UMLDrawer {
         if (!this.isDrawing && !this.isResizing) return;
         
         if (this.isResizing && this.resizeHandle) {
-            this.handleResize(x, y);
+            this.resizeElementToPoint(x, y);
             this.render();
         } else if (this.tempElement) {
             this.updateTempElement(x, y);
@@ -1118,15 +1355,22 @@ class UMLDrawer {
                 } else {
                     diagram.selectedElements.splice(index, 1);
                 }
+
+                this.isDrawing = false;
+                this.tempElement = null;
             } else {
-                // 普通点击：选择当前元素
-                diagram.selectedElements = [clickedElement];
+                const isAlreadySelected = diagram.selectedElements.includes(clickedElement);
+
+                // 普通点击未选中元素：切换为单选；点击已选中元素：保留当前多选并整体拖动
+                if (!isAlreadySelected) {
+                    diagram.selectedElements = [clickedElement];
+                }
+
+                this.isDrawing = true;
+                this.tempElement = { type: 'select' };
+                this.startX = x;
+                this.startY = y;
             }
-            
-            this.isDrawing = true;
-            this.tempElement = { type: 'select' };
-            this.startX = x;
-            this.startY = y;
         } else {
             // 点击空白处：开始框选
             if (!ctrlKey) {
@@ -1186,7 +1430,7 @@ class UMLDrawer {
         return handles;
     }
     
-    handleResize(x, y) {
+    resizeElementToPoint(x, y) {
         const element = this.tempElement;
         const handle = this.resizeHandle;
         
@@ -1439,14 +1683,7 @@ class UMLDrawer {
                     height: Math.abs(element.y2 - element.y1)
                 };
             case 'text':
-                this.ctx.font = `${element.fontSize}px ${element.fontFamily}`;
-                const textWidth = this.ctx.measureText(element.text).width;
-                return {
-                    x: element.x,
-                    y: element.y - element.fontSize,
-                    width: textWidth,
-                    height: element.fontSize
-                };
+                return this.getElementTextLayoutBounds(element);
             case 'pen':
                 if (element.path.length === 0) {
                     return { x: 0, y: 0, width: 0, height: 0 };
@@ -1574,7 +1811,9 @@ class UMLDrawer {
     }
 
     addElementToDiagram(diagram, element) {
-        this.assignNewElementId(element);
+        if (!element.id) {
+            this.assignNewElementId(element);
+        }
         if (!Number.isFinite(Number(element.layer))) {
             element.layer = diagram.elements.length + 1;
         }
@@ -1605,6 +1844,141 @@ class UMLDrawer {
             bl: { x, y: y + h },
             l: { x, y: y + h / 2 }
         };
+    }
+
+    getAnchorNormal(anchorKey) {
+        const normals = {
+            tl: { x: -1, y: -1 },
+            t: { x: 0, y: -1 },
+            tr: { x: 1, y: -1 },
+            r: { x: 1, y: 0 },
+            br: { x: 1, y: 1 },
+            b: { x: 0, y: 1 },
+            bl: { x: -1, y: 1 },
+            l: { x: -1, y: 0 }
+        };
+        return normals[anchorKey] || { x: 0, y: 0 };
+    }
+
+    getAttachmentElement(attachment) {
+        if (!attachment) return null;
+        return this.findElementById(this.diagrams[this.currentDiagram], attachment.elementId);
+    }
+
+    getAttachmentExitPoint(attachment, fallbackPoint, offset = 28) {
+        if (!attachment) return { ...fallbackPoint };
+
+        const element = this.getAttachmentElement(attachment);
+        if (!element) return { ...fallbackPoint };
+
+        const anchors = this.getElementAnchorPoints(element);
+        const anchor = anchors[attachment.anchorKey];
+        if (!anchor) return { ...fallbackPoint };
+
+        const normal = this.getAnchorNormal(attachment.anchorKey);
+        const length = Math.hypot(normal.x, normal.y) || 1;
+        return {
+            x: anchor.x + (normal.x / length) * offset,
+            y: anchor.y + (normal.y / length) * offset
+        };
+    }
+
+    pointInRect(point, rect) {
+        return point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height;
+    }
+
+    segmentsIntersect(p1, p2, p3, p4) {
+        const cross = (a, b, c) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+        const onSegment = (a, b, p) => p.x >= Math.min(a.x, b.x) && p.x <= Math.max(a.x, b.x) && p.y >= Math.min(a.y, b.y) && p.y <= Math.max(a.y, b.y);
+
+        const d1 = cross(p1, p2, p3);
+        const d2 = cross(p1, p2, p4);
+        const d3 = cross(p3, p4, p1);
+        const d4 = cross(p3, p4, p2);
+
+        if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
+            return true;
+        }
+        if (d1 === 0 && onSegment(p1, p2, p3)) return true;
+        if (d2 === 0 && onSegment(p1, p2, p4)) return true;
+        if (d3 === 0 && onSegment(p3, p4, p1)) return true;
+        if (d4 === 0 && onSegment(p3, p4, p2)) return true;
+        return false;
+    }
+
+    segmentIntersectsRect(p1, p2, rect) {
+        const corners = [
+            { x: rect.x, y: rect.y },
+            { x: rect.x + rect.width, y: rect.y },
+            { x: rect.x + rect.width, y: rect.y + rect.height },
+            { x: rect.x, y: rect.y + rect.height }
+        ];
+
+        if (this.pointInRect(p1, rect) || this.pointInRect(p2, rect)) {
+            return true;
+        }
+
+        for (let i = 0; i < corners.length; i++) {
+            if (this.segmentsIntersect(p1, p2, corners[i], corners[(i + 1) % corners.length])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    simplifyPath(points) {
+        return points.filter((point, index, arr) => {
+            if (index === 0) return true;
+            const prev = arr[index - 1];
+            return Math.abs(prev.x - point.x) > 0.01 || Math.abs(prev.y - point.y) > 0.01;
+        });
+    }
+
+    scorePolylinePath(points, ignoreElementIds = new Set()) {
+        const diagram = this.diagrams[this.currentDiagram];
+        let score = 0;
+
+        diagram.elements.forEach(element => {
+            if (ignoreElementIds.has(element.id)) return;
+            if (['line', 'arrow', 'curved-arrow', 'orthogonal-arrow', 'pen'].includes(element.type)) return;
+
+            const bounds = this.getElementBounds(element);
+            for (let i = 0; i < points.length - 1; i++) {
+                if (this.segmentIntersectsRect(points[i], points[i + 1], bounds)) {
+                    score += 1000;
+                }
+            }
+        });
+
+        for (let i = 0; i < points.length - 1; i++) {
+            score += Math.abs(points[i + 1].x - points[i].x) + Math.abs(points[i + 1].y - points[i].y);
+        }
+
+        score += Math.max(0, points.length - 2) * 20;
+        return score;
+    }
+
+    scoreCurveControlPoint(start, control, end, ignoreElementIds = new Set()) {
+        const diagram = this.diagrams[this.currentDiagram];
+        let score = 0;
+
+        diagram.elements.forEach(element => {
+            if (ignoreElementIds.has(element.id)) return;
+            if (['line', 'arrow', 'curved-arrow', 'orthogonal-arrow', 'pen'].includes(element.type)) return;
+
+            const bounds = this.getElementBounds(element);
+            for (let i = 0; i <= 24; i++) {
+                const point = this.getQuadraticBezierPoint(i / 24, start, control, end);
+                if (this.pointInRect(point, bounds)) {
+                    score += 1000;
+                }
+            }
+        });
+
+        score += Math.hypot(control.x - start.x, control.y - start.y);
+        score += Math.hypot(end.x - control.x, end.y - control.y);
+        return score;
     }
 
     getNearestSnapTarget(x, y) {
@@ -1819,23 +2193,27 @@ class UMLDrawer {
     }
     
     addText(x, y) {
-        const text = prompt('请输入文本:');
-        if (text) {
-            const element = {
-                type: 'text',
-                x: x,
-                y: y,
-                text: text,
-                fill: '#333',
-                fontSize: 14,
-                fontFamily: 'Arial'
-            };
-            this.addElementToDiagram(this.diagrams[this.currentDiagram], element);
-            this.render();
-        }
+        const element = {
+            type: 'text',
+            x: x,
+            y: y,
+            text: '',
+            fill: '#333',
+            fontSize: 14,
+            fontFamily: 'Arial'
+        };
+        const diagram = this.diagrams[this.currentDiagram];
+        this.addElementToDiagram(diagram, element);
+        diagram.selectedElements = [element];
+        this.render();
+        this.startInlineTextEdit(element, { selectAll: true });
     }
     
     deleteElement(x, y) {
+        if (this.isInlineTextEditingActive()) {
+            this.cancelInlineTextEdit();
+        }
+
         const diagram = this.diagrams[this.currentDiagram];
         this.ensureDiagramElementLayers(diagram);
         const ordered = this.getElementsSortedByLayer(diagram);
@@ -1861,6 +2239,10 @@ class UMLDrawer {
     }
     
     deleteSelectedElements() {
+        if (this.isInlineTextEditingActive()) {
+            this.cancelInlineTextEdit();
+        }
+
         const diagram = this.diagrams[this.currentDiagram];
         if (diagram.selectedElements.length === 0) return;
         
@@ -2033,7 +2415,8 @@ class UMLDrawer {
                 }
                 
                 if (this.tempElement.width > 10 && this.tempElement.height > 10) {
-                    this.addElementToDiagram(this.diagrams[this.currentDiagram], this.tempElement);
+                    const element = this.addElementToDiagram(this.diagrams[this.currentDiagram], this.tempElement);
+                    this.diagrams[this.currentDiagram].selectedElements = [element];
                 }
             } else if (['line', 'arrow', 'curved-arrow', 'orthogonal-arrow'].includes(this.tempElement.type)) {
                 const distance = Math.sqrt(
@@ -2041,7 +2424,8 @@ class UMLDrawer {
                     Math.pow(this.tempElement.y2 - this.tempElement.y1, 2)
                 );
                 if (distance > 10) {
-                    this.addElementToDiagram(this.diagrams[this.currentDiagram], this.tempElement);
+                    const element = this.addElementToDiagram(this.diagrams[this.currentDiagram], this.tempElement);
+                    this.diagrams[this.currentDiagram].selectedElements = [element];
                 }
             }
         }
@@ -2076,10 +2460,9 @@ class UMLDrawer {
                 const inBody = x >= bodyLeft && x <= bodyRight && y >= bodyTop && y <= bodyBottom;
                 return inHead || inBody;
             case 'text':
-                this.ctx.font = `${element.fontSize}px ${element.fontFamily}`;
-                const textWidth = this.ctx.measureText(element.text).width;
-                return x >= element.x && x <= element.x + textWidth &&
-                       y >= element.y - element.fontSize && y <= element.y;
+                const textBounds = this.getElementTextLayoutBounds(element);
+                return x >= textBounds.x && x <= textBounds.x + textBounds.width &&
+                       y >= textBounds.y && y <= textBounds.y + textBounds.height;
             case 'triangle':
             case 'diamond':
                 // compute polygon points based on bounds
@@ -2106,9 +2489,14 @@ class UMLDrawer {
                 return distance <= 5;
             case 'orthogonal-arrow':
                 const orthPoints = this.getOrthogonalArrowPathPoints(element);
-                const orthDist1 = this.getDistanceToLine(x, y, orthPoints[0].x, orthPoints[0].y, orthPoints[1].x, orthPoints[1].y);
-                const orthDist2 = this.getDistanceToLine(x, y, orthPoints[1].x, orthPoints[1].y, orthPoints[2].x, orthPoints[2].y);
-                return Math.min(orthDist1, orthDist2) <= 5;
+                let orthMinDist = Infinity;
+                for (let i = 0; i < orthPoints.length - 1; i++) {
+                    orthMinDist = Math.min(
+                        orthMinDist,
+                        this.getDistanceToLine(x, y, orthPoints[i].x, orthPoints[i].y, orthPoints[i + 1].x, orthPoints[i + 1].y)
+                    );
+                }
+                return orthMinDist <= 5;
             case 'curved-arrow':
                 const control = this.getCurvedArrowControlPoint(element);
                 let minDist = Infinity;
@@ -2188,42 +2576,67 @@ class UMLDrawer {
     }
 
     getOrthogonalArrowPathPoints(element) {
-        const dx = element.x2 - element.x1;
-        const dy = element.y2 - element.y1;
+        const start = { x: element.x1, y: element.y1 };
+        const end = { x: element.x2, y: element.y2 };
+        const startExit = this.getAttachmentExitPoint(element.sourceAttachment, start, 28);
+        const endExit = this.getAttachmentExitPoint(element.targetAttachment, end, 28);
+        const ignoreElementIds = new Set();
 
-        // Auto route: choose the bend direction that better matches current drag geometry.
-        const preferHorizontalFirst = Math.abs(dx) >= Math.abs(dy);
-        let midX = preferHorizontalFirst ? element.x2 : element.x1;
-        let midY = preferHorizontalFirst ? element.y1 : element.y2;
+        if (element.sourceAttachment?.elementId) ignoreElementIds.add(element.sourceAttachment.elementId);
+        if (element.targetAttachment?.elementId) ignoreElementIds.add(element.targetAttachment.elementId);
 
-        // Avoid a zero-length final segment so arrowhead angle remains stable.
-        const finalSegLen = Math.hypot(element.x2 - midX, element.y2 - midY);
-        if (finalSegLen < 0.01) {
-            midX = preferHorizontalFirst ? element.x1 : element.x2;
-            midY = preferHorizontalFirst ? element.y2 : element.y1;
+        const candidates = [
+            [start, startExit, { x: endExit.x, y: startExit.y }, endExit, end],
+            [start, startExit, { x: startExit.x, y: endExit.y }, endExit, end]
+        ];
+
+        const sourceElement = this.getAttachmentElement(element.sourceAttachment);
+        const targetElement = this.getAttachmentElement(element.targetAttachment);
+        if (sourceElement && targetElement) {
+            const sourceBounds = this.getElementBounds(sourceElement);
+            const targetBounds = this.getElementBounds(targetElement);
+            const margin = 32;
+            const topY = Math.min(sourceBounds.y, targetBounds.y) - margin;
+            const bottomY = Math.max(sourceBounds.y + sourceBounds.height, targetBounds.y + targetBounds.height) + margin;
+            const leftX = Math.min(sourceBounds.x, targetBounds.x) - margin;
+            const rightX = Math.max(sourceBounds.x + sourceBounds.width, targetBounds.x + targetBounds.width) + margin;
+
+            candidates.push([start, startExit, { x: startExit.x, y: topY }, { x: endExit.x, y: topY }, endExit, end]);
+            candidates.push([start, startExit, { x: startExit.x, y: bottomY }, { x: endExit.x, y: bottomY }, endExit, end]);
+            candidates.push([start, startExit, { x: leftX, y: startExit.y }, { x: leftX, y: endExit.y }, endExit, end]);
+            candidates.push([start, startExit, { x: rightX, y: startExit.y }, { x: rightX, y: endExit.y }, endExit, end]);
         }
 
-        return [
-            { x: element.x1, y: element.y1 },
-            { x: midX, y: midY },
-            { x: element.x2, y: element.y2 }
-        ];
+        const scored = candidates
+            .map(path => this.simplifyPath(path))
+            .filter(path => path.length >= 2)
+            .sort((a, b) => this.scorePolylinePath(a, ignoreElementIds) - this.scorePolylinePath(b, ignoreElementIds));
+
+        return scored[0] || [start, end];
     }
 
     getCurvedArrowControlPoint(element) {
-        const dx = element.x2 - element.x1;
-        const dy = element.y2 - element.y1;
+        const start = this.getAttachmentExitPoint(element.sourceAttachment, { x: element.x1, y: element.y1 }, 28);
+        const end = this.getAttachmentExitPoint(element.targetAttachment, { x: element.x2, y: element.y2 }, 28);
+        const dx = end.x - start.x;
+        const dy = end.y - start.y;
         const distance = Math.sqrt(dx * dx + dy * dy) || 1;
         const nx = -dy / distance;
         const ny = dx / distance;
+        const bend = Math.min(100, Math.max(30, distance * 0.28));
+        const midpoint = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+        const ignoreElementIds = new Set();
 
-        // Auto flip curvature by endpoint quadrant to keep bend direction adaptive.
-        const bendSign = dx * dy >= 0 ? 1 : -1;
-        const bend = Math.min(80, Math.max(25, distance * 0.25));
-        return {
-            x: (element.x1 + element.x2) / 2 + nx * bend * bendSign,
-            y: (element.y1 + element.y2) / 2 + ny * bend * bendSign
-        };
+        if (element.sourceAttachment?.elementId) ignoreElementIds.add(element.sourceAttachment.elementId);
+        if (element.targetAttachment?.elementId) ignoreElementIds.add(element.targetAttachment.elementId);
+
+        const candidates = [
+            { x: midpoint.x + nx * bend, y: midpoint.y + ny * bend },
+            { x: midpoint.x - nx * bend, y: midpoint.y - ny * bend }
+        ];
+
+        candidates.sort((a, b) => this.scoreCurveControlPoint(start, a, end, ignoreElementIds) - this.scoreCurveControlPoint(start, b, end, ignoreElementIds));
+        return candidates[0];
     }
 
     getQuadraticBezierPoint(t, p0, p1, p2) {
@@ -2378,6 +2791,10 @@ class UMLDrawer {
     
     clearDiagram() {
         if (confirm('确定要清空当前图表吗？')) {
+            if (this.isInlineTextEditingActive()) {
+                this.cancelInlineTextEdit();
+            }
+
             const diagram = this.diagrams[this.currentDiagram];
             diagram.elements.forEach(element => this.removeRecentCreatedMarker(element));
             this.diagrams[this.currentDiagram].elements = [];
@@ -2436,7 +2853,11 @@ class UMLDrawer {
         });
         
         this.ctx.restore();
-        
+
+        if (this.isInlineTextEditingActive() && this.inlineEditingElement) {
+            this.positionInlineTextEditor(this.inlineEditingElement);
+        }
+
         this.updateBottomToolbar();
         this.updateZoomRateDisplay();
     }
@@ -2473,38 +2894,39 @@ class UMLDrawer {
         
         const textPosition = element.textPosition || 'center';
         const padding = 5;
-        
+        const textBounds = this.getElementTextLayoutBounds(element);
+
         let startX, startY, textAlign, textBaseline;
         
         switch (textPosition) {
             case 'top':
-                startX = element.x + element.width / 2;
-                startY = element.y + padding + (element.fontSize || 14);
+                startX = textBounds.x + textBounds.width / 2;
+                startY = textBounds.y + padding + (element.fontSize || 14);
                 textAlign = 'center';
                 textBaseline = 'top';
                 break;
             case 'bottom':
-                startX = element.x + element.width / 2;
-                startY = element.y + element.height - padding;
+                startX = textBounds.x + textBounds.width / 2;
+                startY = textBounds.y + textBounds.height - padding;
                 textAlign = 'center';
                 textBaseline = 'bottom';
                 break;
             case 'left':
-                startX = element.x + padding;
-                startY = element.y + element.height / 2;
+                startX = textBounds.x + padding;
+                startY = textBounds.y + textBounds.height / 2;
                 textAlign = 'left';
                 textBaseline = 'middle';
                 break;
             case 'right':
-                startX = element.x + element.width - padding;
-                startY = element.y + element.height / 2;
+                startX = textBounds.x + textBounds.width - padding;
+                startY = textBounds.y + textBounds.height / 2;
                 textAlign = 'right';
                 textBaseline = 'middle';
                 break;
             case 'center':
             default:
-                startX = element.x + element.width / 2;
-                startY = element.y + element.height / 2;
+                startX = textBounds.x + textBounds.width / 2;
+                startY = textBounds.y + textBounds.height / 2;
                 textAlign = 'center';
                 textBaseline = 'middle';
                 break;
@@ -2646,6 +3068,7 @@ class UMLDrawer {
                 ctx.moveTo(element.x, element.y + sectionHeight * 2);
                 ctx.lineTo(element.x + element.width, element.y + sectionHeight * 2);
                 ctx.stroke();
+                if (element.text) this.drawElementText(ctx, element);
                 break;
                 
             case 'use-case':
@@ -2666,6 +3089,7 @@ class UMLDrawer {
                 );
                 ctx.fill();
                 ctx.stroke();
+                if (element.text) this.drawElementText(ctx, element);
                 break;
                 
             case 'actor':
@@ -2687,6 +3111,7 @@ class UMLDrawer {
                 const bodyRight = element.x + element.width * 0.7;
                 ctx.fillRect(bodyLeft, bodyTop, bodyRight - bodyLeft, bodyBottom - bodyTop);
                 ctx.strokeRect(bodyLeft, bodyTop, bodyRight - bodyLeft, bodyBottom - bodyTop);
+                if (element.text) this.drawElementText(ctx, element);
                 break;
                 
             case 'package':
@@ -2700,6 +3125,7 @@ class UMLDrawer {
                 const tabHeight = 20;
                 ctx.fillRect(element.x, element.y - tabHeight, element.width / 3, tabHeight);
                 ctx.strokeRect(element.x, element.y - tabHeight, element.width / 3, tabHeight);
+                if (element.text) this.drawElementText(ctx, element);
                 break;
                 
             case 'line':
@@ -2709,6 +3135,7 @@ class UMLDrawer {
                 ctx.moveTo(element.x1, element.y1);
                 ctx.lineTo(element.x2, element.y2);
                 ctx.stroke();
+                if (element.text) this.drawElementText(ctx, element);
                 break;
                 
             case 'arrow':
@@ -2733,6 +3160,7 @@ class UMLDrawer {
                     element.y2 - arrowLength * Math.sin(angle + Math.PI / 6)
                 );
                 ctx.stroke();
+                if (element.text) this.drawElementText(ctx, element);
                 break;
 
             case 'curved-arrow':
@@ -2764,6 +3192,7 @@ class UMLDrawer {
                     element.y2 - curvedArrowLength * Math.sin(curvedAngle + Math.PI / 6)
                 );
                 ctx.stroke();
+                if (element.text) this.drawElementText(ctx, element);
                 break;
 
             case 'orthogonal-arrow':
@@ -2772,37 +3201,38 @@ class UMLDrawer {
                 const orthoPoints = this.getOrthogonalArrowPathPoints(element);
                 ctx.beginPath();
                 ctx.moveTo(orthoPoints[0].x, orthoPoints[0].y);
-                ctx.lineTo(orthoPoints[1].x, orthoPoints[1].y);
-                ctx.lineTo(orthoPoints[2].x, orthoPoints[2].y);
+                for (let i = 1; i < orthoPoints.length; i++) {
+                    ctx.lineTo(orthoPoints[i].x, orthoPoints[i].y);
+                }
                 ctx.stroke();
 
-                const segDx = orthoPoints[2].x - orthoPoints[1].x;
-                const segDy = orthoPoints[2].y - orthoPoints[1].y;
-                const tailDx = orthoPoints[1].x - orthoPoints[0].x;
-                const tailDy = orthoPoints[1].y - orthoPoints[0].y;
-                const orthoAngle = Math.atan2(
-                    Math.abs(segDx) + Math.abs(segDy) < 0.01 ? tailDy : segDy,
-                    Math.abs(segDx) + Math.abs(segDy) < 0.01 ? tailDx : segDx
-                );
+                const lastPoint = orthoPoints[orthoPoints.length - 1];
+                const prevPoint = orthoPoints[orthoPoints.length - 2] || orthoPoints[0];
+                const orthoAngle = Math.atan2(lastPoint.y - prevPoint.y, lastPoint.x - prevPoint.x);
                 const orthoArrowLength = 10;
                 ctx.beginPath();
-                ctx.moveTo(element.x2, element.y2);
+                ctx.moveTo(lastPoint.x, lastPoint.y);
                 ctx.lineTo(
-                    element.x2 - orthoArrowLength * Math.cos(orthoAngle - Math.PI / 6),
-                    element.y2 - orthoArrowLength * Math.sin(orthoAngle - Math.PI / 6)
+                    lastPoint.x - orthoArrowLength * Math.cos(orthoAngle - Math.PI / 6),
+                    lastPoint.y - orthoArrowLength * Math.sin(orthoAngle - Math.PI / 6)
                 );
-                ctx.moveTo(element.x2, element.y2);
+                ctx.moveTo(lastPoint.x, lastPoint.y);
                 ctx.lineTo(
-                    element.x2 - orthoArrowLength * Math.cos(orthoAngle + Math.PI / 6),
-                    element.y2 - orthoArrowLength * Math.sin(orthoAngle + Math.PI / 6)
+                    lastPoint.x - orthoArrowLength * Math.cos(orthoAngle + Math.PI / 6),
+                    lastPoint.y - orthoArrowLength * Math.sin(orthoAngle + Math.PI / 6)
                 );
                 ctx.stroke();
+                if (element.text) this.drawElementText(ctx, element);
                 break;
                 
             case 'text':
                 ctx.fillStyle = element.fill;
-                ctx.font = `${element.fontSize}px ${element.fontFamily}`;
-                ctx.fillText(element.text, element.x, element.y);
+                ctx.font = `${element.fontSize || 14}px ${element.fontFamily || 'Arial'}`;
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'alphabetic';
+                String(element.text || '').split('\n').forEach((line, index) => {
+                    ctx.fillText(line, element.x, element.y + index * (element.fontSize || 14) * 1.2);
+                });
                 break;
                 
             case 'group':
@@ -2817,6 +3247,7 @@ class UMLDrawer {
                 element.elements.forEach(subElement => {
                     this.drawElement(ctx, subElement);
                 });
+                if (element.text) this.drawElementText(ctx, element);
                 break;
                 
             case 'pen':
@@ -2883,7 +3314,8 @@ class UMLDrawer {
                 stroke: this.penColor,
                 strokeWidth: this.penWidth
             };
-            this.addElementToDiagram(diagram, penElement);
+            const created = this.addElementToDiagram(diagram, penElement);
+            diagram.selectedElements = [created];
         }
         this.isDrawingPen = false;
         this.currentPenPath = [];

@@ -403,6 +403,24 @@ body {
     z-index: 20;
 }
 
+.inline-text-editor {
+    position: absolute;
+    display: none;
+    min-width: 120px;
+    min-height: 40px;
+    padding: 6px 8px;
+    border: 2px solid var(--primary-color);
+    border-radius: 6px;
+    background: #ffffff;
+    color: var(--text-color);
+    font-family: Arial, sans-serif;
+    line-height: 1.4;
+    resize: both;
+    outline: none;
+    z-index: 60;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
 .zoom-btn {
     width: 34px;
     height: 34px;
