@@ -29,7 +29,7 @@
             <span>📝 代码编辑区</span>
             <span class="hint-icon">按 Tab 关键词提示</span>
         </div>
-        <textarea id="mermaid-editor" spellcheck="false" placeholder="在此输入 Mermaid 语法...&#10;&#10;例如:&#10;graph TD&#10;    A[开始] --> B{判断}&#10;    B -->|是| C[通过]&#10;    B -->|否| D[驳回]"></textarea>
+        <textarea id="mermaid-editor" aria-label="Mermaid 代码编辑器" spellcheck="false" placeholder="在此输入 Mermaid 语法...&#10;&#10;例如:&#10;graph TD&#10;    A[开始] --> B{判断}&#10;    B -->|是| C[通过]&#10;    B -->|否| D[驳回]"></textarea>
         <!-- 语法提示下拉 -->
         <div class="suggestions" id="suggestions"></div>
         <!-- 模板按钮栏 -->
@@ -110,6 +110,7 @@
     const panToggleBtn = document.getElementById('panToggleBtn');
     const zoomLevel = document.getElementById('zoomLevel');
     let renderTimer = null;
+    let previewSvgGroup = null;
     let previewScale = 1;
     let previewX = 0;
     let previewY = 0;
@@ -124,8 +125,28 @@
         return Math.max(min, Math.min(max, value));
     }
 
+    function bindPreviewSvgGroup() {
+        const svg = previewCanvas.querySelector('svg');
+        previewSvgGroup = svg ? svg.querySelector('g') : null;
+
+        if (svg) {
+            svg.style.width = '100%';
+            svg.style.height = '100%';
+            svg.style.maxWidth = 'none';
+            svg.style.display = 'block';
+        }
+
+        const mermaidWrapper = previewCanvas.querySelector('.mermaid');
+        if (mermaidWrapper) {
+            mermaidWrapper.style.width = '100%';
+            mermaidWrapper.style.height = '100%';
+        }
+    }
+
     function applyPreviewTransform() {
-        previewCanvas.style.transform = `translate(${previewX}px, ${previewY}px) scale(${previewScale})`;
+        if (previewSvgGroup) {
+            previewSvgGroup.setAttribute('transform', `translate(${previewX} ${previewY}) scale(${previewScale})`);
+        }
         zoomLevel.textContent = `${Math.round(previewScale * 100)}%`;
     }
 
@@ -214,6 +235,8 @@
                 nodes: [mermaidDiv],
                 suppressErrors: true
             }).then(() => {
+                bindPreviewSvgGroup();
+                applyPreviewTransform();
                 status.textContent = '✅ 渲染成功';
                 status.className = 'status ok';
                 errorMsg.style.display = 'none';
@@ -223,12 +246,14 @@
                 status.className = 'status error';
                 errorMsg.textContent = '⚠️ ' + (err.message || err || '语法错误，请检查');
                 errorMsg.style.display = 'block';
+                previewSvgGroup = null;
             });
         } catch (e) {
             status.textContent = '❌ 语法错误';
             status.className = 'status error';
             errorMsg.textContent = '⚠️ ' + (e.message || '语法错误，请检查');
             errorMsg.style.display = 'block';
+            previewSvgGroup = null;
         }
     }
 
