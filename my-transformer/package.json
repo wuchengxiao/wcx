@@ -1,0 +1,11 @@
+{
+  "name": "token-lab-simulation",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser-only educational demo for tokenization, statistical embeddings, attention, and n-gram generation",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
+

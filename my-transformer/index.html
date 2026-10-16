@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f7fb">
+  <title>Token Lab · 模拟推理演示</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./src/main.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#top" aria-label="Token Lab 首页">
+      <span class="brand-mark">T</span>
+      <span>token<span class="brand-light">lab</span></span>
+    </a>
+    <div class="topbar-right">
+      <span class="local-badge"><span class="status-dot"></span>仅在浏览器本地运行</span>
+      <span class="demo-badge">算法教学演示 · 非真实大模型</span>
+    </div>
+  </header>
+
+  <main id="top" class="page-shell">
+    <section class="hero">
+      <div class="eyebrow"><span class="eyebrow-line"></span> A SMALL LANGUAGE MODEL SANDBOX</div>
+      <h1>看见文字如何<br><span class="gradient-text">一步步生成。</span></h1>
+      <p>从 Tokenization、共现 Embedding 到 QKV Self-Attention，观察统计模型如何基于语料逐 token 续写。</p>
+      <div class="hero-flow" aria-label="演示流程">
+        <span>语料</span><b>→</b><span>Token</span><b>→</b><span>Embedding</span><b>→</b><span>Attention</span><b>→</b><span>生成</span>
+      </div>
+    </section>
+
+    <section class="notice-bar" aria-label="模拟说明">
+      <span class="notice-icon">i</span>
+      <p><strong>这是简化算法演示，不是实际的大模型。</strong> Embedding 来自共现统计；注意力矩阵固定不训练；N-gram 提供候选词。所有数据只保存在本机浏览器。</p>
+    </section>
+
+    <section class="workbench-grid">
+      <div class="left-column">
+        <section class="panel corpus-panel" aria-labelledby="corpus-title">
+          <div class="panel-heading">
+            <div class="section-index">01 / CORPUS</div>
+            <div class="heading-row">
+              <div>
+                <h2 id="corpus-title">语料统计 <span class="title-note">模拟预训练</span></h2>
+                <p class="panel-subtitle">导入 Markdown，构建本地 N-gram 与共现向量。</p>
+              </div>
+              <span class="panel-icon icon-violet" aria-hidden="true">▤</span>
+            </div>
+          </div>
+          <div id="drop-zone" class="drop-zone">
+            <div class="upload-icon" aria-hidden="true">↑</div>
+            <div class="drop-copy"><strong>拖入 .md 文件，或点击选择</strong><span>支持同时选择多个 Markdown 文件</span></div>
+            <button id="choose-files" class="button button-secondary" type="button">选择文件</button>
+            <input id="file-input" type="file" accept=".md,text/markdown,text/plain" multiple hidden>
+          </div>
+          <div class="list-heading"><span>当前语料</span><span id="corpus-count" class="muted">0 个文件</span></div>
+          <div id="file-list" class="file-list"><div class="empty-inline">尚未添加语料文件</div></div>
+          <div class="corpus-footer">
+            <div class="training-status"><span id="training-indicator" class="status-dot status-idle"></span><span id="training-status" aria-live="polite">等待导入语料</span></div>
+            <button id="show-space" class="button button-outline" type="button" disabled><span aria-hidden="true">✣</span> 展示空间位置</button>
+          </div>
+          <div id="corpus-error" class="inline-error" role="alert" hidden></div>
+        </section>
+
+        <section class="panel prompt-panel" aria-labelledby="prompt-title">
+          <div class="panel-heading compact-heading">
+            <div class="section-index">02 / PROMPT</div>
+            <div class="heading-row">
+              <div>
+                <h2 id="prompt-title">角色与系统提示词</h2>
+                <p class="panel-subtitle">作为输入上下文，不是真实的模型微调。</p>
+              </div>
+              <span class="panel-icon icon-blue" aria-hidden="true">✎</span>
+            </div>
+          </div>
+          <label class="field-label" for="role-input">角色设定 <span>可选</span></label>
+          <textarea id="role-input" class="text-field prompt-field" rows="2" placeholder="例如：你是一位耐心的中文写作助手。"></textarea>
+          <label class="field-label" for="system-input">系统提示词 <span>可选</span></label>
+          <textarea id="system-input" class="text-field prompt-field" rows="3" placeholder="定义助手的回答风格或约束……"></textarea>
+          <div class="panel-actions"><span id="prompt-save-state" class="muted small-text">自动保存在本机</span><button id="clear-prompts" class="text-button" type="button">清空提示词</button></div>
+        </section>
+
+        <section class="panel settings-panel" aria-labelledby="settings-title">
+          <div class="panel-heading compact-heading">
+            <div class="section-index">03 / SAMPLING</div>
+            <div class="heading-row">
+              <div>
+                <h2 id="settings-title">生成参数</h2>
+                <p class="panel-subtitle">控制候选筛选与采样方式。</p>
+              </div>
+              <span class="panel-icon icon-green" aria-hidden="true">⌘</span>
+            </div>
+          </div>
+          <div class="settings-grid">
+            <label class="setting-control" for="temperature"><span>温度 <b id="temperature-value">0.8</b></span><input id="temperature" type="range" min="0" max="2" value="0.8" step="0.1"></label>
+            <label class="setting-control" for="top-k"><span>Top-k <b id="top-k-value">5</b></span><input id="top-k" type="range" min="1" max="20" value="5" step="1"></label>
+            <label class="setting-control" for="lambda"><span>N-gram 权重 λ <b id="lambda-value">0.50</b></span><input id="lambda" type="range" min="0" max="1" value="0.5" step="0.05"></label>
+            <label class="setting-control select-control" for="max-tokens"><span>最大新 token 数</span><select id="max-tokens" class="text-field"><option>24</option><option selected>48</option><option>80</option><option>120</option></select></label>
+            <label class="setting-control select-control" for="max-context"><span>最大输入上下文</span><select id="max-context" class="text-field"><option>64</option><option selected>128</option><option>256</option><option>512</option></select></label>
+          </div>
+          <p class="settings-hint">温度为 0 时使用贪心选择；候选分数是教学用模拟值，不是真实模型概率。</p>
+        </section>
+      </div>
+
+      <div class="right-column">
+        <section class="panel chat-panel" aria-labelledby="chat-title">
+          <div class="panel-heading">
+            <div class="section-index">04 / GENERATION</div>
+            <div class="heading-row">
+              <div>
+                <h2 id="chat-title">逐 token 生成</h2>
+                <p class="panel-subtitle">根据语料模式和上下文模拟下一个 token。</p>
+              </div>
+              <span class="panel-icon icon-orange" aria-hidden="true">✧</span>
+            </div>
+          </div>
+
+          <div id="chat-history" class="chat-history" aria-live="polite">
+            <div id="chat-empty" class="chat-empty">
+              <div class="empty-orbit"><span>t</span><i></i><i></i><i></i></div>
+              <strong>准备好开始探索</strong>
+              <span>先导入语料，再输入一段文字。</span>
+            </div>
+          </div>
+
+          <div id="generation-status" class="generation-status" aria-live="polite" hidden></div>
+          <div class="composer-wrap">
+            <label for="user-input" class="visually-hidden">输入消息</label>
+            <textarea id="user-input" class="text-field composer" rows="3" placeholder="输入一段开头，观察系统如何继续……"></textarea>
+            <div class="composer-bottom"><span>Enter 发送 · Shift + Enter 换行</span><button id="send-button" class="button button-primary" type="button" disabled><span>开始生成</span><span aria-hidden="true">↗</span></button></div>
+          </div>
+          <div class="chat-toolbar"><span id="chat-state" class="muted small-text">尚无会话</span><button id="clear-chat" class="text-button danger-text" type="button" disabled>清空会话</button></div>
+        </section>
+
+        <section class="panel process-panel" aria-labelledby="process-title">
+          <div class="panel-heading compact-heading">
+            <div class="section-index">05 / INSPECTOR</div>
+            <div class="heading-row">
+              <div>
+                <h2 id="process-title">计算过程</h2>
+                <p class="panel-subtitle">展开查看算法如何选择下一个 token。</p>
+              </div>
+              <span class="panel-icon icon-pink" aria-hidden="true">⌁</span>
+            </div>
+          </div>
+          <div id="process-empty" class="process-empty">提交输入后，这里会显示 Tokenization、Embedding、注意力权重与 N-gram 候选。</div>
+          <div id="process-list" class="process-list"></div>
+        </section>
+      </div>
+    </section>
+
+    <footer class="footer"><span>TOKEN LAB <span class="muted">· 本地算法实验</span></span><span>不连接模型 API · 不上传语料</span></footer>
+  </main>
+
+  <dialog id="space-dialog" class="space-dialog" aria-labelledby="space-title">
+    <div class="dialog-head">
+      <div><div class="section-index">EMBEDDING SPACE</div><h2 id="space-title">Token 语义关系空间</h2><p>共现统计 Embedding 的 3D 投影 · 仅作关系近似展示</p></div>
+      <button id="close-space" class="icon-button" type="button" aria-label="关闭空间视图">×</button>
+    </div>
+    <div class="space-toolbar"><span id="space-count">0 个 token</span><div><button id="reset-camera" class="button button-secondary button-small" type="button">重置视角</button><span class="space-help">拖动旋转 · 滚轮缩放 · 点击节点查看</span></div></div>
+    <div class="space-canvas-wrap"><canvas id="space-canvas" aria-label="可交互的三维 token Embedding 空间"></canvas><div id="space-tooltip" class="space-tooltip" hidden></div><div id="space-empty" class="space-empty" hidden>当前语料没有可视化节点</div></div>
+    <div id="space-detail" class="space-detail">点击任意节点，查看 token 向量与来源信息。</div>
+    <div class="dialog-foot"><span class="legend-dot"></span>Token 节点 <span class="legend-line"></span>有向共现边 <span class="muted">· 点位是 16D Embedding 的近似投影</span></div>
+  </dialog>
+  <div id="toast-region" class="toast-region" aria-live="polite"></div>
+</body>
+</html>
+
