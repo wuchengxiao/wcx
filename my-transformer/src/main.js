@@ -5,12 +5,13 @@ import { createSpaceViewer } from './visualization.js';
 const $ = selector => document.querySelector(selector);
 const elements = {
   fileInput: $('#file-input'), chooseFiles: $('#choose-files'), dropZone: $('#drop-zone'), fileList: $('#file-list'), corpusCount: $('#corpus-count'),
-  trainingStatus: $('#training-status'), trainingIndicator: $('#training-indicator'), corpusError: $('#corpus-error'), showSpace: $('#show-space'),
+  trainingStatus: $('#training-status'), trainingIndicator: $('#training-indicator'), corpusError: $('#corpus-error'), runTraining: $('#run-training'), showSpace: $('#show-space'), trainingRounds: $('#training-rounds'),
+  ngramHelp: $('#ngram-help'), ngramHelpDialog: $('#ngram-help-dialog'), closeNgramHelp: $('#close-ngram-help'),
   role: $('#role-input'), system: $('#system-input'), promptSave: $('#prompt-save-state'), clearPrompts: $('#clear-prompts'), temperature: $('#temperature'), temperatureValue: $('#temperature-value'),
   topK: $('#top-k'), topKValue: $('#top-k-value'), lambda: $('#lambda'), lambdaValue: $('#lambda-value'), maxTokens: $('#max-tokens'), maxContext: $('#max-context'),
   chatHistory: $('#chat-history'), chatEmpty: $('#chat-empty'), input: $('#user-input'), send: $('#send-button'), clearChat: $('#clear-chat'), chatState: $('#chat-state'),
   generationStatus: $('#generation-status'), processEmpty: $('#process-empty'), processList: $('#process-list'), dialog: $('#space-dialog'), canvas: $('#space-canvas'),
-  spaceCount: $('#space-count'), spaceDetail: $('#space-detail'), spaceTooltip: $('#space-tooltip'), spaceEmpty: $('#space-empty'), closeSpace: $('#close-space'), resetCamera: $('#reset-camera'), toastRegion: $('#toast-region'),
+  spaceCount: $('#space-count'), spaceDetail: $('#space-detail'), spaceTooltip: $('#space-tooltip'), spaceEmpty: $('#space-empty'), closeSpace: $('#close-space'), resetCamera: $('#reset-camera'), fullscreenSpace: $('#space-fullscreen'), spaceSearch: $('#space-search'), spaceSearchInput: $('#space-search-input'), spaceSearchStatus: $('#space-search-status'), showAllSuccessors: $('#show-all-successors'), showTopSuccessor: $('#show-top-successor'), toastRegion: $('#toast-region'),
 };
 
 let corpusFiles = [];
@@ -24,7 +25,22 @@ let conversationEpoch = 0;
 let currentTask = 0;
 let toastTimeouts = new Set();
 
-const viewer = createSpaceViewer({ dialog: elements.dialog, canvas: elements.canvas, count: elements.spaceCount, detail: elements.spaceDetail, tooltip: elements.spaceTooltip, empty: elements.spaceEmpty, closeButton: elements.closeSpace, resetButton: elements.resetCamera });
+const viewer = createSpaceViewer({ dialog: elements.dialog, canvas: elements.canvas, count: elements.spaceCount, detail: elements.spaceDetail, tooltip: elements.spaceTooltip, empty: elements.spaceEmpty, closeButton: elements.closeSpace, resetButton: elements.resetCamera, onFocusChange: updateSuccessorControls });
+
+function updateSuccessorControls(selection) {
+  const disabled = !selection || selection.count === 0;
+  elements.showAllSuccessors.disabled = disabled;
+  elements.showTopSuccessor.disabled = disabled;
+  elements.showAllSuccessors.classList.toggle('active', Boolean(selection?.count && selection.mode === 'all'));
+  elements.showTopSuccessor.classList.toggle('active', Boolean(selection?.count && selection.mode === 'top'));
+}
+
+function updateFullscreenControl() {
+  const isFullscreen = document.fullscreenElement === elements.dialog || elements.dialog.classList.contains('is-fullscreen-fallback');
+  elements.fullscreenSpace.textContent = isFullscreen ? '退出全屏' : '全屏显示';
+  elements.fullscreenSpace.setAttribute('aria-label', isFullscreen ? '退出空间全屏' : '全屏显示空间');
+  requestAnimationFrame(() => viewer.resize());
+}
 
 function toast(message, isError = false, duration = 3200) {
   const node = document.createElement('div');
@@ -87,8 +103,9 @@ function renderFiles() {
       elements.fileList.append(row);
     }
   }
+  elements.runTraining.disabled = !corpusFiles.length || isTraining;
   elements.showSpace.disabled = !snapshot?.layout?.nodes?.length || isTraining;
-  elements.send.disabled = isGenerating || !snapshot?.vocabularySize;
+  elements.send.disabled = isGenerating || isTraining || !snapshot?.vocabularySize;
   elements.clearChat.disabled = messages.length === 0;
 }
 
@@ -100,7 +117,7 @@ async function runTraining() {
   setTrainingStatus('预训练中...', 'working');
   renderFiles();
   try {
-    const next = await processCorpus(corpusFiles, snapshot);
+    const next = await processCorpus(corpusFiles, snapshot, elements.trainingRounds.value);
     if (task !== currentTask) return;
     await putSnapshot(next);
     if (task !== currentTask) return;
@@ -175,13 +192,22 @@ async function removeFile(id) {
 function renderMessage(message) {
   const article = document.createElement('article');
   article.className = `message ${message.role}`;
+  if (message.id) article.dataset.messageId = message.id;
   const meta = document.createElement('span');
   meta.className = 'message-meta';
   meta.textContent = message.role === 'user' ? `你 · ${formatTime(message.createdAt)}` : `TOKEN LAB · ${formatTime(message.createdAt)}`;
+  if (message.role === 'assistant') {
+    const thought = makeElement('section', 'message-thought');
+    thought.append(makeElement('strong', '', '思考内容'));
+    thought.append(makeElement('p', 'message-thought-text', message.thoughtText || (message.pending ? '正在根据上下文生成…' : '（该回复未保存思考文本）')));
+    article.append(meta, thought);
+  } else {
+    article.append(meta);
+  }
   const bubble = document.createElement('div');
   bubble.className = 'message-bubble';
-  bubble.textContent = message.text;
-  article.append(meta, bubble);
+  bubble.textContent = message.text || (message.pending ? '正在生成回复…' : '');
+  article.append(bubble);
   if (message.role === 'assistant' && message.text) {
     const actions = document.createElement('div');
     actions.className = 'message-actions';
@@ -208,6 +234,17 @@ function renderMessages() {
   elements.clearChat.disabled = messages.length === 0;
 }
 
+function updateAssistantMessage(message) {
+  const article = elements.chatHistory.querySelector(`[data-message-id="${message.id}"]`);
+  if (!article) return;
+  const followOutput = elements.chatHistory.scrollHeight - elements.chatHistory.scrollTop - elements.chatHistory.clientHeight < 40;
+  const thought = article.querySelector('.message-thought-text');
+  const bubble = article.querySelector('.message-bubble');
+  if (thought) thought.textContent = message.thoughtText || (message.pending ? '正在根据上下文生成…' : '');
+  if (bubble) bubble.textContent = message.text || (message.pending ? '正在生成回复…' : '');
+  if (followOutput) elements.chatHistory.scrollTop = elements.chatHistory.scrollHeight;
+}
+
 function formatTime(timestamp) {
   return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' }).format(timestamp || Date.now());
 }
@@ -219,18 +256,8 @@ function makeElement(tag, className, text) {
   return element;
 }
 
-function vectorContent(title, vector) {
-  const section = makeElement('div');
-  section.append(makeElement('h4', '', title));
-  const values = makeElement('div', 'vector-list');
-  (vector || []).forEach((value, index) => values.append(makeElement('span', 'vector-value', `${index}:${Number(value).toFixed(2)}`)));
-  section.append(values);
-  return section;
-}
-
 function renderAttention(step) {
-  const section = makeElement('div');
-  section.append(makeElement('h4', '', '最后位置的 Self-Attention 权重'));
+  const section = makeElement('div', 'attention-scroll');
   const grid = makeElement('div', 'attention-grid');
   grid.style.setProperty('--attention-cols', Math.max(1, step.attentionWeights.length));
   grid.append(makeElement('span', 'attention-label', '查询位置'));
@@ -245,48 +272,68 @@ function renderAttention(step) {
   return section;
 }
 
-function renderProcessCard(step) {
-  const details = document.createElement('details');
-  details.className = 'process-card';
-  const summary = document.createElement('summary');
-  summary.append(makeElement('span', 'process-number', String(step.index).padStart(2, '0')));
-  summary.append(document.createTextNode(`选择 token：${displayToken(step.selected)}`));
-  const body = makeElement('div', 'process-body');
-  const input = makeElement('div');
-  input.append(makeElement('h4', '', '上下文 Tokenization'));
-  const tokenRow = makeElement('div', 'token-row');
-  step.context.forEach(token => tokenRow.append(makeElement('span', 'token-chip', displayToken(token))));
-  input.append(tokenRow);
-  body.append(input);
-  body.append(vectorContent('当前 token 的演示 Embedding（16 维）', step.embedding));
-  body.append(renderAttention(step));
-  const candidateSection = makeElement('div');
-  candidateSection.append(makeElement('h4', '', `N-gram 候选 · 回退阶数 ${step.order}`));
-  const scroll = makeElement('div', 'table-scroll');
-  const table = makeElement('table', 'candidate-table');
-  const head = document.createElement('thead');
-  const header = document.createElement('tr');
-  ['候选', '次数', '频率', '相似度', '融合分数', '结果'].forEach(label => header.append(makeElement('th', '', label)));
-  head.append(header);
-  const tableBody = document.createElement('tbody');
+function createProcessStages() {
+  const stages = {};
+  const definitions = [
+    ['context', '上下文 Tokenization'],
+    ['attention', '最后位置的 Self-Attention 权重'],
+    ['candidates', '当前 N-gram 候选'],
+  ];
+  for (const [key, title] of definitions) {
+    const stage = makeElement('section', 'process-stage');
+    stage.append(makeElement('h4', 'process-stage-title', title));
+    let entries;
+    if (key === 'candidates') {
+      const scroll = makeElement('div', 'table-scroll candidate-history-scroll');
+      const table = makeElement('table', 'candidate-table');
+      const head = document.createElement('thead');
+      const header = document.createElement('tr');
+      ['步骤', '候选', '次数', '频率', '相似度', '融合分数', '结果'].forEach(label => header.append(makeElement('th', '', label)));
+      head.append(header);
+      entries = document.createElement('tbody');
+      table.append(head, entries);
+      scroll.append(table);
+      stage.append(scroll);
+    } else {
+      entries = makeElement('div', 'process-stage-entries');
+      stage.append(entries);
+    }
+    elements.processList.append(stage);
+    stages[key] = entries;
+  }
+  return stages;
+}
+
+function appendCandidateRows(step) {
   step.candidates.forEach(candidate => {
     const row = document.createElement('tr');
     if (candidate.selected) row.className = 'selected';
-    [displayToken(candidate.token), String(candidate.count), candidate.probability.toFixed(3), candidate.similarity.toFixed(3), candidate.score.toFixed(3), candidate.selected ? '✓' : ''].forEach(value => row.append(makeElement('td', '', value)));
-    tableBody.append(row);
+    [`第${step.index}步`, displayToken(candidate.token), String(candidate.count), candidate.probability.toFixed(3), candidate.similarity.toFixed(3), candidate.score.toFixed(3), candidate.selected ? '✓' : ''].forEach(value => row.append(makeElement('td', '', value)));
+    processStages.candidates.append(row);
   });
-  table.append(head, tableBody);
-  scroll.append(table);
-  candidateSection.append(scroll);
-  body.append(candidateSection);
-  details.append(summary, body);
-  return details;
 }
 
 function renderProcessSteps(steps) {
   elements.processList.replaceChildren();
   elements.processEmpty.hidden = steps.length > 0;
-  steps.forEach(step => elements.processList.append(renderProcessCard(step)));
+  processStages = null;
+  steps.forEach(appendProcessStep);
+}
+
+function appendProcessStep(step) {
+  const list = elements.processList;
+  const followOutput = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
+  if (!processStages) processStages = createProcessStages();
+  elements.processEmpty.hidden = true;
+
+  if (!processStages.context.childElementCount) {
+    const tokenRow = makeElement('div', 'token-row');
+    step.context.forEach(token => tokenRow.append(makeElement('span', 'token-chip', displayToken(token))));
+    processStages.context.append(tokenRow);
+  }
+  processStages.attention.replaceChildren(renderAttention(step));
+  appendCandidateRows(step);
+  if (followOutput) list.scrollTop = list.scrollHeight;
 }
 
 function setGenerationStatus(text, error = false, cancelButton = false) {
@@ -326,7 +373,15 @@ async function submitMessage() {
     return;
   }
   const userMessage = { role: 'user', text, createdAt: Date.now() };
-  messages.push(userMessage);
+  const assistantMessage = {
+    id: `assistant-${Date.now()}-${generationTurn + 1}`,
+    role: 'assistant',
+    text: '',
+    thoughtText: '',
+    pending: true,
+    createdAt: Date.now(),
+  };
+  messages.push(userMessage, assistantMessage);
   renderMessages();
   elements.input.value = '';
   isGenerating = true;
@@ -338,7 +393,6 @@ async function submitMessage() {
   renderProcessSteps([]);
   try { await saveConversation(); } catch { toast('无法持久化会话记录，但本次会话仍会显示。', true); }
   const settings = currentSettings();
-  let lastSteps = [];
   try {
     const result = await generateReply({
       snapshot,
@@ -349,30 +403,40 @@ async function submitMessage() {
       settings,
       turn: generationTurn,
       isCancelled: () => cancelGeneration,
-      onStep: ({ step, generated }) => {
-        lastSteps = [...lastSteps, step];
-        renderProcessSteps(lastSteps);
+      onStep: ({ step, generated, text: thoughtText }) => {
+        assistantMessage.thoughtText = thoughtText;
+        updateAssistantMessage(assistantMessage);
+        appendProcessStep(step);
         setGenerationStatus(`生成中 · 已选择 ${generated.length} 个 token`, false, true);
       },
     });
     if (submissionEpoch !== conversationEpoch) return;
     if (result.contextWasTruncated) toast('本轮推理输入超出上下文上限，已按规则裁剪算法输入；完整会话记录仍保留。', false, 5000);
+    assistantMessage.pending = false;
     if (result.cancelled || cancelGeneration) {
-      if (result.text) messages.push({ role: 'assistant', text: result.text, createdAt: Date.now(), cancelled: true });
-      else messages.push({ role: 'assistant', text: '本轮生成已停止。', createdAt: Date.now() });
+      assistantMessage.text = result.text || '本轮生成已停止。';
+      assistantMessage.thoughtText ||= result.text;
+      assistantMessage.cancelled = true;
       renderMessages();
       setGenerationStatus('本轮生成已取消。');
     } else if (result.noMatch) {
-      messages.push({ role: 'assistant', text: '没有匹配的语料模式。请尝试输入与导入语料更接近的内容。', createdAt: Date.now() });
+      assistantMessage.text = '没有匹配的语料模式。请尝试输入与导入语料更接近的内容。';
+      assistantMessage.thoughtText = '没有找到可用的 N-gram 候选。';
       renderMessages();
       setGenerationStatus('未找到可续写的 N-gram 模式。', true);
     } else {
-      messages.push({ role: 'assistant', text: result.text || '（结束标记前没有生成可见 token）', createdAt: Date.now() });
+      assistantMessage.text = result.text || '（结束标记前没有生成可见 token）';
+      assistantMessage.thoughtText = result.text || '没有生成可见 token。';
       renderMessages();
       setGenerationStatus(result.limitReached ? `已达到本轮上限（${settings.maxTokens} 个新 token）。` : '生成完成。');
     }
     await saveConversation();
   } catch (error) {
+    assistantMessage.pending = false;
+    assistantMessage.text = `生成失败：${error.message || '未知错误'}`;
+    assistantMessage.thoughtText ||= '生成过程未能完成。';
+    renderMessages();
+    try { await saveConversation(); } catch { /* Keep the visible failure state if storage is unavailable. */ }
     setGenerationStatus(`生成失败：${error.message || '未知错误'}`, true);
     toast('生成过程发生错误。', true);
   } finally {
@@ -383,10 +447,11 @@ async function submitMessage() {
 }
 
 function currentSettings() {
-  return { role: elements.role.value, systemPrompt: elements.system.value, temperature: Number(elements.temperature.value), topK: Number(elements.topK.value), lambda: Number(elements.lambda.value), maxTokens: Number(elements.maxTokens.value), maxContext: Number(elements.maxContext.value) };
+  return { role: elements.role.value, systemPrompt: elements.system.value, temperature: Number(elements.temperature.value), topK: Number(elements.topK.value), lambda: Number(elements.lambda.value), maxTokens: Number(elements.maxTokens.value), maxContext: Number(elements.maxContext.value), trainingRounds: Number(elements.trainingRounds.value) };
 }
 
 let saveTimer = null;
+let processStages = null;
 function bindSettings() {
   const updateSettingDisplays = () => {
     elements.temperatureValue.textContent = Number(elements.temperature.value).toFixed(1);
@@ -403,6 +468,10 @@ function bindSettings() {
     }, 350);
   };
   [elements.role, elements.system, elements.temperature, elements.topK, elements.lambda, elements.maxTokens, elements.maxContext].forEach(control => control.addEventListener('input', scheduleSave));
+  elements.trainingRounds.addEventListener('change', () => {
+    scheduleSave();
+    if (corpusFiles.length) void runTraining();
+  });
   elements.clearPrompts.addEventListener('click', async () => {
     elements.role.value = '';
     elements.system.value = '';
@@ -444,13 +513,14 @@ async function initialize() {
       elements.lambda.value = String(savedSettings.lambda);
       elements.maxTokens.value = String(savedSettings.maxTokens);
       elements.maxContext.value = String(savedSettings.maxContext || 128);
+      elements.trainingRounds.value = String(savedSettings.trainingRounds || 3);
     }
     if (snapshot) setTrainingStatus('预训练完成。', 'done');
     else if (corpusFiles.length) setTrainingStatus('需要重新统计语料', 'idle');
     renderFiles();
     renderMessages();
     bindSettings();
-    if (corpusFiles.length && !snapshot) await runTraining();
+    if (corpusFiles.length && (!snapshot || snapshot.tokenizerVersion !== 'natural-zh-word-v3')) await runTraining();
   } catch (error) {
     toast(`无法读取本地数据：${error.message || '请重新导入语料。'}`, true, 6000);
     setTrainingStatus('本地数据读取失败', 'idle');
@@ -461,17 +531,83 @@ async function initialize() {
 }
 
 elements.chooseFiles.addEventListener('click', () => { delete elements.fileInput.dataset.replaceId; elements.fileInput.click(); });
+elements.ngramHelp.addEventListener('click', () => elements.ngramHelpDialog.showModal());
+elements.closeNgramHelp.addEventListener('click', () => elements.ngramHelpDialog.close());
+elements.ngramHelpDialog.addEventListener('click', event => {
+  if (event.target === elements.ngramHelpDialog) elements.ngramHelpDialog.close();
+});
 elements.fileInput.addEventListener('change', event => importFiles(event.target.files));
 elements.dropZone.addEventListener('click', event => { if (event.target.closest('button')) return; elements.fileInput.click(); });
 elements.dropZone.addEventListener('dragover', event => { event.preventDefault(); elements.dropZone.classList.add('drag-over'); });
 elements.dropZone.addEventListener('dragleave', () => elements.dropZone.classList.remove('drag-over'));
 elements.dropZone.addEventListener('drop', event => { event.preventDefault(); elements.dropZone.classList.remove('drag-over'); importFiles(event.dataTransfer.files); });
-elements.showSpace.addEventListener('click', () => { if (snapshot) viewer.open(snapshot); });
+elements.showSpace.addEventListener('click', () => {
+  if (!snapshot) return;
+  elements.spaceSearchInput.value = '';
+  elements.spaceSearchStatus.textContent = '';
+  viewer.open(snapshot);
+});
+elements.spaceSearch.addEventListener('submit', event => {
+  event.preventDefault();
+  const query = elements.spaceSearchInput.value.trim();
+  if (!query) {
+    elements.spaceSearchStatus.textContent = '请输入要查找的 Token。';
+    return;
+  }
+  elements.spaceSearchStatus.textContent = viewer.focusToken(query) ? `已定位 Token「${query}」。` : `没有找到 Token「${query}」。`;
+});
+elements.spaceSearchInput.addEventListener('input', () => { elements.spaceSearchStatus.textContent = ''; });
+elements.fullscreenSpace.addEventListener('click', async () => {
+  try {
+    if (document.fullscreenElement === elements.dialog) {
+      await document.exitFullscreen();
+    } else if (elements.dialog.classList.contains('is-fullscreen-fallback')) {
+      elements.dialog.classList.remove('is-fullscreen-fallback');
+      updateFullscreenControl();
+    } else if (elements.dialog.requestFullscreen) {
+      try {
+        await elements.dialog.requestFullscreen();
+      } catch {
+        elements.dialog.classList.add('is-fullscreen-fallback');
+        updateFullscreenControl();
+      }
+    } else {
+      elements.dialog.classList.add('is-fullscreen-fallback');
+      updateFullscreenControl();
+    }
+  } catch {
+    toast('无法切换到全屏显示。', true);
+  }
+});
+document.addEventListener('fullscreenchange', updateFullscreenControl);
+elements.dialog.addEventListener('cancel', event => {
+  if (!elements.dialog.classList.contains('is-fullscreen-fallback')) return;
+  event.preventDefault();
+  elements.dialog.classList.remove('is-fullscreen-fallback');
+  updateFullscreenControl();
+});
+elements.dialog.addEventListener('close', () => {
+  elements.dialog.classList.remove('is-fullscreen-fallback');
+  updateFullscreenControl();
+});
+elements.showAllSuccessors.addEventListener('click', () => {
+  const count = viewer.setSuccessorMode('all');
+  elements.spaceSearchStatus.textContent = count === null
+    ? '请先定位或单击一个 Token。'
+    : count ? `已显示全部 ${count} 个后继 Token。` : '当前 Token 没有后继。';
+});
+elements.showTopSuccessor.addEventListener('click', () => {
+  const count = viewer.setSuccessorMode('top');
+  elements.spaceSearchStatus.textContent = count === null
+    ? '请先定位或单击一个 Token。'
+    : count ? '已显示权重最高的后继 Token。' : '当前 Token 没有后继。';
+});
 elements.send.addEventListener('click', submitMessage);
 elements.input.addEventListener('keydown', event => {
   if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submitMessage(); }
 });
 elements.clearChat.addEventListener('click', clearConversation);
+elements.runTraining.addEventListener('click', () => { if (corpusFiles.length && !isTraining) void runTraining(); });
 elements.dialog.addEventListener('close', () => elements.showSpace.focus());
 
 initialize();

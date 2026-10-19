@@ -45,20 +45,39 @@
                 <h2 id="corpus-title">语料统计 <span class="title-note">模拟预训练</span></h2>
                 <p class="panel-subtitle">导入 Markdown，构建本地 N-gram 与共现向量。</p>
               </div>
-              <span class="panel-icon icon-violet" aria-hidden="true">▤</span>
+              <div class="heading-tools" style="display: flex;">
+                <span class="panel-icon icon-violet" aria-hidden="true">▤</span>
+                <button id="ngram-help" class="panel-icon icon-violet help-trigger" type="button" aria-label="查看 N-gram 解释" aria-haspopup="dialog" aria-controls="ngram-help-dialog" style="border:0;">?</button>
+              </div>
             </div>
           </div>
           <div id="drop-zone" class="drop-zone">
             <div class="upload-icon" aria-hidden="true">↑</div>
-            <div class="drop-copy"><strong>拖入 .md 文件，或点击选择</strong><span>支持同时选择多个 Markdown 文件</span></div>
+            <div class="drop-copy"><strong>拖入 .md 文件，或点击选择</strong><span>支持多文件；中文按自然���组切分，例如“胡萝卜”</span></div>
             <button id="choose-files" class="button button-secondary" type="button">选择文件</button>
             <input id="file-input" type="file" accept=".md,text/markdown,text/plain" multiple hidden>
           </div>
           <div class="list-heading"><span>当前语料</span><span id="corpus-count" class="muted">0 个文件</span></div>
           <div id="file-list" class="file-list"><div class="empty-inline">尚未添加语料文件</div></div>
+          <div class="settings-grid training-settings">
+            <label class="setting-control select-control" for="training-rounds">
+              <span>向量构建轮数</span>
+              <select id="training-rounds" class="text-field" aria-describedby="training-rounds-help">
+                <option value="1">1 轮</option>
+                <option value="2">2 轮</option>
+                <option value="3" selected>3 轮</option>
+                <option value="5">5 轮</option>
+                <option value="8">8 轮</option>
+              </select>
+            </label>
+          </div>
+          <p id="training-rounds-help" class="settings-hint training-hint">每轮将相邻共现上下文传播到 token 向量；中文优先按自然词组切分，不限于两个汉字。</p>
           <div class="corpus-footer">
             <div class="training-status"><span id="training-indicator" class="status-dot status-idle"></span><span id="training-status" aria-live="polite">等待导入语料</span></div>
-            <button id="show-space" class="button button-outline" type="button" disabled><span aria-hidden="true">✣</span> 展示空间位置</button>
+            <div class="corpus-actions">
+              <button id="run-training" class="button button-primary button-small" type="button" disabled>重新预训练</button>
+              <button id="show-space" class="button button-outline button-small" type="button" disabled><span aria-hidden="true">✣</span> 展示空间位置</button>
+            </div>
           </div>
           <div id="corpus-error" class="inline-error" role="alert" hidden></div>
         </section>
@@ -139,12 +158,12 @@
             <div class="heading-row">
               <div>
                 <h2 id="process-title">计算过程</h2>
-                <p class="panel-subtitle">展开查看算法如何选择下一个 token。</p>
+                <p class="panel-subtitle">观察生成文本如何逐 token 累积，注意力与候选随上下文更新。</p>
               </div>
               <span class="panel-icon icon-pink" aria-hidden="true">⌁</span>
             </div>
           </div>
-          <div id="process-empty" class="process-empty">提交输入后，这里会显示 Tokenization、Embedding、注意力权重与 N-gram 候选。</div>
+          <div id="process-empty" class="process-empty">提交输入后，这里会显示上下文 Tokenization、Self-Attention 权重与逐轮 N-gram 候选；累积的生成文本显示在对应回复上方。</div>
           <div id="process-list" class="process-list"></div>
         </section>
       </div>
@@ -158,10 +177,32 @@
       <div><div class="section-index">EMBEDDING SPACE</div><h2 id="space-title">Token 语义关系空间</h2><p>共现统计 Embedding 的 3D 投影 · 仅作关系近似展示</p></div>
       <button id="close-space" class="icon-button" type="button" aria-label="关闭空间视图">×</button>
     </div>
-    <div class="space-toolbar"><span id="space-count">0 个 token</span><div><button id="reset-camera" class="button button-secondary button-small" type="button">重置视角</button><span class="space-help">拖动旋转 · 滚轮缩放 · 点击节点查看</span></div></div>
+    <div class="space-toolbar"><span id="space-count">0 个 token</span><div><button id="reset-camera" class="button button-secondary button-small" type="button">重置视角</button><button id="space-fullscreen" class="button button-secondary button-small" type="button" aria-label="全屏显示空间">全屏显示</button><span class="space-help">拖动旋转 · 滚轮缩放 · 点击节点查看</span></div></div>
+    <form id="space-search" class="space-search" role="search">
+      <label for="space-search-input">搜索 Token</label>
+      <input id="space-search-input" type="search" autocomplete="off" placeholder="输入完整 token">
+      <button id="space-search-button" class="button button-outline button-small" type="submit">定位</button>
+      <button id="show-all-successors" class="button button-secondary button-small" type="button" disabled>显示所有后继 Token</button>
+      <button id="show-top-successor" class="button button-secondary button-small" type="button" disabled>权重最高的后继 Token</button>
+      <span id="space-search-status" role="status" aria-live="polite"></span>
+    </form>
     <div class="space-canvas-wrap"><canvas id="space-canvas" aria-label="可交互的三维 token Embedding 空间"></canvas><div id="space-tooltip" class="space-tooltip" hidden></div><div id="space-empty" class="space-empty" hidden>当前语料没有可视化节点</div></div>
     <div id="space-detail" class="space-detail">点击任意节点，查看 token 向量与来源信息。</div>
     <div class="dialog-foot"><span class="legend-dot"></span>Token 节点 <span class="legend-line"></span>有向共现边 <span class="muted">· 点位是 16D Embedding 的近似投影</span></div>
+  </dialog>
+  <dialog id="ngram-help-dialog" class="help-dialog" aria-labelledby="ngram-help-title">
+    <div class="help-dialog-head" style="display: flex; justify-content: space-between;">
+      <div><div class="section-index">CORPUS BASICS</div><h2 id="ngram-help-title">什么是 N-gram？</h2></div>
+      <button id="close-ngram-help" class="icon-button" type="button" aria-label="关闭 N-gram 解释">×</button>
+    </div>
+    <div class="help-dialog-content">
+      <p>N-gram 是语料中连续 N 个 Token 组成的片段。这个演示会根据前文，统计语料里哪些 Token 曾经接着出现，作为下一步的候选。</p>
+      <ul>
+        <li>优先参考前面 2 个 Token（3-gram）；没有匹配时退回前面 1 个 Token（2-gram）。</li>
+        <li>仍没有匹配时，使用语料中的单 Token 频率（1-gram）。</li>
+      </ul>
+      <p>候选再结合出现频率与注意力相似度计算融合分数，并按温度进行选择。这是教学用模拟，不是实际大模型推理。</p>
+    </div>
   </dialog>
   <div id="toast-region" class="toast-region" aria-live="polite"></div>
 </body>

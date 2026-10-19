@@ -1,4 +1,4 @@
-export function createSpaceViewer({ dialog, canvas, count, detail, tooltip, empty, closeButton, resetButton }) {
+export function createSpaceViewer({ dialog, canvas, count, detail, tooltip, empty, closeButton, resetButton, onFocusChange = () => {} }) {
   const context = canvas.getContext('2d');
   let snapshot = null;
   let rotationX = -0.38;
@@ -10,6 +10,9 @@ export function createSpaceViewer({ dialog, canvas, count, detail, tooltip, empt
   let pointerOrigin = null;
   let pointerMoved = false;
   let selectedToken = null;
+  let relatedTokens = [];
+  let successorMode = 'top';
+  let focusPosition = [0, 0, 0];
   let width = 0;
   let height = 0;
   let dpr = 1;
@@ -28,9 +31,12 @@ export function createSpaceViewer({ dialog, canvas, count, detail, tooltip, empt
   }
 
   function projectNode(node) {
+    if (node.token === selectedToken) {
+      return { x: width / 2, y: height / 2, depth: 0, scale: Math.min(width, height) * 0.33 * zoom, node };
+    }
     const bounds = snapshot.layout.bounds || { min: -5, max: 5 };
     const span = Math.max(Math.abs(bounds.min), Math.abs(bounds.max), 1);
-    let [x, y, z] = node.position.map(value => value / span);
+    let [x, y, z] = node.position.map((value, index) => (value - focusPosition[index]) / span);
     const cosY = Math.cos(rotationY);
     const sinY = Math.sin(rotationY);
     const rotatedX = x * cosY - z * sinY;
@@ -58,11 +64,17 @@ export function createSpaceViewer({ dialog, canvas, count, detail, tooltip, empt
     context.restore();
     if (!snapshot?.layout?.nodes?.length) return;
 
-    projected = snapshot.layout.nodes.map(projectNode);
+    const visibleTokens = selectedToken
+      ? new Set([selectedToken, ...relatedTokens])
+      : null;
+    projected = snapshot.layout.nodes
+      .filter(node => !visibleTokens || visibleTokens.has(node.token))
+      .map(projectNode);
     const byToken = new Map(projected.map(item => [item.node.token, item]));
     const edgeLimit = snapshot.layout.edges.length > 600 ? 600 : snapshot.layout.edges.length;
     for (let index = 0; index < edgeLimit; index += 1) {
       const edge = snapshot.layout.edges[index];
+      if (visibleTokens && (edge.source !== selectedToken || !visibleTokens.has(edge.target))) continue;
       const from = byToken.get(edge.source);
       const to = byToken.get(edge.target);
       if (!from || !to) continue;
@@ -135,7 +147,7 @@ export function createSpaceViewer({ dialog, canvas, count, detail, tooltip, empt
 
   function showNode(item) {
     if (!item) return;
-    selectedToken = item.node.token;
+    focusNode(item.node);
     const embedding = (snapshot.embeddings[item.node.token] || []).map(value => value.toFixed(2)).join(', ');
     const sources = snapshot.occurrences.filter(entry => entry.token === item.node.token).slice(0, 5);
     detail.replaceChildren();
@@ -149,6 +161,69 @@ export function createSpaceViewer({ dialog, canvas, count, detail, tooltip, empt
     vector.textContent = `Embedding：[${embedding}]`;
     detail.append(title, position, source, vector);
     render();
+  }
+
+  function focusNode(node) {
+    selectedToken = node.token;
+    successorMode = 'top';
+    setVisibleSuccessors();
+    rotationX = -0.38;
+    rotationY = 0.55;
+    fitFocusedNodes(node);
+    resize();
+    onFocusChange({ token: selectedToken, count: relatedTokens.length, mode: successorMode });
+  }
+
+  function getSuccessors(token) {
+    const successors = new Map();
+    for (const edge of snapshot.layout.edges) {
+      if (edge.source !== token || edge.target === token) continue;
+      successors.set(edge.target, Math.max(successors.get(edge.target) || 0, edge.weight));
+    }
+    return [...successors.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([target]) => target);
+  }
+
+  function setVisibleSuccessors() {
+    const successors = getSuccessors(selectedToken);
+    relatedTokens = successorMode === 'all' ? successors : successors.slice(0, 1);
+  }
+
+  function fitFocusedNodes(node) {
+    const span = Math.max(Math.abs(snapshot.layout.bounds?.min ?? -1), Math.abs(snapshot.layout.bounds?.max ?? 1), 1);
+    const relatedNodes = relatedTokens
+      .map(token => snapshot.layout.nodes.find(item => item.token === token))
+      .filter(Boolean);
+    const farthestDistance = relatedNodes.reduce((farthest, item) => Math.max(
+      farthest,
+      Math.hypot(...item.position.map((value, index) => value - node.position[index])) / span,
+    ), 0);
+    const viewSize = Math.min(width || canvas.clientWidth, height || canvas.clientHeight);
+    zoom = farthestDistance > 0 && viewSize > 0
+      ? Math.max(0.35, Math.min(18, 38 / (0.33 * viewSize * farthestDistance)))
+      : 1.5;
+  }
+
+  function setSuccessorMode(mode) {
+    if (!selectedToken || !snapshot) return null;
+    successorMode = mode === 'all' ? 'all' : 'top';
+    setVisibleSuccessors();
+    const node = snapshot.layout.nodes.find(item => item.token === selectedToken);
+    if (node) fitFocusedNodes(node);
+    render();
+    onFocusChange({ token: selectedToken, count: relatedTokens.length, mode: successorMode });
+    return relatedTokens.length;
+  }
+
+  function focusToken(query) {
+    const normalizedQuery = String(query || '').trim();
+    if (!normalizedQuery || !snapshot?.layout?.nodes?.length) return false;
+    const node = snapshot.layout.nodes.find(item => item.token === normalizedQuery)
+      || snapshot.layout.nodes.find(item => displayLabel(item.token) === normalizedQuery);
+    if (!node) return false;
+    showNode({ node });
+    return true;
   }
 
   function pointerDown(event) {
@@ -216,10 +291,10 @@ export function createSpaceViewer({ dialog, canvas, count, detail, tooltip, empt
   canvas.addEventListener('pointercancel', () => { dragging = false; lastPointer = null; pointerOrigin = null; pointerMoved = false; });
   canvas.addEventListener('wheel', event => {
     event.preventDefault();
-    zoom = Math.max(0.5, Math.min(3.2, zoom * (event.deltaY < 0 ? 1.1 : 0.91)));
+    zoom = Math.max(0.35, Math.min(18, zoom * (event.deltaY < 0 ? 1.15 : 0.87)));
     render();
   }, { passive: false });
-  resetButton.addEventListener('click', () => { rotationX = -0.38; rotationY = 0.55; zoom = 1; render(); });
+  resetButton.addEventListener('click', () => { rotationX = -0.38; rotationY = 0.55; zoom = 1; focusPosition = [0, 0, 0]; selectedToken = null; relatedTokens = []; successorMode = 'top'; onFocusChange(null); render(); });
   closeButton.addEventListener('click', () => dialog.close());
   dialog.addEventListener('close', () => { cancelAnimationFrame(animationFrame); });
   dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
@@ -229,12 +304,19 @@ export function createSpaceViewer({ dialog, canvas, count, detail, tooltip, empt
     open(nextSnapshot) {
       snapshot = nextSnapshot;
       selectedToken = null;
+      relatedTokens = [];
+      successorMode = 'top';
+      onFocusChange(null);
+      focusPosition = [0, 0, 0];
       detail.textContent = '点击任意节点，查看 token 向量与来源信息。';
       count.textContent = `${nextSnapshot.layout.nodes.length} 个 token · ${nextSnapshot.layout.edges.length} 条共现边`;
       empty.hidden = nextSnapshot.layout.nodes.length > 0;
       if (!dialog.open) dialog.showModal();
       requestAnimationFrame(resize);
     },
+    focusToken,
+    setSuccessorMode,
+    resize,
   };
 }
 

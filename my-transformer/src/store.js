@@ -95,6 +95,6 @@ export async function saveSettings(settings) {
 
 export async function loadSettings() {
   const saved = await getRecord('settings', 'app-settings');
-  return saved ? { role: saved.role || '', systemPrompt: saved.systemPrompt || '', temperature: Number(saved.temperature ?? 0.8), topK: Number(saved.topK ?? 5), lambda: Number(saved.lambda ?? 0.5), maxTokens: Number(saved.maxTokens ?? 48), maxContext: Number(saved.maxContext ?? 128) } : null;
+  return saved ? { role: saved.role || '', systemPrompt: saved.systemPrompt || '', temperature: Number(saved.temperature ?? 0.8), topK: Number(saved.topK ?? 5), lambda: Number(saved.lambda ?? 0.5), maxTokens: Number(saved.maxTokens ?? 48), maxContext: Number(saved.maxContext ?? 128), trainingRounds: Number(saved.trainingRounds ?? 3) } : null;
 }
 

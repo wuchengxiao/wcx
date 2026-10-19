@@ -1,5 +1,10 @@
 const SPECIAL = { BOS: '\u0002BOS', EOS: '\u0002EOS', UNK: '\u0002UNK' };
 const EMBED_DIM = 16;
+const HAN_RUN = /^\p{Script=Han}+$/u;
+const FALLBACK_CHINESE_WORDS = ['胡萝卜', '红萝卜', '萝卜', '西红柿', '番茄', '土豆', '马铃薯', '白菜', '青菜', '苹果', '香蕉', '橘子', '火车站', '图书馆', '自然语言', '机器学习', '人工智能'];
+const CHINESE_SEGMENTER = typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function'
+  ? new Intl.Segmenter('zh-CN', { granularity: 'word' })
+  : null;
 
 export function stableHash(value) {
   let hash = 2166136261;
@@ -52,17 +57,61 @@ function stripMarkdown(markdown) {
     .trim();
 }
 
-export function tokenize(text) {
-  const matches = String(text).match(/[A-Za-z]+|\d+|[\p{Script=Han}]|[^\s\p{Script=Han}A-Za-z\d]/gu) || [];
-  return matches;
+function makeWordTrie(words) {
+  const root = new Map();
+  for (const word of words) {
+    if (!HAN_RUN.test(word) || [...word].length < 2) continue;
+    let node = root;
+    for (const character of word) {
+      if (!node.has(character)) node.set(character, new Map());
+      node = node.get(character);
+    }
+    node.set('', null);
+  }
+  return root;
 }
 
-function sentenceSequences(markdown) {
+function tokenizeHanFallback(run, trie) {
+  const characters = [...run];
+  const tokens = [];
+  for (let index = 0; index < characters.length;) {
+    let node = trie;
+    let match = '';
+    let end = index;
+    while (end < characters.length && node.has(characters[end])) {
+      node = node.get(characters[end]);
+      end += 1;
+      if (node.has('')) match = characters.slice(index, end).join('');
+    }
+    tokens.push(match || characters[index]);
+    index += match ? [...match].length : 1;
+  }
+  return tokens;
+}
+
+export function tokenize(text, wordVocabulary = []) {
+  const pieces = String(text).match(/[A-Za-z]+|\d+|\p{Script=Han}+|[^\s\p{Script=Han}A-Za-z\d]/gu) || [];
+  const vocabulary = new Set([...FALLBACK_CHINESE_WORDS, ...(wordVocabulary || [])]);
+  const trie = makeWordTrie(vocabulary);
+  const tokens = [];
+  for (const piece of pieces) {
+    if (!HAN_RUN.test(piece)) {
+      tokens.push(piece);
+    } else if (CHINESE_SEGMENTER) {
+      for (const item of CHINESE_SEGMENTER.segment(piece)) tokens.push(item.segment);
+    } else {
+      tokens.push(...tokenizeHanFallback(piece, trie));
+    }
+  }
+  return tokens;
+}
+
+function sentenceSequences(markdown, wordVocabulary = []) {
   const text = stripMarkdown(markdown);
   const paragraphs = text.split(/\n\s*\n+/u);
   const sequences = [];
   for (const paragraph of paragraphs) {
-    const tokens = tokenize(paragraph);
+    const tokens = tokenize(paragraph, wordVocabulary);
     let sequence = [];
     for (const token of tokens) {
       sequence.push(token);
@@ -74,6 +123,17 @@ function sentenceSequences(markdown) {
     if (sequence.length) sequences.push(sequence);
   }
   return sequences;
+}
+
+function discoverWordVocabulary(files) {
+  const words = new Set(FALLBACK_CHINESE_WORDS);
+  for (const file of files) {
+    const text = String(file.content ?? '');
+    for (const token of tokenize(stripMarkdown(text))) {
+      if (HAN_RUN.test(token) && [...token].length > 1) words.add(token);
+    }
+  }
+  return [...words].sort((a, b) => a.localeCompare(b, 'zh-CN'));
 }
 
 function addCount(table, key, token, amount = 1) {
@@ -161,16 +221,21 @@ function makeAttention(contextTokens, embeddingMap, matrices) {
   return { positions, weights, output };
 }
 
-export async function processCorpus(files, previousSnapshot = null) {
+export async function processCorpus(files, previousSnapshot = null, requestedEmbeddingRounds = 3) {
+  const sourceFiles = [];
+  for (const file of files) {
+    sourceFiles.push({ ...file, content: String(file.content ?? await file.text()) });
+  }
+  const wordVocabulary = discoverWordVocabulary(sourceFiles);
   const sequences = [];
   const occurrences = [];
   const uniqueTokens = new Set();
   const documentInfo = [];
-  for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
-    const file = files[fileIndex];
-    const text = String(file.content ?? await file.text());
+  for (let fileIndex = 0; fileIndex < sourceFiles.length; fileIndex += 1) {
+    const file = sourceFiles[fileIndex];
+    const text = file.content;
     documentInfo.push({ id: file.id, name: file.name, size: new Blob([text]).size, updatedAt: file.updatedAt || Date.now(), content: text });
-    const parsedSequences = sentenceSequences(text);
+    const parsedSequences = sentenceSequences(text, wordVocabulary);
     parsedSequences.forEach((tokens, sequenceIndex) => {
       const sequenceId = `${file.id}:${sequenceIndex}`;
       sequences.push({ id: sequenceId, fileId: file.id, fileName: file.name, tokens });
@@ -236,21 +301,28 @@ export async function processCorpus(files, previousSnapshot = null) {
       ppmiVectors[center][dimension] += ppmi * (bit ? 1 : -1) / 4;
     }
   }
-  const embeddingMap = Object.create(null);
-  for (const token of uniqueTokens) embeddingMap[token] = vectorForEmbedding(token, ppmiVectors[token], corpusVersion);
-  const layout = createLayout([...uniqueTokens].filter(token => !Object.values(SPECIAL).includes(token)), directedEdges, embeddingMap, corpusVersion);
+  const baseEmbeddings = Object.create(null);
+  for (const token of uniqueTokens) baseEmbeddings[token] = vectorForEmbedding(token, ppmiVectors[token], corpusVersion);
+  const embeddingRounds = Math.max(1, Math.min(8, Math.floor(Number(requestedEmbeddingRounds) || 3)));
+  const embeddingMap = refineEmbeddings(baseEmbeddings, pairCounts, embeddingRounds);
+  const layoutVersion = `${corpusVersion}:embedding-rounds-${embeddingRounds}`;
+  const layout = createLayout([...uniqueTokens].filter(token => !Object.values(SPECIAL).includes(token)), directedEdges, embeddingMap, layoutVersion);
   const qkv = {
     version: 'fixed-qkv-v1',
     wq: fixedMatrix('fixed-qkv-v1:WQ'),
     wk: fixedMatrix('fixed-qkv-v1:WK'),
     wv: fixedMatrix('fixed-qkv-v1:WV'),
   };
+  const modelVersion = stableHash(`${corpusVersion}:tokenizer-natural-zh-word-v3:embedding-rounds-${embeddingRounds}`);
   return {
-    id: corpusVersion,
+    id: modelVersion,
     corpusVersion,
+    modelVersion,
     createdAt: Math.max(Date.now(), (previousSnapshot?.createdAt || 0) + 1),
-    tokenizerVersion: 'simple-zh-en-v1',
+    tokenizerVersion: 'natural-zh-word-v3',
     embeddingVersion: 'ppmi-rp16-v1',
+    wordVocabulary,
+    embeddingRounds,
     qkvVersion: qkv.version,
     files: documentInfo,
     sequences,
@@ -264,6 +336,40 @@ export async function processCorpus(files, previousSnapshot = null) {
     vocabularySize: uniqueTokens.size - 3,
     tokenCount: occurrences.length,
   };
+}
+
+function refineEmbeddings(baseEmbeddings, pairCounts, rounds) {
+  const tokens = Object.keys(baseEmbeddings).filter(token => !Object.values(SPECIAL).includes(token));
+  const neighbors = new Map(tokens.map(token => [token, new Map()]));
+  for (const [key, count] of Object.entries(pairCounts)) {
+    const [center, context] = JSON.parse(key);
+    if (!neighbors.has(center) || !neighbors.has(context)) continue;
+    neighbors.get(center).set(context, (neighbors.get(center).get(context) || 0) + count);
+    neighbors.get(context).set(center, (neighbors.get(context).get(center) || 0) + count);
+  }
+
+  let current = { ...baseEmbeddings };
+  for (let round = 0; round < rounds; round += 1) {
+    const next = { ...current };
+    for (const token of tokens) {
+      const related = neighbors.get(token);
+      if (!related?.size) continue;
+      const context = Array(EMBED_DIM).fill(0);
+      let totalWeight = 0;
+      for (const [neighbor, weight] of related) {
+        const vector = current[neighbor];
+        if (!vector) continue;
+        totalWeight += weight;
+        for (let dimension = 0; dimension < EMBED_DIM; dimension += 1) context[dimension] += vector[dimension] * weight;
+      }
+      if (!totalWeight) continue;
+      const base = baseEmbeddings[token];
+      const contextScale = 0.35 / totalWeight;
+      next[token] = normalize(base.map((value, index) => value * 0.65 + context[index] * contextScale));
+    }
+    current = next;
+  }
+  return current;
 }
 
 function createLayout(tokens, edges, embeddings, corpusVersion, previousPositions = new Map()) {
@@ -311,7 +417,7 @@ function createLayout(tokens, edges, embeddings, corpusVersion, previousPosition
       }
     }
     const prior = previousPositions.get(token);
-    const position = prior ? clampSlot(prior) : clampSlot(projected.map(value => value * (side * 0.45)));
+    const position = prior ? clampSlot(prior) : clampSlot(projected.map(value => value * (side * 1.35)));
     const free = nearestFree(position, token);
     const assigned = free || [Math.round(lower + random() * (upper - lower)), Math.round(lower + random() * (upper - lower)), Math.round(lower + random() * (upper - lower))];
     occupied.set(getSlotKey(assigned), token);
@@ -457,10 +563,11 @@ function softmaxAtTemperature(scores, temperature) {
 
 export async function generateReply({ snapshot, userText, role = '', systemPrompt = '', history = [], settings, turn = 0, onStep = () => {}, isCancelled = () => false }) {
   const maxContext = Math.max(16, Number(settings.maxContext) || 128);
-  const systemTokens = tokenize(systemPrompt);
-  const roleTokens = tokenize(role);
-  const userTokens = tokenize(userText);
-  const historyChunks = history.map(item => [...tokenize(item.user || ''), ...tokenize(item.assistant || '')]).filter(chunk => chunk.length);
+  const wordVocabulary = snapshot.wordVocabulary || snapshot.commonTerms || [];
+  const systemTokens = tokenize(systemPrompt, wordVocabulary);
+  const roleTokens = tokenize(role, wordVocabulary);
+  const userTokens = tokenize(userText, wordVocabulary);
+  const historyChunks = history.map(item => [...tokenize(item.user || '', wordVocabulary), ...tokenize(item.assistant || '', wordVocabulary)]).filter(chunk => chunk.length);
   let contextWasTruncated = false;
   const fixedTokens = [...systemTokens, ...roleTokens];
   let boundedSystemAndRole = fixedTokens;
@@ -492,7 +599,7 @@ export async function generateReply({ snapshot, userText, role = '', systemPromp
   const topK = Math.max(1, Number(settings.topK) || 5);
   const lambda = Math.max(0, Math.min(1, Number(settings.lambda ?? 0.5)));
   const historySeed = history.map(item => `${item.user || ''}:${item.assistant || ''}`).join('|');
-  const seed = `${snapshot.corpusVersion}|${systemPrompt}|${role}|${historySeed}|${userText}|${turn}|${temperature}|${topK}|${lambda}`;
+  const seed = `${snapshot.modelVersion || snapshot.corpusVersion}|${systemPrompt}|${role}|${historySeed}|${userText}|${turn}|${temperature}|${topK}|${lambda}`;
   const random = seededRandom(seed);
   const matrices = snapshot.qkv;
   const generated = [];
