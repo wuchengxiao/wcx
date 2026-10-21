@@ -9,7 +9,8 @@ class UMLDrawer {
             1: {
                 elements: [],
                 selectedElements: [],
-                groups: []
+                groups: [],
+                view: { zoom: 1, offsetX: 0, offsetY: 0 }
             }
         };
         this.isDrawing = false;
@@ -69,7 +70,7 @@ class UMLDrawer {
         this.currentTool = 'select';
         // Load autosave if present and start periodic autosave
         this.loadAutoBackup();
-        this.autosaveInterval = setInterval(this.saveAutoBackup.bind(this), 5000);
+        this.autosaveInterval = setInterval(this.saveAutoBackup.bind(this), 60000);
         window.addEventListener('beforeunload', this.saveAutoBackup.bind(this));
         this.render();
     }
@@ -435,6 +436,8 @@ class UMLDrawer {
         const elements = {
             'new-diagram': this.createNewDiagram.bind(this),
             'download-diagram': this.downloadDiagram.bind(this),
+            'download-design': this.downloadDesign.bind(this),
+            'upload-design': this.openImportDesignDialog.bind(this),
             'clear-diagram': this.clearDiagram.bind(this),
             'help': this.showHelp.bind(this),
             'close-help': this.hideHelp.bind(this),
@@ -473,6 +476,53 @@ class UMLDrawer {
         const customShapesList = document.getElementById('custom-shapes-list');
         if (customShapesList) {
             customShapesList.addEventListener('click', this.handleCustomShapeListClick.bind(this));
+        }
+
+        const tabsContainer = document.querySelector('.diagram-tabs');
+        if (tabsContainer) {
+            tabsContainer.addEventListener('click', (e) => {
+                const tab = e.target.closest('.tab');
+                if (!tab || !tabsContainer.contains(tab)) return;
+
+                const diagramId = tab.dataset.diagram;
+                if (e.target.closest('.close-tab')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (Object.keys(this.diagrams).length <= 1) return;
+
+                    const wasCurrent = String(this.currentDiagram) === diagramId;
+                    if (wasCurrent) this.saveCurrentDiagramView();
+                    delete this.diagrams[diagramId];
+                    tab.remove();
+
+                    if (wasCurrent || !this.diagrams[this.currentDiagram]) {
+                        const nextTab = tabsContainer.querySelector('.tab');
+                        if (!nextTab) return;
+                        this.currentDiagram = nextTab.dataset.diagram;
+                        this.loadDiagramView(this.diagrams[this.currentDiagram]);
+                        tabsContainer.querySelectorAll('.tab').forEach(item => {
+                            const isActive = item === nextTab;
+                            item.classList.toggle('active', isActive);
+                            item.setAttribute('aria-selected', String(isActive));
+                        });
+                        this.render();
+                    }
+                    this.saveAutoBackup();
+                    return;
+                }
+
+                if (!this.diagrams[diagramId]) return;
+                this.saveCurrentDiagramView();
+                this.currentDiagram = diagramId;
+                this.loadDiagramView(this.diagrams[this.currentDiagram]);
+                tabsContainer.querySelectorAll('.tab').forEach(item => {
+                    const isActive = item === tab;
+                    item.classList.toggle('active', isActive);
+                    item.setAttribute('aria-selected', String(isActive));
+                });
+                this.render();
+                this.saveAutoBackup();
+            });
         }
     }
     
@@ -625,6 +675,25 @@ class UMLDrawer {
         const zoomBtn = document.getElementById('zoom-reset');
         if (!zoomBtn) return;
         zoomBtn.textContent = `${Math.round(this.viewZoom * 100)}%`;
+    }
+
+    saveCurrentDiagramView() {
+        const diagram = this.diagrams[this.currentDiagram];
+        if (!diagram) return;
+        diagram.view = {
+            zoom: this.viewZoom,
+            offsetX: this.canvasOffsetX,
+            offsetY: this.canvasOffsetY
+        };
+    }
+
+    loadDiagramView(diagram) {
+        const view = diagram && diagram.view ? diagram.view : {};
+        const zoom = Number(view.zoom);
+        this.viewZoom = Number.isFinite(zoom) ? Math.max(this.minViewZoom, Math.min(this.maxViewZoom, zoom)) : 1;
+        this.canvasOffsetX = Number.isFinite(Number(view.offsetX)) ? Number(view.offsetX) : 0;
+        this.canvasOffsetY = Number.isFinite(Number(view.offsetY)) ? Number(view.offsetY) : 0;
+        this.updateZoomRateDisplay();
     }
 
     loadCustomShapes() {
@@ -792,14 +861,23 @@ class UMLDrawer {
 
     saveAutoBackup() {
         try {
-            const diagram = this.diagrams[this.currentDiagram] || { elements: [], groups: [] };
-            const payload = {
-                timestamp: Date.now(),
-                diagramId: this.currentDiagram,
-                diagram: {
+            this.saveCurrentDiagramView();
+            const diagrams = {};
+            Object.entries(this.diagrams).forEach(([id, diagram]) => {
+                diagrams[id] = {
                     elements: diagram.elements || [],
                     groups: diagram.groups || [],
-                    // do not persist selection
+                    view: diagram.view || { zoom: 1, offsetX: 0, offsetY: 0 }
+                };
+            });
+            const payload = {
+                version: 2,
+                timestamp: Date.now(),
+                currentDiagram: String(this.currentDiagram),
+                diagrams,
+                canvas: {
+                    width: this.baseWidth,
+                    height: this.baseHeight
                 },
                 viewZoom: this.viewZoom,
                 canvasOffsetX: this.canvasOffsetX,
@@ -816,26 +894,109 @@ class UMLDrawer {
             const raw = localStorage.getItem('uml_drawer_autosave_v1');
             if (!raw) return;
             const parsed = JSON.parse(raw);
-            if (!parsed || !parsed.diagram) return;
+            if (!parsed || typeof parsed !== 'object') return;
 
-            const current = this.diagrams[this.currentDiagram] || { elements: [] };
-            const hasCurrentData = Array.isArray(current.elements) && current.elements.length > 0;
-
-            // Ask the user whether to restore only if current canvas is empty or they agree to overwrite
-            const message = hasCurrentData ? '检测到浏览器中的未保存编辑记录，是否覆盖当前画布并恢复上次编辑？' : '检测到未保存的编辑记录，是否恢复上次编辑？';
-            if (confirm(message)) {
-                this.diagrams[parsed.diagramId] = this.diagrams[parsed.diagramId] || { elements: [], selectedElements: [], groups: [] };
-                this.diagrams[parsed.diagramId].elements = parsed.diagram.elements || [];
-                this.diagrams[parsed.diagramId].groups = parsed.diagram.groups || [];
-                this.viewZoom = parsed.viewZoom || 1;
-                this.canvasOffsetX = parsed.canvasOffsetX || 0;
-                this.canvasOffsetY = parsed.canvasOffsetY || 0;
-                this.render();
-                alert('已从缓存恢复编辑内容。');
+            let savedDiagrams = parsed.diagrams;
+            let savedCurrentDiagram = String(parsed.currentDiagram);
+            if (!savedDiagrams && parsed.diagram && parsed.diagramId !== undefined) {
+                // Support autosaves created by the earlier single-diagram format.
+                savedCurrentDiagram = String(parsed.diagramId);
+                savedDiagrams = { [savedCurrentDiagram]: parsed.diagram };
             }
+            if (!savedDiagrams || typeof savedDiagrams !== 'object' || Array.isArray(savedDiagrams)) return;
+
+            const restoredDiagrams = {};
+            for (const [id, savedDiagram] of Object.entries(savedDiagrams)) {
+                if (!/^\d+$/.test(id) || !savedDiagram || !Array.isArray(savedDiagram.elements) ||
+                    (savedDiagram.groups !== undefined && !Array.isArray(savedDiagram.groups))) {
+                    throw new Error('自动保存中的图表数据格式无效');
+                }
+
+                const elements = savedDiagram.elements;
+                const topLevelGroups = new Map(elements
+                    .filter(element => element && element.type === 'group' && element.id !== undefined)
+                    .map(group => [String(group.id), group]));
+                const groups = (savedDiagram.groups || []).map(group => {
+                    if (!group || group.id === undefined) return group;
+                    return topLevelGroups.get(String(group.id)) || group;
+                }).filter(Boolean);
+                const view = savedDiagram.view || {};
+                const zoom = Number(view.zoom);
+                const offsetX = Number(view.offsetX);
+                const offsetY = Number(view.offsetY);
+
+                restoredDiagrams[id] = {
+                    elements,
+                    selectedElements: [],
+                    groups,
+                    view: {
+                        zoom: Number.isFinite(zoom) ? Math.max(this.minViewZoom, Math.min(this.maxViewZoom, zoom)) : 1,
+                        offsetX: Number.isFinite(offsetX) ? offsetX : 0,
+                        offsetY: Number.isFinite(offsetY) ? offsetY : 0
+                    }
+                };
+            }
+            if (Object.keys(restoredDiagrams).length === 0) return;
+
+            const diagramIds = Object.keys(restoredDiagrams).sort((a, b) => Number(a) - Number(b));
+            if (!restoredDiagrams[savedCurrentDiagram]) savedCurrentDiagram = diagramIds[0];
+            const hasSavedElements = diagramIds.some(id => restoredDiagrams[id].elements.length > 0);
+            const message = hasSavedElements
+                ? '检测到浏览器中的未保存编辑记录，是否恢复所有图表？'
+                : '检测到浏览器中的图表记录，是否恢复所有图表？';
+            if (!confirm(message)) return;
+
+            this.diagrams = restoredDiagrams;
+            this.currentDiagram = savedCurrentDiagram;
+            this.rebuildDiagramTabs();
+            this.loadDiagramView(this.diagrams[this.currentDiagram]);
+
+            let maxElementId = 0;
+            const visitElement = (element) => {
+                if (!element || typeof element !== 'object') return;
+                const match = typeof element.id === 'string' && element.id.match(/^el-(\d+)$/);
+                if (match) maxElementId = Math.max(maxElementId, Number(match[1]));
+                if (Array.isArray(element.elements)) element.elements.forEach(visitElement);
+            };
+            Object.values(this.diagrams).forEach(diagram => diagram.elements.forEach(visitElement));
+            this.elementIdCounter = Math.max(this.elementIdCounter, maxElementId + 1);
+
+            const canvas = parsed.canvas || {};
+            const width = Number(canvas.width);
+            const height = Number(canvas.height);
+            if (Number.isFinite(width) && Number.isFinite(height) && width >= 1 && height >= 1 && width <= 10000 && height <= 10000) {
+                this.setCanvasSize(width, height);
+            } else {
+                this.render();
+            }
+            alert('已从浏览器缓存恢复所有图表。');
         } catch (err) {
             console.warn('恢复自动保存失败', err);
         }
+    }
+
+    rebuildDiagramTabs() {
+        const tabsContainer = document.querySelector('.diagram-tabs');
+        if (!tabsContainer) return;
+
+        tabsContainer.replaceChildren();
+        const ids = Object.keys(this.diagrams).sort((a, b) => Number(a) - Number(b));
+        ids.forEach(id => {
+            const tab = document.createElement('div');
+            const isActive = id === String(this.currentDiagram);
+            tab.className = `tab${isActive ? ' active' : ''}`;
+            tab.dataset.diagram = id;
+            tab.setAttribute('role', 'tab');
+            tab.setAttribute('aria-selected', String(isActive));
+            tab.appendChild(document.createTextNode(`图 ${id} `));
+
+            const closeButton = document.createElement('button');
+            closeButton.className = 'close-tab';
+            closeButton.setAttribute('aria-label', `关闭图表 ${id}`);
+            closeButton.textContent = '×';
+            tab.appendChild(closeButton);
+            tabsContainer.appendChild(tab);
+        });
     }
 
     deleteCustomShape(shapeId) {
@@ -2655,51 +2816,157 @@ class UMLDrawer {
     }
     
     createNewDiagram() {
-        const diagramId = Object.keys(this.diagrams).length + 1;
+        const diagramId = Math.max(0, ...Object.keys(this.diagrams).map(Number).filter(Number.isFinite)) + 1;
+        this.saveCurrentDiagramView();
         this.diagrams[diagramId] = {
             elements: [],
             selectedElements: [],
-            groups: []
+            groups: [],
+            view: { zoom: 1, offsetX: 0, offsetY: 0 }
         };
         
         const tabContainer = document.querySelector('.diagram-tabs');
         const tab = document.createElement('div');
         tab.className = 'tab active';
         tab.dataset.diagram = diagramId;
+        tab.setAttribute('role', 'tab');
+        tab.setAttribute('aria-selected', 'true');
         tab.innerHTML = `
             图 ${diagramId}
             <button class="close-tab">×</button>
         `;
         
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab').forEach(t => {
+            t.classList.remove('active');
+            t.setAttribute('aria-selected', 'false');
+        });
         tabContainer.appendChild(tab);
         
-        tab.addEventListener('click', (e) => {
-            if (!e.target.classList.contains('close-tab')) {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                tab.classList.add('active');
-                this.currentDiagram = diagramId;
-                this.render();
-            }
-        });
-        
-        tab.querySelector('.close-tab').addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (Object.keys(this.diagrams).length > 1) {
-                delete this.diagrams[diagramId];
-                tab.remove();
-                
-                const firstTab = document.querySelector('.tab');
-                if (firstTab) {
-                    firstTab.click();
-                }
-            }
-        });
-        
         this.currentDiagram = diagramId;
+        this.loadDiagramView(this.diagrams[diagramId]);
         this.render();
+        this.saveAutoBackup();
     }
     
+    downloadDesign() {
+        try {
+            const diagram = this.diagrams[this.currentDiagram] || { elements: [], groups: [] };
+            const data = JSON.stringify({
+                version: 1,
+                exportedAt: new Date().toISOString(),
+                diagramId: this.currentDiagram,
+                diagram: {
+                    elements: diagram.elements || [],
+                    groups: diagram.groups || []
+                },
+                canvas: {
+                    width: this.baseWidth,
+                    height: this.baseHeight
+                },
+                view: {
+                    zoom: this.viewZoom,
+                    offsetX: this.canvasOffsetX,
+                    offsetY: this.canvasOffsetY
+                }
+            }, null, 2);
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `uml-design-${this.currentDiagram}-${Date.now()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.warn('导出设计失败', err);
+            alert('导出设计失败，请检查控制台。');
+        }
+    }
+
+    openImportDesignDialog() {
+        const input = document.getElementById('upload-design-input');
+        if (!input) return;
+        input.value = '';
+        input.onchange = this.handleImportDesignFile.bind(this);
+        input.click();
+    }
+
+    handleImportDesignFile(e) {
+        const input = e.target;
+        const file = input.files && input.files[0];
+        if (!file) return;
+        input.value = '';
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            try {
+                const data = JSON.parse(evt.target.result);
+                const diagramData = data && data.diagram;
+                if (!diagramData || !Array.isArray(diagramData.elements) ||
+                    diagramData.elements.some(element => !element || typeof element !== 'object' || Array.isArray(element) || typeof element.type !== 'string')) {
+                    throw new Error('无效的设计文件结构');
+                }
+                if (diagramData.groups !== undefined && !Array.isArray(diagramData.groups)) {
+                    throw new Error('无效的分组数据');
+                }
+
+                const canvas = data.canvas || {};
+                const width = canvas.width === undefined ? this.baseWidth : Number(canvas.width);
+                const height = canvas.height === undefined ? this.baseHeight : Number(canvas.height);
+                if (!Number.isFinite(width) || !Number.isFinite(height) || width < 1 || height < 1 || width > 10000 || height > 10000) {
+                    throw new Error('画布尺寸无效');
+                }
+
+                const currentDiagram = this.diagrams[this.currentDiagram];
+                if (currentDiagram && currentDiagram.elements.length > 0 &&
+                    !confirm('上传设计将替换当前画布中的全部内容，是否继续？')) {
+                    return;
+                }
+
+                const elements = diagramData.elements;
+                this.diagrams[this.currentDiagram] = {
+                    elements,
+                    selectedElements: [],
+                    groups: diagramData.groups || [],
+                    view: data.view || { zoom: 1, offsetX: 0, offsetY: 0 }
+                };
+
+                const view = data.view || {};
+                const zoom = Number(view.zoom);
+                this.viewZoom = Number.isFinite(zoom) ? Math.max(this.minViewZoom, Math.min(this.maxViewZoom, zoom)) : 1;
+                this.canvasOffsetX = Number.isFinite(Number(view.offsetX)) ? Number(view.offsetX) : 0;
+                this.canvasOffsetY = Number.isFinite(Number(view.offsetY)) ? Number(view.offsetY) : 0;
+                this.saveCurrentDiagramView();
+
+                let maxElementId = 0;
+                const visitElement = (element) => {
+                    const match = typeof element.id === 'string' && element.id.match(/^el-(\d+)$/);
+                    if (match) maxElementId = Math.max(maxElementId, Number(match[1]));
+                    if (Array.isArray(element.elements)) element.elements.forEach(visitElement);
+                };
+                elements.forEach(visitElement);
+                this.elementIdCounter = Math.max(this.elementIdCounter, maxElementId + 1);
+
+                this.selectionBox = null;
+                this.tempElement = null;
+                this.recentlyCreatedElements.clear();
+                this.updateZoomRateDisplay();
+                this.setCanvasSize(width, height);
+                this.saveAutoBackup();
+                alert('设计已上传并恢复到当前画布。');
+            } catch (err) {
+                console.warn('导入设计失败', err);
+                alert('导入设计失败，请选择有效的设计 JSON 文件。');
+            }
+        };
+        reader.onerror = () => {
+            console.warn('读取设计文件失败');
+            alert('读取设计文件失败，请重试。');
+        };
+        reader.readAsText(file);
+    }
+
     downloadDiagram() {
         const exportBounds = this.getExportBounds();
         const tempCanvas = document.createElement('canvas');
