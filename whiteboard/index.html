@@ -86,7 +86,8 @@
         </header>
 
         <div class="main-content">
-            <aside class="sidebar" role="complementary" aria-label="绘图工具">
+            <aside id="drawing-sidebar" class="sidebar" role="complementary" aria-label="绘图工具">
+                <button id="sidebar-collapse" class="sidebar-collapse" aria-label="收缩操作面板" aria-expanded="true" aria-controls="drawing-sidebar" title="收缩操作面板">‹</button>
                 <h3>图形工具</h3>
                 <div class="tool-group">
                     <h4>基本图形</h4>
@@ -223,7 +224,13 @@
                 <div class="tool-group">
                     <h4>操作</h4>
                     <div class="tools" role="group" aria-label="操作工具">
-                        <!-- sidebar paste removed per UI change -->
+                        <button id="sidebar-paste" class="tool" aria-label="黏贴" title="黏贴">
+                            <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M19 7h-3V4H8v3H5v13h14V7zM9 4h6v3H9V4z" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <rect x="9" y="10" width="6" height="6" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>黏贴</span>
+                        </button>
                         <button class="tool" data-tool="select" aria-label="选择工具">
                             <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
                                 <rect x="3" y="3" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="4"/>

@@ -77,10 +77,12 @@ class UMLDrawer {
     
     resizeCanvas() {
         const container = this.canvas.parentElement;
-        // 获取可视区域大小，减去padding
-        const containerWidth = container.clientWidth - 40;
-        const containerHeight = container.clientHeight - 40;
-        
+        const style = window.getComputedStyle(container);
+        const paddingX = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+        const paddingY = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+        const containerWidth = Math.max(1, container.clientWidth - paddingX);
+        const containerHeight = Math.max(1, container.clientHeight - paddingY);
+
         // 如果还没有设置过画布大小，设置为占满可视区域
         if (!this.canvasSizeSet) {
             this.baseWidth = Math.max(containerWidth, 400);
@@ -88,13 +90,15 @@ class UMLDrawer {
             this.canvasSizeSet = true;
         }
         
-        // 计算缩放比例，使画布适应容器，无最大限制
+        // 始终按容器可用宽度等比适配，让画布随侧栏展开/收缩改变显示尺寸。
         const scaleX = containerWidth / this.baseWidth;
-        const scaleY = containerHeight / this.baseHeight;
-        this.canvasScale = Math.min(scaleX, scaleY);
-        
-        this.canvas.width = this.baseWidth;
-        this.canvas.height = this.baseHeight;
+        this.canvasScale = scaleX;
+        this.updateCanvasDisplaySize();
+    }
+
+    updateCanvasDisplaySize() {
+        if (this.canvas.width !== this.baseWidth) this.canvas.width = this.baseWidth;
+        if (this.canvas.height !== this.baseHeight) this.canvas.height = this.baseHeight;
         this.canvas.style.width = `${this.baseWidth * this.canvasScale}px`;
         this.canvas.style.height = `${this.baseHeight * this.canvasScale}px`;
     }
@@ -139,6 +143,13 @@ class UMLDrawer {
         document.addEventListener('keyup', this.handleKeyUp.bind(this));
         
         window.addEventListener('resize', this.handleWindowResize.bind(this));
+        if (window.ResizeObserver) {
+            this.canvasResizeObserver = new window.ResizeObserver(() => {
+                this.resizeCanvas();
+                this.render();
+            });
+            this.canvasResizeObserver.observe(this.canvas.parentElement);
+        }
     }
     
     handleDoubleClick(e) {
@@ -232,6 +243,46 @@ class UMLDrawer {
         return !!element && element.type !== 'pen';
     }
 
+    getLineElementLabelAnchor(element) {
+        if (element.type === 'orthogonal-arrow') {
+            const points = this.getOrthogonalArrowPathPoints(element);
+            const segments = points.slice(1).map((point, index) => {
+                const start = points[index];
+                return {
+                    start,
+                    end: point,
+                    length: Math.hypot(point.x - start.x, point.y - start.y)
+                };
+            });
+            let remaining = segments.reduce((sum, segment) => sum + segment.length, 0) / 2;
+            for (const segment of segments) {
+                if (segment.length === 0) continue;
+                if (remaining <= segment.length) {
+                    const ratio = remaining / segment.length;
+                    return {
+                        x: segment.start.x + (segment.end.x - segment.start.x) * ratio,
+                        y: segment.start.y + (segment.end.y - segment.start.y) * ratio
+                    };
+                }
+                remaining -= segment.length;
+            }
+        }
+
+        if (element.type === 'curved-arrow') {
+            return this.getQuadraticBezierPoint(
+                0.5,
+                { x: element.x1, y: element.y1 },
+                this.getCurvedArrowControlPoint(element),
+                { x: element.x2, y: element.y2 }
+            );
+        }
+
+        return {
+            x: (element.x1 + element.x2) / 2,
+            y: (element.y1 + element.y2) / 2
+        };
+    }
+
     getElementTextLayoutBounds(element) {
         if (!element) {
             return { x: 0, y: 0, width: 120, height: 40 };
@@ -249,6 +300,32 @@ class UMLDrawer {
                 width,
                 height: Math.max(lineHeight, lines.length * lineHeight)
             };
+        }
+
+        if (['line', 'arrow', 'curved-arrow', 'orthogonal-arrow'].includes(element.type)) {
+            const bounds = this.getElementBounds(element);
+            const anchor = this.getLineElementLabelAnchor(element);
+            const fontSize = Number(element.fontSize) || 14;
+            const lines = String(element.text || '').split('\n');
+            this.ctx.font = `${fontSize}px ${element.fontFamily || 'Arial'}`;
+            const textWidth = Math.max(0, ...lines.map(line => this.ctx.measureText(line).width));
+            const padding = 8;
+            const width = Math.max(40, Math.ceil(textWidth) + padding * 2);
+            const height = Math.max(fontSize * 1.2, lines.length * fontSize * 1.2) + padding * 2;
+            const gap = padding + Math.max(0, Number(element.strokeWidth) || 0) / 2;
+            switch (element.textPosition || 'center') {
+                case 'top':
+                    return { x: bounds.x + (bounds.width - width) / 2, y: bounds.y - height - gap, width, height };
+                case 'bottom':
+                    return { x: bounds.x + (bounds.width - width) / 2, y: bounds.y + bounds.height + gap, width, height };
+                case 'left':
+                    return { x: bounds.x - width - gap, y: bounds.y + (bounds.height - height) / 2, width, height };
+                case 'right':
+                    return { x: bounds.x + bounds.width + gap, y: bounds.y + (bounds.height - height) / 2, width, height };
+                case 'center':
+                default:
+                    return { x: anchor.x - width / 2, y: anchor.y - height / 2, width, height };
+            }
         }
 
         const bounds = this.getElementBounds(element);
@@ -414,7 +491,7 @@ class UMLDrawer {
     
     setupToolListeners() {
         // 工具按钮点击事件
-        const tools = document.querySelectorAll('.tool');
+        const tools = document.querySelectorAll('.tool[data-tool]');
         tools.forEach(tool => {
             tool.addEventListener('click', () => {
                 this.setCurrentTool(tool.dataset.tool);
@@ -449,9 +526,11 @@ class UMLDrawer {
             'prop-layer-bottom': this.moveEditingElementLayerToBottom.bind(this),
             'btn-delete': this.deleteSelectedElements.bind(this),
             'btn-tools': this.toggleToolsPanel.bind(this),
+            'sidebar-collapse': this.toggleSidebarCollapse.bind(this),
             'btn-property': this.showPropertyForSelected.bind(this),
             'btn-copy': this.handleCopyButtonClick.bind(this),
             'quick-paste': this.handlePasteButtonClick.bind(this),
+            'sidebar-paste': this.handlePasteButtonClick.bind(this),
             'download-shapes': this.downloadCustomShapes.bind(this),
             'import-shapes': this.openImportCustomShapesDialog.bind(this),
             'create-custom-shape': this.createCustomShapeFromSelection.bind(this),
@@ -531,6 +610,25 @@ class UMLDrawer {
         const btn = document.getElementById('btn-tools');
         sidebar.classList.toggle('show');
         btn.classList.toggle('active');
+        btn.setAttribute('aria-label', sidebar.classList.contains('show') ? '关闭工具面板' : '打开工具面板');
+    }
+
+    toggleSidebarCollapse() {
+        const sidebar = document.getElementById('drawing-sidebar');
+        const button = document.getElementById('sidebar-collapse');
+        if (!sidebar || !button) return;
+
+        const isCollapsed = sidebar.classList.toggle('collapsed');
+        button.textContent = isCollapsed ? '›' : '‹';
+        button.setAttribute('aria-expanded', String(!isCollapsed));
+        button.setAttribute('aria-label', isCollapsed ? '展开操作面板' : '收缩操作面板');
+        button.title = isCollapsed ? '展开操作面板' : '收缩操作面板';
+        if (!this.canvasResizeObserver) {
+            window.setTimeout(() => {
+                this.resizeCanvas();
+                this.render();
+            }, 300);
+        }
     }
     
     setSelectTool() {
@@ -3009,8 +3107,8 @@ class UMLDrawer {
         const elements = diagram.elements || [];
 
         // 最小导出尺寸：当前可见画布尺寸
-        const minWidth = this.canvas.width;
-        const minHeight = this.canvas.height;
+        const minWidth = this.baseWidth;
+        const minHeight = this.baseHeight;
 
         // 如果没有元素，直接按可见区域导出
         if (elements.length === 0) {
@@ -3136,17 +3234,17 @@ class UMLDrawer {
         
         const gridSize = 20;
         
-        for (let x = 0; x <= this.canvas.width; x += gridSize) {
+        for (let x = 0; x <= this.baseWidth; x += gridSize) {
             this.ctx.beginPath();
             this.ctx.moveTo(x, 0);
-            this.ctx.lineTo(x, this.canvas.height);
+            this.ctx.lineTo(x, this.baseHeight);
             this.ctx.stroke();
         }
         
-        for (let y = 0; y <= this.canvas.height; y += gridSize) {
+        for (let y = 0; y <= this.baseHeight; y += gridSize) {
             this.ctx.beginPath();
             this.ctx.moveTo(0, y);
-            this.ctx.lineTo(this.canvas.width, y);
+            this.ctx.lineTo(this.baseWidth, y);
             this.ctx.stroke();
         }
         
@@ -3155,20 +3253,22 @@ class UMLDrawer {
     
     drawElementText(ctx, element) {
         if (!element.text) return;
-        
+
+        const textPosition = element.textPosition || 'center';
+        const padding = ['line', 'arrow', 'curved-arrow', 'orthogonal-arrow'].includes(element.type) ? 8 : 5;
+        const textBounds = this.getElementTextLayoutBounds(element);
+
+        // Path/layout calculations can change the shared canvas context font.
+        // Apply this element's label style after calculating its layout.
         ctx.fillStyle = element.textColor || '#333333';
         ctx.font = `${element.fontSize || 14}px ${element.fontFamily || 'Arial'}`;
-        
-        const textPosition = element.textPosition || 'center';
-        const padding = 5;
-        const textBounds = this.getElementTextLayoutBounds(element);
 
         let startX, startY, textAlign, textBaseline;
         
         switch (textPosition) {
             case 'top':
                 startX = textBounds.x + textBounds.width / 2;
-                startY = textBounds.y + padding + (element.fontSize || 14);
+                startY = textBounds.y + padding + (['line', 'arrow', 'curved-arrow', 'orthogonal-arrow'].includes(element.type) ? 0 : (element.fontSize || 14));
                 textAlign = 'center';
                 textBaseline = 'top';
                 break;
