@@ -49,6 +49,7 @@ class UMLDrawer {
         this.customShapeNameCounter = 1;
         this.elementIdCounter = 1;
         this.snapThreshold = 18;
+        this.gridSnapThreshold = 8;
         this.newElementSelectDelayMs = 2000;
         this.recentlyCreatedElements = new Map();
         this.inlineTextEditor = null;
@@ -1262,6 +1263,10 @@ class UMLDrawer {
             return;
         }
 
+        if (this.handleArrowKey(e)) {
+            return;
+        }
+
         const diagram = this.diagrams[this.currentDiagram];
         const singleSelected = diagram.selectedElements.length === 1 ? diagram.selectedElements[0] : null;
 
@@ -1279,7 +1284,40 @@ class UMLDrawer {
             }
         }
     }
-    
+
+    handleArrowKey(e) {
+        const directions = {
+            ArrowLeft: { x: -1, y: 0 },
+            ArrowRight: { x: 1, y: 0 },
+            ArrowUp: { x: 0, y: -1 },
+            ArrowDown: { x: 0, y: 1 }
+        };
+        const direction = directions[e.key];
+        if (!direction || e.ctrlKey || e.metaKey || e.altKey) return false;
+
+        const diagram = this.diagrams[this.currentDiagram];
+        if (diagram.selectedElements.length > 0) {
+            const step = e.shiftKey ? 50 : 10;
+            const dx = direction.x * step;
+            const dy = direction.y * step;
+            const movedElementIds = new Set();
+            diagram.selectedElements.forEach(element => {
+                if (element.id) movedElementIds.add(element.id);
+                this.translateElement(element, dx, dy);
+            });
+            this.syncAttachedArrowsForElementIds(movedElementIds);
+        } else {
+            const screenStep = e.shiftKey ? 120 : 24;
+            const worldStep = screenStep / (this.canvasScale * this.viewZoom);
+            this.canvasOffsetX -= direction.x * worldStep;
+            this.canvasOffsetY -= direction.y * worldStep;
+        }
+
+        e.preventDefault();
+        this.render();
+        return true;
+    }
+
     handleKeyUp(e) {
         if (e.key === 'Control') {
             this.ctrlPressed = false;
@@ -1560,7 +1598,19 @@ class UMLDrawer {
         
         if (!this.isDrawing && !this.isResizing) return;
 
+        if (this.isResizing && this.resizeHandle) {
+            this.resizeElementToPoint(x, y);
+            if (['line', 'arrow', 'curved-arrow', 'orthogonal-arrow'].includes(this.tempElement?.type) &&
+                (this.resizeHandle === 'start' || this.resizeHandle === 'end')) {
+                this.snapLineEndpoint(this.tempElement, this.resizeHandle);
+            }
+        }
+
         if (this.isDrawing) {
+            if (this.tempElement?.type === 'select') {
+                this.updateTempElement(x, y);
+                this.snapSelectedElementsToGrid();
+            }
             this.finishDrawing(x, y);
         }
         this.isDrawing = false;
@@ -1698,24 +1748,8 @@ class UMLDrawer {
         if ((['line', 'arrow', 'curved-arrow', 'orthogonal-arrow'].includes(element.type)) && (handle === 'start' || handle === 'end')) {
             const xKey = handle === 'start' ? 'x1' : 'x2';
             const yKey = handle === 'start' ? 'y1' : 'y2';
-
-            if (['arrow', 'curved-arrow', 'orthogonal-arrow'].includes(element.type)) {
-                const snap = this.getNearestSnapTarget(x, y);
-                if (snap) {
-                    this.applyAttachmentToArrowEnd(element, handle, snap);
-                } else {
-                    element[xKey] = x;
-                    element[yKey] = y;
-                    if (handle === 'start') {
-                        element.sourceAttachment = null;
-                    } else {
-                        element.targetAttachment = null;
-                    }
-                }
-            } else {
-                element[xKey] = x;
-                element[yKey] = y;
-            }
+            element[xKey] = x;
+            element[yKey] = y;
             return;
         }
 
@@ -2270,6 +2304,60 @@ class UMLDrawer {
         return best;
     }
 
+    getGridSnapPoint(x, y) {
+        const gridSize = 20;
+        const gridX = Math.round(x / gridSize) * gridSize;
+        const gridY = Math.round(y / gridSize) * gridSize;
+
+        return {
+            x: Math.abs(gridX - x) <= this.gridSnapThreshold ? gridX : x,
+            y: Math.abs(gridY - y) <= this.gridSnapThreshold ? gridY : y
+        };
+    }
+
+    snapLineEndpoint(element, endpoint) {
+        if (!element || !['start', 'end'].includes(endpoint)) return;
+
+        const xKey = endpoint === 'start' ? 'x1' : 'x2';
+        const yKey = endpoint === 'start' ? 'y1' : 'y2';
+        const snap = this.getNearestSnapTarget(element[xKey], element[yKey]);
+        if (snap) {
+            if (['arrow', 'curved-arrow', 'orthogonal-arrow'].includes(element.type)) {
+                this.applyAttachmentToArrowEnd(element, endpoint, snap);
+            } else {
+                element[xKey] = snap.x;
+                element[yKey] = snap.y;
+            }
+            return;
+        }
+
+        const point = this.getGridSnapPoint(element[xKey], element[yKey]);
+        element[xKey] = point.x;
+        element[yKey] = point.y;
+        if (endpoint === 'start') element.sourceAttachment = null;
+        else element.targetAttachment = null;
+    }
+
+    snapSelectedElementsToGrid() {
+        const selected = this.diagrams[this.currentDiagram].selectedElements;
+        if (selected.length === 0) return;
+
+        const bounds = selected.map(element => this.getElementBounds(element));
+        const minX = Math.min(...bounds.map(item => item.x));
+        const minY = Math.min(...bounds.map(item => item.y));
+        const snapped = this.getGridSnapPoint(minX, minY);
+        const dx = snapped.x - minX;
+        const dy = snapped.y - minY;
+        if (dx === 0 && dy === 0) return;
+
+        const movedElementIds = new Set();
+        selected.forEach(element => {
+            if (element.id) movedElementIds.add(element.id);
+            this.translateElement(element, dx, dy);
+        });
+        this.syncAttachedArrowsForElementIds(movedElementIds);
+    }
+
     applyAttachmentToArrowEnd(arrow, endpoint, attachment) {
         if (!attachment) return;
         const key = endpoint === 'start' ? 'sourceAttachment' : 'targetAttachment';
@@ -2425,16 +2513,15 @@ class UMLDrawer {
     startDrawingLine(x, y) {
         this.isDrawing = true;
         if (['arrow', 'curved-arrow', 'orthogonal-arrow'].includes(this.currentTool)) {
-            const startSnap = this.getNearestSnapTarget(x, y);
             this.tempElement = {
                 type: this.currentTool,
-                x1: startSnap ? startSnap.x : x,
-                y1: startSnap ? startSnap.y : y,
-                x2: startSnap ? startSnap.x : x,
-                y2: startSnap ? startSnap.y : y,
+                x1: x,
+                y1: y,
+                x2: x,
+                y2: y,
                 stroke: '#333',
                 strokeWidth: 2,
-                sourceAttachment: startSnap ? { elementId: startSnap.elementId, anchorKey: startSnap.anchorKey } : null,
+                sourceAttachment: null,
                 targetAttachment: null
             };
             return;
@@ -2599,10 +2686,10 @@ class UMLDrawer {
     
     updateTempElement(x, y) {
         if (this.tempElement.type === 'select') {
+            const selected = this.diagrams[this.currentDiagram].selectedElements;
             const dx = x - this.startX;
             const dy = y - this.startY;
-            
-            const selected = this.diagrams[this.currentDiagram].selectedElements;
+
             const movedElementIds = new Set();
             selected.forEach(element => {
                 if (element.id) movedElementIds.add(element.id);
@@ -2646,18 +2733,9 @@ class UMLDrawer {
         } else if (['rectangle', 'ellipse', 'class', 'use-case', 'actor', 'package', 'sticky', 'triangle', 'diamond'].includes(this.tempElement.type)) {
             this.tempElement.width = x - this.tempElement.x;
             this.tempElement.height = y - this.tempElement.y;
-        } else if (this.tempElement.type === 'line') {
+        } else if (['line', 'arrow', 'curved-arrow', 'orthogonal-arrow'].includes(this.tempElement.type)) {
             this.tempElement.x2 = x;
             this.tempElement.y2 = y;
-        } else if (['arrow', 'curved-arrow', 'orthogonal-arrow'].includes(this.tempElement.type)) {
-            const snap = this.getNearestSnapTarget(x, y);
-            if (snap) {
-                this.applyAttachmentToArrowEnd(this.tempElement, 'end', snap);
-            } else {
-                this.tempElement.x2 = x;
-                this.tempElement.y2 = y;
-                this.tempElement.targetAttachment = null;
-            }
         }
     }
     
@@ -2678,6 +2756,10 @@ class UMLDrawer {
                     this.diagrams[this.currentDiagram].selectedElements = [element];
                 }
             } else if (['line', 'arrow', 'curved-arrow', 'orthogonal-arrow'].includes(this.tempElement.type)) {
+                this.tempElement.x2 = x;
+                this.tempElement.y2 = y;
+                this.snapLineEndpoint(this.tempElement, 'start');
+                this.snapLineEndpoint(this.tempElement, 'end');
                 const distance = Math.sqrt(
                     Math.pow(this.tempElement.x2 - this.tempElement.x1, 2) +
                     Math.pow(this.tempElement.y2 - this.tempElement.y1, 2)
@@ -3233,18 +3315,27 @@ class UMLDrawer {
         this.ctx.lineWidth = 1;
         
         const gridSize = 20;
-        
-        for (let x = 0; x <= this.baseWidth; x += gridSize) {
+
+        // The canvas is the viewport. Calculate its visible world bounds from
+        // the current view transform and draw only grid lines inside that area.
+        const minX = -this.canvasOffsetX;
+        const minY = -this.canvasOffsetY;
+        const maxX = minX + this.canvas.width / this.viewZoom;
+        const maxY = minY + this.canvas.height / this.viewZoom;
+        const firstGridX = Math.ceil(minX / gridSize) * gridSize;
+        const firstGridY = Math.ceil(minY / gridSize) * gridSize;
+
+        for (let x = firstGridX; x <= maxX; x += gridSize) {
             this.ctx.beginPath();
-            this.ctx.moveTo(x, 0);
-            this.ctx.lineTo(x, this.baseHeight);
+            this.ctx.moveTo(x, minY);
+            this.ctx.lineTo(x, maxY);
             this.ctx.stroke();
         }
         
-        for (let y = 0; y <= this.baseHeight; y += gridSize) {
+        for (let y = firstGridY; y <= maxY; y += gridSize) {
             this.ctx.beginPath();
-            this.ctx.moveTo(0, y);
-            this.ctx.lineTo(this.baseWidth, y);
+            this.ctx.moveTo(minX, y);
+            this.ctx.lineTo(maxX, y);
             this.ctx.stroke();
         }
         
@@ -3753,7 +3844,10 @@ class UMLDrawer {
     
     handleTouchEnd(e) {
         e.preventDefault();
+        const touch = e.changedTouches && e.changedTouches[0];
         const mouseEvent = {
+            clientX: touch ? touch.clientX : 0,
+            clientY: touch ? touch.clientY : 0,
             preventDefault: () => {}
         };
         
