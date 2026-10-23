@@ -415,7 +415,7 @@ body {
     display: flex;
     justify-content: flex-start;
     align-items: flex-start;
-    padding: 2rem;
+    padding: 8px;
     overflow: auto;
     background-color: var(--background-color);
     min-height: 400px;

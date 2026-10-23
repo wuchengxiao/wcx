@@ -98,10 +98,8 @@ class UMLDrawer {
     }
 
     updateCanvasDisplaySize() {
-        if (this.canvas.width !== this.baseWidth) this.canvas.width = this.baseWidth;
-        if (this.canvas.height !== this.baseHeight) this.canvas.height = this.baseHeight;
-        this.canvas.style.width = `${this.baseWidth * this.canvasScale}px`;
-        this.canvas.style.height = `${this.baseHeight * this.canvasScale}px`;
+        this.canvas.style.width = '100%';
+        this.canvas.style.height = '100%';
     }
     
     setCanvasSize(width, height) {
