@@ -28,7 +28,6 @@ class UMLDrawer {
         this.currentPenPath = [];
         this.penColor = '#333333';
         this.penWidth = 2;
-        this.canvasScale = 1;
         this.canvasOffsetX = 0;
         this.canvasOffsetY = 0;
         this.baseWidth = 1200;
@@ -91,9 +90,7 @@ class UMLDrawer {
             this.canvasSizeSet = true;
         }
         
-        // 始终按容器可用宽度等比适配，让画布随侧栏展开/收缩改变显示尺寸。
-        const scaleX = containerWidth / this.baseWidth;
-        this.canvasScale = scaleX;
+        // 更新显示尺寸；坐标比例由画布实际显示矩形单独计算。
         this.updateCanvasDisplaySize();
     }
 
@@ -346,16 +343,17 @@ class UMLDrawer {
         const containerRect = container.getBoundingClientRect();
         const bounds = this.getElementTextLayoutBounds(element);
 
-        const screenLeft = canvasRect.left - containerRect.left + (bounds.x + this.canvasOffsetX) * this.canvasScale * this.viewZoom;
-        const screenTop = canvasRect.top - containerRect.top + (bounds.y + this.canvasOffsetY) * this.canvasScale * this.viewZoom;
-        const screenWidth = Math.max(120, bounds.width * this.canvasScale * this.viewZoom);
-        const screenHeight = Math.max(40, bounds.height * this.canvasScale * this.viewZoom);
+        const metrics = this.getCanvasDisplayMetrics(canvasRect);
+        const screenLeft = canvasRect.left - containerRect.left + metrics.borderLeft + (bounds.x + this.canvasOffsetX) * metrics.scaleX * this.viewZoom;
+        const screenTop = canvasRect.top - containerRect.top + metrics.borderTop + (bounds.y + this.canvasOffsetY) * metrics.scaleY * this.viewZoom;
+        const screenWidth = Math.max(120, bounds.width * metrics.scaleX * this.viewZoom);
+        const screenHeight = Math.max(40, bounds.height * metrics.scaleY * this.viewZoom);
 
         this.inlineTextEditor.style.left = `${screenLeft}px`;
         this.inlineTextEditor.style.top = `${screenTop}px`;
         this.inlineTextEditor.style.width = `${screenWidth}px`;
         this.inlineTextEditor.style.height = `${screenHeight}px`;
-        this.inlineTextEditor.style.fontSize = `${Math.max(12, Math.round((element.fontSize || 14) * this.viewZoom))}px`;
+        this.inlineTextEditor.style.fontSize = `${Math.max(12, Math.round((element.fontSize || 14) * metrics.scaleY * this.viewZoom))}px`;
     }
 
     startInlineTextEdit(element, options = {}) {
@@ -443,10 +441,30 @@ class UMLDrawer {
         this.render();
     }
     
+    getCanvasDisplayMetrics(rect = this.canvas.getBoundingClientRect()) {
+        const style = window.getComputedStyle(this.canvas);
+        const borderLeft = parseFloat(style.borderLeftWidth) || 0;
+        const borderRight = parseFloat(style.borderRightWidth) || 0;
+        const borderTop = parseFloat(style.borderTopWidth) || 0;
+        const borderBottom = parseFloat(style.borderBottomWidth) || 0;
+        const contentWidth = Math.max(1, rect.width - borderLeft - borderRight);
+        const contentHeight = Math.max(1, rect.height - borderTop - borderBottom);
+
+        return {
+            borderLeft,
+            borderTop,
+            scaleX: contentWidth / Math.max(1, this.canvas.width),
+            scaleY: contentHeight / Math.max(1, this.canvas.height)
+        };
+    }
+
     getCanvasCoordinates(clientX, clientY) {
         const rect = this.canvas.getBoundingClientRect();
-        const x = (clientX - rect.left) / (this.canvasScale * this.viewZoom) - this.canvasOffsetX;
-        const y = (clientY - rect.top) / (this.canvasScale * this.viewZoom) - this.canvasOffsetY;
+        const metrics = this.getCanvasDisplayMetrics(rect);
+        const canvasX = (clientX - rect.left - metrics.borderLeft) / metrics.scaleX;
+        const canvasY = (clientY - rect.top - metrics.borderTop) / metrics.scaleY;
+        const x = canvasX / this.viewZoom - this.canvasOffsetX;
+        const y = canvasY / this.viewZoom - this.canvasOffsetY;
         return { x, y };
     }
 
@@ -732,19 +750,20 @@ class UMLDrawer {
 
     zoomAtClientPoint(clientX, clientY, factor) {
         const rect = this.canvas.getBoundingClientRect();
-        const screenX = clientX - rect.left;
-        const screenY = clientY - rect.top;
+        const metrics = this.getCanvasDisplayMetrics(rect);
+        const screenX = (clientX - rect.left - metrics.borderLeft) / metrics.scaleX;
+        const screenY = (clientY - rect.top - metrics.borderTop) / metrics.scaleY;
 
         const oldZoom = this.viewZoom;
         const newZoom = Math.max(this.minViewZoom, Math.min(this.maxViewZoom, oldZoom * factor));
         if (Math.abs(newZoom - oldZoom) < 0.0001) return;
 
-        const worldX = screenX / (this.canvasScale * oldZoom) - this.canvasOffsetX;
-        const worldY = screenY / (this.canvasScale * oldZoom) - this.canvasOffsetY;
+        const worldX = screenX / oldZoom - this.canvasOffsetX;
+        const worldY = screenY / oldZoom - this.canvasOffsetY;
 
         this.viewZoom = newZoom;
-        this.canvasOffsetX = screenX / (this.canvasScale * newZoom) - worldX;
-        this.canvasOffsetY = screenY / (this.canvasScale * newZoom) - worldY;
+        this.canvasOffsetX = screenX / newZoom - worldX;
+        this.canvasOffsetY = screenY / newZoom - worldY;
 
         this.updateZoomRateDisplay();
         this.render();
@@ -1306,9 +1325,11 @@ class UMLDrawer {
             this.syncAttachedArrowsForElementIds(movedElementIds);
         } else {
             const screenStep = e.shiftKey ? 120 : 24;
-            const worldStep = screenStep / (this.canvasScale * this.viewZoom);
-            this.canvasOffsetX -= direction.x * worldStep;
-            this.canvasOffsetY -= direction.y * worldStep;
+            const metrics = this.getCanvasDisplayMetrics();
+            const worldStepX = screenStep / (metrics.scaleX * this.viewZoom);
+            const worldStepY = screenStep / (metrics.scaleY * this.viewZoom);
+            this.canvasOffsetX -= direction.x * worldStepX;
+            this.canvasOffsetY -= direction.y * worldStepY;
         }
 
         e.preventDefault();
@@ -1546,8 +1567,9 @@ class UMLDrawer {
     
     handleMouseMove(e) {
         if (this.isDraggingCanvas) {
-            const dx = (e.clientX - this.canvasDragStartX) / (this.canvasScale * this.viewZoom);
-            const dy = (e.clientY - this.canvasDragStartY) / (this.canvasScale * this.viewZoom);
+            const metrics = this.getCanvasDisplayMetrics();
+            const dx = (e.clientX - this.canvasDragStartX) / (metrics.scaleX * this.viewZoom);
+            const dy = (e.clientY - this.canvasDragStartY) / (metrics.scaleY * this.viewZoom);
             this.canvasOffsetX += dx;
             this.canvasOffsetY += dy;
             this.canvasDragStartX = e.clientX;
