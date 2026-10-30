@@ -55,6 +55,10 @@ class UMLDrawer {
         this.inlineEditingElement = null;
         this.clipboardSignature = 'uml-drawer-elements';
         this.clipboardVersion = 1;
+        this.keybindingsStorageKey = 'uml_drawer_keybindings_v1';
+        this.keybindings = this.loadKeybindings();
+        this.capturingShortcut = null;
+        this.isSpacePanPressed = false;
 
         this.init();
     }
@@ -66,6 +70,7 @@ class UMLDrawer {
         this.setupEventListeners();
         this.setupToolListeners();
         this.setupDiagramListeners();
+        this.renderKeybindings();
         this.renderCustomShapeList();
         this.currentTool = 'select';
         // Load autosave if present and start periodic autosave
@@ -139,6 +144,7 @@ class UMLDrawer {
         document.addEventListener('keyup', this.handleKeyUp.bind(this));
         
         window.addEventListener('resize', this.handleWindowResize.bind(this));
+        window.addEventListener('blur', () => this.setSpacePanPressed(false));
         if (window.ResizeObserver) {
             this.canvasResizeObserver = new window.ResizeObserver(() => {
                 this.resizeCanvas();
@@ -534,6 +540,9 @@ class UMLDrawer {
             'upload-design': this.openImportDesignDialog.bind(this),
             'clear-diagram': this.clearDiagram.bind(this),
             'help': this.showHelp.bind(this),
+            'settings': this.showSettings.bind(this),
+            'close-settings': this.hideSettings.bind(this),
+            'reset-shortcuts': this.resetKeybindings.bind(this),
             'close-help': this.hideHelp.bind(this),
             'close-property': this.hidePropertyDialog.bind(this),
             'apply-property': this.applyPropertyChanges.bind(this),
@@ -568,6 +577,14 @@ class UMLDrawer {
                 console.warn(`Element with id '${id}' not found`);
             }
         }
+
+        document.querySelectorAll('.shortcut-capture').forEach(button => {
+            button.addEventListener('click', () => this.startShortcutCapture(button.dataset.shortcut));
+        });
+        const settingsDialog = document.getElementById('settings-dialog');
+        settingsDialog.addEventListener('click', event => {
+            if (event.target === settingsDialog) this.hideSettings();
+        });
 
         const customShapesList = document.getElementById('custom-shapes-list');
         if (customShapesList) {
@@ -1225,6 +1242,143 @@ class UMLDrawer {
         this.render();
     }
     
+    getDefaultKeybindings() {
+        return {
+            copy: { key: 'c', ctrl: true, alt: false, shift: false, meta: false },
+            paste: { key: 'v', ctrl: true, alt: false, shift: false, meta: false },
+            moveUp: { key: 'ArrowUp', ctrl: false, alt: false, shift: false, meta: false },
+            moveDown: { key: 'ArrowDown', ctrl: false, alt: false, shift: false, meta: false },
+            moveLeft: { key: 'ArrowLeft', ctrl: false, alt: false, shift: false, meta: false },
+            moveRight: { key: 'ArrowRight', ctrl: false, alt: false, shift: false, meta: false },
+            delete: { key: 'Backspace', ctrl: false, alt: false, shift: false, meta: false },
+            pan: { key: ' ', ctrl: false, alt: false, shift: false, meta: false }
+        };
+    }
+
+    loadKeybindings() {
+        const defaults = this.getDefaultKeybindings();
+        try {
+            const stored = JSON.parse(localStorage.getItem(this.keybindingsStorageKey) || 'null');
+            if (!stored || typeof stored !== 'object') return defaults;
+            Object.keys(defaults).forEach(action => {
+                const binding = stored[action];
+                if (binding && typeof binding.key === 'string') {
+                    defaults[action] = {
+                        key: binding.key,
+                        ctrl: !!binding.ctrl,
+                        alt: !!binding.alt,
+                        shift: !!binding.shift,
+                        meta: !!binding.meta
+                    };
+                }
+            });
+        } catch (error) {
+            console.warn('读取快捷键设置失败，将使用默认设置。', error);
+        }
+        return defaults;
+    }
+
+    saveKeybindings() {
+        try {
+            localStorage.setItem(this.keybindingsStorageKey, JSON.stringify(this.keybindings));
+        } catch (error) {
+            console.warn('保存快捷键设置失败。', error);
+        }
+    }
+
+    formatKeybinding(binding) {
+        const parts = [];
+        if (binding.ctrl) parts.push('Ctrl');
+        if (binding.alt) parts.push('Alt');
+        if (binding.shift) parts.push('Shift');
+        if (binding.meta) parts.push('Meta');
+        const keyNames = { ' ': '空格', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Backspace: 'Backspace', Delete: 'Delete', Escape: 'Esc' };
+        parts.push(keyNames[binding.key] || (binding.key.length === 1 ? binding.key.toUpperCase() : binding.key));
+        return parts.join('+');
+    }
+
+    renderKeybindings() {
+        document.querySelectorAll('.shortcut-capture').forEach(button => {
+            const binding = this.keybindings[button.dataset.shortcut];
+            if (binding) button.textContent = this.formatKeybinding(binding);
+        });
+        ['copy', 'paste', 'moveUp', 'moveDown', 'moveLeft', 'moveRight', 'delete', 'pan'].forEach(action => {
+            const label = document.getElementById(`help-shortcut-${action}`);
+            if (label) label.textContent = this.formatKeybinding(this.keybindings[action]);
+        });
+    }
+
+    showSettings() {
+        document.getElementById('settings-dialog').classList.add('show');
+    }
+
+    hideSettings() {
+        this.cancelShortcutCapture();
+        document.getElementById('settings-dialog').classList.remove('show');
+    }
+
+    startShortcutCapture(action) {
+        this.cancelShortcutCapture();
+        this.capturingShortcut = action;
+        const button = document.querySelector(`[data-shortcut="${action}"]`);
+        if (button) {
+            button.classList.add('recording');
+            button.textContent = '请按键…';
+            button.focus();
+        }
+        document.getElementById('shortcut-settings-status').textContent = '按下新快捷键，按 Esc 取消。';
+    }
+
+    cancelShortcutCapture() {
+        if (this.capturingShortcut) {
+            const button = document.querySelector(`[data-shortcut="${this.capturingShortcut}"]`);
+            if (button) button.classList.remove('recording');
+        }
+        this.capturingShortcut = null;
+        this.renderKeybindings();
+    }
+
+    captureShortcut(e) {
+        if (!this.capturingShortcut) return false;
+        e.preventDefault();
+        e.stopPropagation();
+        if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return true;
+        if (e.key === 'Escape') {
+            this.cancelShortcutCapture();
+            document.getElementById('shortcut-settings-status').textContent = '已取消快捷键录制。';
+            return true;
+        }
+
+        const key = e.key === 'Spacebar' ? ' ' : e.key;
+        const candidate = { key, ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey, meta: e.metaKey };
+        const conflict = Object.entries(this.keybindings).find(([action, binding]) =>
+            action !== this.capturingShortcut && binding.key === candidate.key &&
+            binding.ctrl === candidate.ctrl && binding.alt === candidate.alt &&
+            binding.shift === candidate.shift && binding.meta === candidate.meta
+        );
+        if (conflict) {
+            document.getElementById('shortcut-settings-status').textContent = `该快捷键已用于“${this.getShortcutActionLabel(conflict[0])}”，请换一个。`;
+            return true;
+        }
+
+        this.keybindings[this.capturingShortcut] = candidate;
+        this.saveKeybindings();
+        this.cancelShortcutCapture();
+        document.getElementById('shortcut-settings-status').textContent = '快捷键已保存。';
+        return true;
+    }
+
+    getShortcutActionLabel(action) {
+        return { copy: '复制', paste: '粘贴', moveUp: '向上移动', moveDown: '向下移动', moveLeft: '向左移动', moveRight: '向右移动', delete: '删除', pan: '抓取画板' }[action] || action;
+    }
+
+    resetKeybindings() {
+        this.keybindings = this.getDefaultKeybindings();
+        this.saveKeybindings();
+        this.cancelShortcutCapture();
+        document.getElementById('shortcut-settings-status').textContent = '已恢复默认快捷键。';
+    }
+
     showHelp() {
         document.getElementById('help-dialog').classList.add('show');
     }
@@ -1234,42 +1388,57 @@ class UMLDrawer {
     }
     
     async handleKeyDown(e) {
+        if (this.captureShortcut(e)) return;
         if (e.key === 'Control') {
             this.ctrlPressed = true;
         }
 
-        const hasCtrlModifier = e.ctrlKey || this.ctrlPressed;
         const isEditable = this.isEditableTarget(e.target) || this.isInlineTextEditingActive();
-
-        if (hasCtrlModifier && !isEditable) {
-            if (e.key === 'c' || e.key === 'C') {
+        if (document.getElementById('settings-dialog').classList.contains('show')) return;
+        if (!isEditable) {
+            if (this.matchesKeybinding(e, 'copy')) {
                 e.preventDefault();
                 await this.copySelectedElementsToSystemClipboard();
                 return;
             }
-
-            if (e.key === 'v' || e.key === 'V') {
+            if (this.matchesKeybinding(e, 'paste')) {
                 e.preventDefault();
                 await this.pasteFromSystemClipboard();
                 return;
             }
-
-            if (e.key === 'g' || e.key === 'G') {
-                this.createCustomShapeFromSelection();
+            if (this.matchesKeybinding(e, 'delete')) {
                 e.preventDefault();
+                this.deleteSelectedElements();
+                return;
+            }
+            if (this.matchesKeybinding(e, 'pan')) {
+                e.preventDefault();
+                this.setSpacePanPressed(true);
+                return;
+            }
+            const movement = ['moveUp', 'moveDown', 'moveLeft', 'moveRight'].find(action => this.matchesKeybinding(e, action));
+            if (movement) {
+                this.handleArrowKey(e, movement);
                 return;
             }
 
-            if (e.key === 'u' || e.key === 'U') {
-                this.ungroupSelectedElements();
-                e.preventDefault();
-                return;
+            const hasCtrlModifier = e.ctrlKey || this.ctrlPressed;
+            if (hasCtrlModifier) {
+                if (e.key === 'g' || e.key === 'G') {
+                    this.createCustomShapeFromSelection();
+                    e.preventDefault();
+                    return;
+                }
+
+                if (e.key === 'u' || e.key === 'U') {
+                    this.ungroupSelectedElements();
+                    e.preventDefault();
+                    return;
+                }
             }
         }
 
-        // 为安全起见：不允许通过键盘删除图形，只能使用删除工具
         if (e.key === 'Delete' || e.key === 'Backspace') {
-            // 非输入状态下阻止默认行为（避免浏览器后退等）
             if (!isEditable) {
                 e.preventDefault();
             }
@@ -1277,10 +1446,6 @@ class UMLDrawer {
         }
 
         if (isEditable) {
-            return;
-        }
-
-        if (this.handleArrowKey(e)) {
             return;
         }
 
@@ -1302,15 +1467,32 @@ class UMLDrawer {
         }
     }
 
-    handleArrowKey(e) {
+    matchesKeybinding(e, action) {
+        const binding = this.keybindings[action];
+        if (!binding) return false;
+        const key = e.key === 'Spacebar' ? ' ' : e.key;
+        const keyMatches = binding.key.length === 1
+            ? key.toLowerCase() === binding.key.toLowerCase()
+            : key === binding.key;
+        const isMovement = action.startsWith('move');
+        return keyMatches && e.ctrlKey === binding.ctrl && e.altKey === binding.alt &&
+            e.metaKey === binding.meta && (isMovement && !binding.shift ? true : e.shiftKey === binding.shift);
+    }
+
+    setSpacePanPressed(pressed) {
+        this.isSpacePanPressed = pressed;
+        this.canvas.classList.toggle('space-pan-mode', pressed);
+    }
+
+    handleArrowKey(e, action) {
         const directions = {
-            ArrowLeft: { x: -1, y: 0 },
-            ArrowRight: { x: 1, y: 0 },
-            ArrowUp: { x: 0, y: -1 },
-            ArrowDown: { x: 0, y: 1 }
+            moveLeft: { x: -1, y: 0 },
+            moveRight: { x: 1, y: 0 },
+            moveUp: { x: 0, y: -1 },
+            moveDown: { x: 0, y: 1 }
         };
-        const direction = directions[e.key];
-        if (!direction || e.ctrlKey || e.metaKey || e.altKey) return false;
+        const direction = directions[action];
+        if (!direction) return false;
 
         const diagram = this.diagrams[this.currentDiagram];
         if (diagram.selectedElements.length > 0) {
@@ -1340,6 +1522,10 @@ class UMLDrawer {
     handleKeyUp(e) {
         if (e.key === 'Control') {
             this.ctrlPressed = false;
+        }
+        const panBinding = this.keybindings.pan;
+        if (this.isSpacePanPressed && panBinding && (e.key === 'Spacebar' ? ' ' : e.key) === panBinding.key) {
+            this.setSpacePanPressed(false);
         }
     }
     
@@ -1491,6 +1677,14 @@ class UMLDrawer {
             document.getElementById('btn-tools').classList.remove('active');
         }
         
+        if (this.isSpacePanPressed && e.button === 0) {
+            this.isDraggingCanvas = true;
+            this.canvasDragStartX = e.clientX;
+            this.canvasDragStartY = e.clientY;
+            e.preventDefault();
+            return;
+        }
+
         // 如果是拖拽工具，直接开始拖拽
         if (this.currentTool === 'pan') {
             this.isDraggingCanvas = true;

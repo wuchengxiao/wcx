@@ -82,6 +82,7 @@
                 <input id="upload-design-input" type="file" accept=".json,application/json" style="display:none" />
                 <button id="clear-diagram" aria-label="清空图表">清空</button>
                 <button id="help" aria-label="查看帮助">帮助</button>
+                <button id="settings" aria-label="快捷键设置">设置</button>
             </div>
         </header>
 
@@ -366,8 +367,8 @@
             <div class="help-section">
                 <h3>画布操作</h3>
                 <ul>
-                    <li><strong>选择拖拽工具</strong> - 点击工具栏中的"拖拽"按钮</li>
-                    <li><strong>拖动画布</strong> - 按住画布拖动</li>
+                    <li><strong>按住 <span id="help-shortcut-pan">空格</span> + 左键拖动</strong> - 抓取并移动画布</li>
+                    <li><strong>选择拖拽工具</strong> - 也可点击工具栏中的"拖拽"按钮</li>
                     <li><strong>PC端备选</strong> - 中键拖拽或Alt+左键拖拽</li>
                 </ul>
             </div>
@@ -381,9 +382,11 @@
             <div class="help-section">
                 <h3>编辑操作</h3>
                 <ul>
-                    <li><strong>Delete/Backspace</strong> - 删除选中元素</li>
-                    <li><strong>Ctrl+C</strong> - 复制选中元素</li>
-                    <li><strong>Ctrl+V</strong> - 粘贴元素</li>
+                    <li><strong id="help-shortcut-delete">Backspace</strong> - 删除选中元素</li>
+                    <li><strong id="help-shortcut-copy">Ctrl+C</strong> - 复制选中元素</li>
+                    <li><strong id="help-shortcut-paste">Ctrl+V</strong> - 粘贴元素</li>
+                    <li><strong><span id="help-shortcut-moveUp">↑</span>/<span id="help-shortcut-moveDown">↓</span>/<span id="help-shortcut-moveLeft">←</span>/<span id="help-shortcut-moveRight">→</span></strong> - 移动选中元素；未选中时移动视角</li>
+                    <li><strong>设置</strong> - 自定义以上快捷键</li>
                     <li><strong>Ctrl+G</strong> - 组合选中元素</li>
                     <li><strong>Ctrl+U</strong> - 取消组合</li>
                 </ul>
@@ -397,6 +400,28 @@
                 </ul>
             </div>
             <button class="close-help" id="close-help">关闭</button>
+        </div>
+    </div>
+
+    <div id="settings-dialog" class="help-dialog" role="dialog" aria-labelledby="settings-title" aria-modal="true">
+        <div class="help-content settings-content">
+            <h2 id="settings-title">快捷键设置</h2>
+            <p class="settings-hint">点击快捷键后按下新的按键组合；方向键在选中元素时移动元素，否则移动视角。</p>
+            <div class="shortcut-list">
+                <div class="shortcut-row"><span>复制</span><button type="button" class="shortcut-capture" data-shortcut="copy">Ctrl+C</button></div>
+                <div class="shortcut-row"><span>粘贴</span><button type="button" class="shortcut-capture" data-shortcut="paste">Ctrl+V</button></div>
+                <div class="shortcut-row"><span>向上移动 / 向上移动视角</span><button type="button" class="shortcut-capture" data-shortcut="moveUp">↑</button></div>
+                <div class="shortcut-row"><span>向下移动 / 向下移动视角</span><button type="button" class="shortcut-capture" data-shortcut="moveDown">↓</button></div>
+                <div class="shortcut-row"><span>向左移动 / 向左移动视角</span><button type="button" class="shortcut-capture" data-shortcut="moveLeft">←</button></div>
+                <div class="shortcut-row"><span>向右移动 / 向右移动视角</span><button type="button" class="shortcut-capture" data-shortcut="moveRight">→</button></div>
+                <div class="shortcut-row"><span>删除选中元素</span><button type="button" class="shortcut-capture" data-shortcut="delete">Backspace</button></div>
+                <div class="shortcut-row"><span>按住抓取画板</span><button type="button" class="shortcut-capture" data-shortcut="pan">空格</button></div>
+            </div>
+            <p id="shortcut-settings-status" class="settings-status" aria-live="polite"></p>
+            <div class="settings-actions">
+                <button id="reset-shortcuts" type="button">恢复默认</button>
+                <button id="close-settings" type="button" class="close-help">完成</button>
+            </div>
         </div>
     </div>
 
