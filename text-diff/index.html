@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>文本差异对比 - 功能模块中心</title>
+    <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+    <div class="page-shell">
+        <header class="topbar">
+            <a class="home-link" href="../index.html">← 返回首页</a>
+            <div class="title-wrap">
+                <h1>文本差异对比</h1>
+                <p>对比两段文本的新增、删除和保留内容</p>
+            </div>
+        </header>
+
+        <main class="tool-panel">
+            <section class="input-row">
+                <div class="editor-panel">
+                    <div class="panel-header">
+                        <span>原文</span>
+                    </div>
+                    <textarea id="leftText" spellcheck="false" aria-label="原文输入框">项目计划：
+- 完成登录模块
+- 优化首页加载速度
+- 修复搜索结果分页问题
+- 补充测试用例</textarea>
+                </div>
+
+                <div class="editor-panel">
+                    <div class="panel-header">
+                        <span>修改后</span>
+                    </div>
+                    <textarea id="rightText" spellcheck="false" aria-label="修改后输入框">项目计划：
+- 完成登录模块
+- 优化首页加载速度
+- 修复搜索结果分页问题
+- 增加接口监控
+- 补充测试用例
+- 完成用户反馈回收</textarea>
+                </div>
+            </section>
+
+            <section class="toolbar">
+                <div class="left-actions">
+                    <button id="compareBtn" class="primary-btn">开始比较</button>
+                    <button id="swapBtn" class="secondary-btn">交换内容</button>
+                    <button id="clearBtn" class="ghost-btn">清空</button>
+                    <button id="sampleBtn" class="ghost-btn">加载示例</button>
+                </div>
+
+                <div class="check-group">
+                    <label><input type="checkbox" id="ignoreWhitespace" /> 忽略空白</label>
+                    <label><input type="checkbox" id="ignoreCase" /> 忽略大小写</label>
+                    <label><input type="checkbox" id="lineMode" checked /> 按行比较</label>
+                </div>
+            </section>
+
+            <section class="result-card">
+                <div class="result-head">
+                    <h2>比较结果</h2>
+                    <button id="copyBtn" class="copy-btn">复制结果</button>
+                </div>
+
+                <div id="summaryBox" class="summary-box">等待比较...</div>
+                <div id="diffOutput" class="diff-output" aria-live="polite"></div>
+            </section>
+        </main>
+    </div>
+
+    <script src="./app.js"></script>
+</body>
+</html>
