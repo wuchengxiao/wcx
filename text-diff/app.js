@@ -48,21 +48,18 @@ function normalizeText(text, options) {
     return value;
 }
 
-function getItems(text, options) {
-    if (options.lineMode) {
-        return text.split(/\r?\n/);
-    }
-    return Array.from(text);
+function splitLines(text) {
+    return (text ?? '').split(/\r?\n/);
 }
 
-function buildLcsDiff(leftItems, rightItems) {
-    const rows = leftItems.length + 1;
-    const cols = rightItems.length + 1;
+function buildLineDiff(leftLines, rightLines) {
+    const rows = leftLines.length + 1;
+    const cols = rightLines.length + 1;
     const dp = Array.from({ length: rows }, () => Array(cols).fill(0));
 
-    for (let i = leftItems.length - 1; i >= 0; i--) {
-        for (let j = rightItems.length - 1; j >= 0; j--) {
-            if (leftItems[i] === rightItems[j]) {
+    for (let i = leftLines.length - 1; i >= 0; i--) {
+        for (let j = rightLines.length - 1; j >= 0; j--) {
+            if (leftLines[i] === rightLines[j]) {
                 dp[i][j] = dp[i + 1][j + 1] + 1;
             } else {
                 dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
@@ -76,12 +73,12 @@ function buildLcsDiff(leftItems, rightItems) {
     let leftLine = 1;
     let rightLine = 1;
 
-    while (i < leftItems.length && j < rightItems.length) {
-        if (leftItems[i] === rightItems[j]) {
+    while (i < leftLines.length && j < rightLines.length) {
+        if (leftLines[i] === rightLines[j]) {
             blocks.push({
                 type: 'equal',
-                left: leftItems[i],
-                right: rightItems[j],
+                left: leftLines[i],
+                right: rightLines[j],
                 leftLine,
                 rightLine
             });
@@ -92,7 +89,7 @@ function buildLcsDiff(leftItems, rightItems) {
         } else if (dp[i + 1][j] >= dp[i][j + 1]) {
             blocks.push({
                 type: 'remove',
-                left: leftItems[i],
+                left: leftLines[i],
                 right: '',
                 leftLine,
                 rightLine: null
@@ -103,7 +100,7 @@ function buildLcsDiff(leftItems, rightItems) {
             blocks.push({
                 type: 'add',
                 left: '',
-                right: rightItems[j],
+                right: rightLines[j],
                 leftLine: null,
                 rightLine
             });
@@ -112,10 +109,10 @@ function buildLcsDiff(leftItems, rightItems) {
         }
     }
 
-    while (i < leftItems.length) {
+    while (i < leftLines.length) {
         blocks.push({
             type: 'remove',
-            left: leftItems[i],
+            left: leftLines[i],
             right: '',
             leftLine,
             rightLine: null
@@ -124,16 +121,84 @@ function buildLcsDiff(leftItems, rightItems) {
         leftLine += 1;
     }
 
-    while (j < rightItems.length) {
+    while (j < rightLines.length) {
         blocks.push({
             type: 'add',
             left: '',
-            right: rightItems[j],
+            right: rightLines[j],
             leftLine: null,
             rightLine
         });
         j += 1;
         rightLine += 1;
+    }
+
+    return blocks;
+}
+
+function buildUnifiedDiff(leftText, rightText, options) {
+    const leftLines = splitLines(leftText);
+    const rightLines = splitLines(rightText);
+
+    if (options.lineMode) {
+        return buildLineDiff(leftLines, rightLines);
+    }
+
+    const blocks = [];
+    const maxLength = Math.max(leftLines.length, rightLines.length);
+
+    for (let index = 0; index < maxLength; index += 1) {
+        const leftValue = leftLines[index] ?? '';
+        const rightValue = rightLines[index] ?? '';
+
+        if (leftValue === rightValue) {
+            blocks.push({
+                type: 'equal',
+                left: leftValue,
+                right: rightValue,
+                leftLine: index + 1,
+                rightLine: index + 1
+            });
+            continue;
+        }
+
+        if (leftValue && rightValue) {
+            blocks.push({
+                type: 'remove',
+                left: leftValue,
+                right: rightValue,
+                leftLine: index + 1,
+                rightLine: index + 1
+            });
+            blocks.push({
+                type: 'add',
+                left: leftValue,
+                right: rightValue,
+                leftLine: index + 1,
+                rightLine: index + 1
+            });
+            continue;
+        }
+
+        if (!leftValue) {
+            blocks.push({
+                type: 'add',
+                left: '',
+                right: rightValue,
+                leftLine: null,
+                rightLine: index + 1
+            });
+        }
+
+        if (!rightValue) {
+            blocks.push({
+                type: 'remove',
+                left: leftValue,
+                right: '',
+                leftLine: index + 1,
+                rightLine: null
+            });
+        }
     }
 
     return blocks;
@@ -145,14 +210,8 @@ function renderDiff(blocks) {
     if (!blocks || blocks.length === 0) {
         diffOutputEl.innerHTML = `
             <div class="diff-row empty">
-                <div class="diff-side">
-                    <div class="diff-line-no"> </div>
-                    <div class="diff-content">暂无内容</div>
-                </div>
-                <div class="diff-side">
-                    <div class="diff-line-no"> </div>
-                    <div class="diff-content">暂无内容</div>
-                </div>
+                <div class="diff-line-no"> </div>
+                <div class="diff-content">暂无内容</div>
             </div>
         `;
         return;
@@ -162,63 +221,32 @@ function renderDiff(blocks) {
         const row = document.createElement('div');
         row.className = `diff-row ${block.type}`;
 
-        const leftSide = document.createElement('div');
-        leftSide.className = 'diff-side left';
+        const lineNo = document.createElement('div');
+        lineNo.className = 'diff-line-no';
+        lineNo.textContent = block.type === 'remove' ? (block.leftLine ?? ' ') : (block.rightLine ?? block.leftLine ?? ' ');
 
-        const leftNo = document.createElement('div');
-        leftNo.className = 'diff-line-no';
-        leftNo.textContent = block.leftLine ?? ' ';
+        const content = document.createElement('div');
+        content.className = 'diff-content';
 
-        const leftContent = document.createElement('div');
-        leftContent.className = 'diff-content';
+        const badge = document.createElement('span');
+        badge.className = 'diff-badge';
+        badge.textContent = block.type === 'add' ? '+' : block.type === 'remove' ? '−' : ' ';
 
-        const leftBadge = document.createElement('span');
-        leftBadge.className = 'diff-badge';
-        leftBadge.textContent = block.type === 'remove' ? '−' : ' ';
-
-        const leftText = document.createElement('span');
-        leftText.className = 'diff-text';
-        if (block.type === 'remove') {
-            leftText.classList.add('removed');
-        }
-        leftText.textContent = block.left ?? '';
-
-        leftContent.appendChild(leftBadge);
-        leftContent.appendChild(leftText);
-
-        leftSide.appendChild(leftNo);
-        leftSide.appendChild(leftContent);
-
-        const rightSide = document.createElement('div');
-        rightSide.className = 'diff-side right';
-
-        const rightNo = document.createElement('div');
-        rightNo.className = 'diff-line-no';
-        rightNo.textContent = block.rightLine ?? ' ';
-
-        const rightContent = document.createElement('div');
-        rightContent.className = 'diff-content';
-
-        const rightBadge = document.createElement('span');
-        rightBadge.className = 'diff-badge';
-        rightBadge.textContent = block.type === 'add' ? '+' : ' ';
-
-        const rightText = document.createElement('span');
-        rightText.className = 'diff-text';
+        const text = document.createElement('span');
+        text.className = 'diff-text';
         if (block.type === 'add') {
-            rightText.classList.add('added');
+            text.textContent = `+ ${block.right ?? ''}`;
+        } else if (block.type === 'remove') {
+            text.textContent = `- ${block.left ?? ''}`;
+        } else {
+            text.textContent = `  ${block.left ?? block.right ?? ''}`;
         }
-        rightText.textContent = block.right ?? '';
 
-        rightContent.appendChild(rightBadge);
-        rightContent.appendChild(rightText);
+        content.appendChild(badge);
+        content.appendChild(text);
 
-        rightSide.appendChild(rightNo);
-        rightSide.appendChild(rightContent);
-
-        row.appendChild(leftSide);
-        row.appendChild(rightSide);
-
+        row.appendChild(lineNo);
+        row.appendChild(content);
         diffOutputEl.appendChild(row);
     });
 }
@@ -249,14 +277,8 @@ function compareText() {
         summaryBoxEl.textContent = '请输入两段文本后再进行比较。';
         diffOutputEl.innerHTML = `
             <div class="diff-row empty">
-                <div class="diff-side">
-                    <div class="diff-line-no"> </div>
-                    <div class="diff-content">暂无内容</div>
-                </div>
-                <div class="diff-side">
-                    <div class="diff-line-no"> </div>
-                    <div class="diff-content">暂无内容</div>
-                </div>
+                <div class="diff-line-no"> </div>
+                <div class="diff-content">暂无内容</div>
             </div>
         `;
         return;
@@ -270,10 +292,7 @@ function compareText() {
 
     const leftValue = normalizeText(leftText, options);
     const rightValue = normalizeText(rightText, options);
-    const blocks = buildLcsDiff(
-        getItems(leftValue, options),
-        getItems(rightValue, options)
-    );
+    const blocks = buildUnifiedDiff(leftValue, rightValue, options);
 
     const summary = computeSummary(blocks);
     summaryBoxEl.textContent = `新增 ${summary.added} • 删除 ${summary.removed} • 保持 ${summary.unchanged}`;
@@ -292,14 +311,8 @@ function clearText() {
     summaryBoxEl.textContent = '已清空输入内容。';
     diffOutputEl.innerHTML = `
         <div class="diff-row empty">
-            <div class="diff-side">
-                <div class="diff-line-no"> </div>
-                <div class="diff-content">暂无内容</div>
-            </div>
-            <div class="diff-side">
-                <div class="diff-line-no"> </div>
-                <div class="diff-content">暂无内容</div>
-            </div>
+            <div class="diff-line-no"> </div>
+            <div class="diff-content">暂无内容</div>
         </div>
     `;
 }
