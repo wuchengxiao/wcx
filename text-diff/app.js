@@ -10,6 +10,7 @@ const ignoreCaseEl = document.getElementById('ignoreCase');
 const lineModeEl = document.getElementById('lineMode');
 const summaryBoxEl = document.getElementById('summaryBox');
 const diffOutputEl = document.getElementById('diffOutput');
+const dropZones = document.querySelectorAll('.dropzone');
 
 const sampleLeft = `项目计划：
 - 完成登录模块
@@ -214,6 +215,57 @@ async function copyResult() {
     }
 }
 
+function readFileAsText(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (event) => resolve(event.target.result);
+        reader.onerror = () => reject(new Error('读取文件失败'));
+        reader.readAsText(file);
+    });
+}
+
+function bindDropZone(zone) {
+    const side = zone.dataset.side;
+
+    const handleDrop = async (event) => {
+        event.preventDefault();
+        zone.classList.remove('is-dragover');
+
+        const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+        if (!file) return;
+
+        try {
+            const text = await readFileAsText(file);
+            if (side === 'left') {
+                leftTextEl.value = text;
+            } else {
+                rightTextEl.value = text;
+            }
+            compareText();
+        } catch (error) {
+            alert('文件读取失败，请重试。');
+        }
+    };
+
+    zone.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        zone.classList.add('is-dragover');
+    });
+
+    zone.addEventListener('dragenter', (event) => {
+        event.preventDefault();
+        zone.classList.add('is-dragover');
+    });
+
+    zone.addEventListener('dragleave', (event) => {
+        if (!zone.contains(event.relatedTarget)) {
+            zone.classList.remove('is-dragover');
+        }
+    });
+
+    zone.addEventListener('drop', handleDrop);
+}
+
 compareBtn.addEventListener('click', compareText);
 clearBtn.addEventListener('click', clearText);
 swapBtn.addEventListener('click', swapText);
@@ -225,6 +277,8 @@ rightTextEl.addEventListener('input', compareText);
 ignoreWhitespaceEl.addEventListener('change', compareText);
 ignoreCaseEl.addEventListener('change', compareText);
 lineModeEl.addEventListener('change', compareText);
+
+dropZones.forEach(bindDropZone);
 
 window.addEventListener('keydown', (event) => {
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
