@@ -48,15 +48,19 @@ function normalizeText(text, options) {
     return value;
 }
 
-function splitLines(text) {
-    return (text ?? '').split(/\r?\n/);
+function splitItems(text, options) {
+    if (options.lineMode) {
+        return (text ?? '').split(/\r?\n/);
+    }
+    return Array.from(text ?? '');
 }
 
-function buildInlineDiff(leftText, rightText) {
+function buildInlineSegments(leftText, rightText) {
     const left = leftText ?? '';
     const right = rightText ?? '';
     const n = left.length;
     const m = right.length;
+
     const dp = Array.from({ length: n + 1 }, () => Array(m + 1).fill(0));
 
     for (let i = n - 1; i >= 0; i -= 1) {
@@ -69,35 +73,35 @@ function buildInlineDiff(leftText, rightText) {
         }
     }
 
-    const result = [];
+    const segments = [];
     let i = 0;
     let j = 0;
 
     while (i < n && j < m) {
         if (left[i] === right[j]) {
-            result.push({ type: 'equal', text: left[i] });
+            segments.push({ type: 'equal', text: left[i] });
             i += 1;
             j += 1;
         } else if (dp[i + 1][j] >= dp[i][j + 1]) {
-            result.push({ type: 'removed', text: left[i] });
+            segments.push({ type: 'removed', text: left[i] });
             i += 1;
         } else {
-            result.push({ type: 'added', text: right[j] });
+            segments.push({ type: 'added', text: right[j] });
             j += 1;
         }
     }
 
     while (i < n) {
-        result.push({ type: 'removed', text: left[i] });
+        segments.push({ type: 'removed', text: left[i] });
         i += 1;
     }
 
     while (j < m) {
-        result.push({ type: 'added', text: right[j] });
+        segments.push({ type: 'added', text: right[j] });
         j += 1;
     }
 
-    return result;
+    return segments;
 }
 
 function renderDiff(rows) {
@@ -112,26 +116,18 @@ function renderDiff(rows) {
         const lineEl = document.createElement('div');
         lineEl.className = 'diff-line';
 
-        const lineText = document.createElement('div');
-        lineText.className = 'diff-line-text';
+        const textEl = document.createElement('div');
+        textEl.className = 'diff-line-text';
 
-        const segments = buildInlineDiff(row.left, row.right);
-
-        if (segments.length === 0) {
-            lineText.textContent = row.left || row.right || ' ';
-            lineEl.appendChild(lineText);
-            diffOutputEl.appendChild(lineEl);
-            return;
-        }
-
+        const segments = buildInlineSegments(row.left, row.right);
         segments.forEach((segment) => {
             const span = document.createElement('span');
             span.className = `diff-segment ${segment.type}`;
-            span.textContent = segment.text || ' ';
-            lineText.appendChild(span);
+            span.textContent = segment.text;
+            textEl.appendChild(span);
         });
 
-        lineEl.appendChild(lineText);
+        lineEl.appendChild(textEl);
         diffOutputEl.appendChild(lineEl);
     });
 }
@@ -142,7 +138,7 @@ function computeSummary(rows) {
     let unchanged = 0;
 
     rows.forEach((row) => {
-        const segments = buildInlineDiff(row.left, row.right);
+        const segments = buildInlineSegments(row.left, row.right);
         segments.forEach((segment) => {
             if (segment.type === 'added') {
                 added += 1;
@@ -173,20 +169,19 @@ function compareText() {
         lineMode: lineModeEl.checked,
     };
 
-    const normalizedLeft = normalizeText(leftText, options);
-    const normalizedRight = normalizeText(rightText, options);
-    const leftLines = splitLines(normalizedLeft);
-    const rightLines = splitLines(normalizedRight);
-    const maxLength = Math.max(leftLines.length, rightLines.length);
+    const leftValue = normalizeText(leftText, options);
+    const rightValue = normalizeText(rightText, options);
+    const leftItems = splitItems(leftValue, options);
+    const rightItems = splitItems(rightValue, options);
+    const maxLength = Math.max(leftItems.length, rightItems.length);
 
     const rows = [];
     for (let index = 0; index < maxLength; index += 1) {
-        const leftLine = leftLines[index] ?? '';
-        const rightLine = rightLines[index] ?? '';
+        const leftLine = leftItems[index] ?? '';
+        const rightLine = rightItems[index] ?? '';
         rows.push({
             left: leftLine,
             right: rightLine,
-            type: leftLine === rightLine ? 'equal' : 'changed'
         });
     }
 
