@@ -11,7 +11,6 @@
     --success-soft: #e8f5e9;
     --danger: #d93025;
     --danger-soft: #fdecea;
-    --warning: #f59e0b;
     --shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
 }
 
@@ -36,7 +35,7 @@ button, textarea, input {
 }
 
 .page-shell {
-    max-width: 1400px;
+    max-width: 1440px;
     margin: 0 auto;
     padding: 32px 20px 48px;
 }
@@ -44,26 +43,12 @@ button, textarea, input {
 .topbar {
     display: flex;
     align-items: center;
-    gap: 20px;
+    justify-content: center;
     margin-bottom: 24px;
 }
 
-.home-link {
-    display: inline-flex;
-    align-items: center;
-    text-decoration: none;
-    color: var(--primary);
-    font-weight: 600;
-    padding: 10px 14px;
-    border: 1px solid rgba(37, 99, 235, 0.15);
-    background: rgba(255, 255, 255, 0.66);
-    border-radius: 10px;
-    transition: all 0.2s ease;
-}
-
-.home-link:hover {
-    background: #fff;
-    transform: translateY(-1px);
+.title-wrap {
+    text-align: center;
 }
 
 .title-wrap h1 {
@@ -101,6 +86,13 @@ button, textarea, input {
     min-height: 420px;
     display: flex;
     flex-direction: column;
+    transition: all 0.2s ease;
+}
+
+.editor-panel.is-dragover {
+    border-color: var(--primary);
+    box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.12);
+    background: #eef4ff;
 }
 
 .panel-header {
@@ -112,6 +104,15 @@ button, textarea, input {
     background: rgba(255,255,255,0.9);
     font-weight: 700;
     color: var(--text);
+}
+
+.drop-hint {
+    font-size: 12px;
+    color: var(--muted);
+    background: rgba(148, 163, 184, 0.08);
+    border: 1px dashed rgba(148, 163, 184, 0.4);
+    border-radius: 999px;
+    padding: 4px 8px;
 }
 
 textarea {
@@ -171,6 +172,11 @@ button:hover {
     box-shadow: 0 8px 18px rgba(37, 99, 235, 0.18);
 }
 
+.small-btn {
+    padding: 8px 12px;
+    font-size: 13px;
+}
+
 .secondary-btn {
     background: #fff;
     border-color: rgba(37, 99, 235, 0.15);
@@ -182,6 +188,12 @@ button:hover {
     background: #fff;
     border-color: var(--line);
     color: var(--text);
+}
+
+.head-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .check-group label {
@@ -231,35 +243,93 @@ button:hover {
 }
 
 .diff-output {
-    min-height: 240px;
-    max-height: 520px;
+    min-height: 260px;
+    max-height: 560px;
     overflow: auto;
-    padding: 20px;
     background: #fff;
+    font-family: "Consolas", "SFMono-Regular", "Menlo", monospace;
+    font-size: 14px;
+    line-height: 1.7;
+}
+
+.diff-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-bottom: 1px solid var(--line);
+    min-height: 36px;
+}
+
+.diff-row.equal {
+    background: rgba(248, 250, 252, 0.7);
+}
+
+.diff-row.added {
+    background: rgba(46, 125, 50, 0.07);
+}
+
+.diff-row.removed {
+    background: rgba(217, 48, 48, 0.07);
+}
+
+.diff-plain {
+    display: grid;
+    grid-template-columns: 52px 1fr;
+    min-height: 36px;
+    border-right: 1px solid var(--line);
+}
+
+.diff-row .diff-plain:last-child {
+    border-right: none;
+}
+
+.diff-line-no {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(148, 163, 184, 0.08);
+    border-right: 1px solid var(--line);
+    color: var(--muted);
+    user-select: none;
+    font-weight: 600;
+}
+
+.diff-cell {
     white-space: pre-wrap;
     word-break: break-word;
-    font-family: "Consolas", "SFMono-Regular", "Menlo", monospace;
-    line-height: 1.7;
-    font-size: 14px;
+    padding: 8px 12px;
+    min-height: 36px;
 }
 
-.diff-equal {
-    color: var(--text);
+.diff-row.added .diff-plain:first-child {
+    background: rgba(46, 125, 50, 0.03);
 }
 
-.diff-add {
-    background: var(--success-soft);
-    color: var(--success);
-    border-radius: 4px;
-    padding: 1px 2px;
+.diff-row.added .diff-plain:first-child .diff-cell {
+    color: transparent;
 }
 
-.diff-remove {
-    background: var(--danger-soft);
-    color: var(--danger);
-    border-radius: 4px;
-    padding: 1px 2px;
-    text-decoration: line-through;
+.diff-row.added .diff-plain:last-child {
+    background: rgba(46, 125, 50, 0.1);
+}
+
+.diff-row.removed .diff-plain:first-child {
+    background: rgba(217, 48, 48, 0.1);
+}
+
+.diff-row.removed .diff-plain:last-child {
+    background: rgba(217, 48, 48, 0.03);
+}
+
+.diff-row.removed .diff-plain:last-child .diff-cell {
+    color: transparent;
+}
+
+.diff-row.equal .diff-plain {
+    background: rgba(248, 250, 252, 0.6);
+}
+
+.diff-empty {
+    color: transparent;
 }
 
 @media (max-width: 900px) {
@@ -273,7 +343,6 @@ button:hover {
     }
 
     .topbar {
-        flex-direction: column;
-        align-items: flex-start;
+        justify-content: center;
     }
 }
