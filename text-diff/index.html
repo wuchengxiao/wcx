@@ -9,7 +9,6 @@
 <body>
     <div class="page-shell">
         <header class="topbar">
-            <a class="home-link" href="../index.html">← 返回首页</a>
             <div class="title-wrap">
                 <h1>文本差异对比</h1>
                 <p>对比两段文本的新增、删除和保留内容</p>
@@ -18,9 +17,10 @@
 
         <main class="tool-panel">
             <section class="input-row">
-                <div class="editor-panel">
+                <div class="editor-panel dropzone" data-side="left" aria-label="原文输入区域">
                     <div class="panel-header">
                         <span>原文</span>
+                        <span class="drop-hint">拖拽文件</span>
                     </div>
                     <textarea id="leftText" spellcheck="false" aria-label="原文输入框">项目计划：
 - 完成登录模块
@@ -29,9 +29,10 @@
 - 补充测试用例</textarea>
                 </div>
 
-                <div class="editor-panel">
+                <div class="editor-panel dropzone" data-side="right" aria-label="修改后输入区域">
                     <div class="panel-header">
                         <span>修改后</span>
+                        <span class="drop-hint">拖拽文件</span>
                     </div>
                     <textarea id="rightText" spellcheck="false" aria-label="修改后输入框">项目计划：
 - 完成登录模块
