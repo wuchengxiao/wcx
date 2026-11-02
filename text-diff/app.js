@@ -5,6 +5,7 @@ const clearBtn = document.getElementById('clearBtn');
 const swapBtn = document.getElementById('swapBtn');
 const sampleBtn = document.getElementById('sampleBtn');
 const copyBtn = document.getElementById('copyBtn');
+const exportBtn = document.getElementById('exportBtn');
 const ignoreWhitespaceEl = document.getElementById('ignoreWhitespace');
 const ignoreCaseEl = document.getElementById('ignoreCase');
 const lineModeEl = document.getElementById('lineMode');
@@ -27,7 +28,7 @@ const sampleRight = `项目计划：
 - 完成用户反馈回收`;
 
 function escapeHtml(value) {
-    return value
+    return String(value ?? '')
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
@@ -81,55 +82,105 @@ function buildLcsDiff(leftItems, rightItems) {
     const blocks = [];
     let i = 0;
     let j = 0;
+    let leftLine = 1;
+    let rightLine = 1;
 
     while (i < leftItems.length && j < rightItems.length) {
         if (leftItems[i] === rightItems[j]) {
-            blocks.push({ type: 'equal', value: leftItems[i] });
+            blocks.push({
+                type: 'equal',
+                left: leftItems[i],
+                right: rightItems[j],
+                leftLine,
+                rightLine
+            });
             i += 1;
             j += 1;
+            leftLine += 1;
+            rightLine += 1;
         } else if (dp[i + 1][j] >= dp[i][j + 1]) {
-            blocks.push({ type: 'remove', value: leftItems[i] });
+            blocks.push({
+                type: 'remove',
+                left: leftItems[i],
+                right: '',
+                leftLine,
+                rightLine: null
+            });
             i += 1;
+            leftLine += 1;
         } else {
-            blocks.push({ type: 'add', value: rightItems[j] });
+            blocks.push({
+                type: 'add',
+                left: '',
+                right: rightItems[j],
+                leftLine: null,
+                rightLine
+            });
             j += 1;
+            rightLine += 1;
         }
     }
 
     while (i < leftItems.length) {
-        blocks.push({ type: 'remove', value: leftItems[i] });
+        blocks.push({
+            type: 'remove',
+            left: leftItems[i],
+            right: '',
+            leftLine,
+            rightLine: null
+        });
         i += 1;
+        leftLine += 1;
     }
 
     while (j < rightItems.length) {
-        blocks.push({ type: 'add', value: rightItems[j] });
+        blocks.push({
+            type: 'add',
+            left: '',
+            right: rightItems[j],
+            leftLine: null,
+            rightLine
+        });
         j += 1;
+        rightLine += 1;
     }
 
     return blocks;
 }
 
-function renderDiff(blocks, options) {
+function buildDiffHtml(blocks) {
     if (!blocks || blocks.length === 0) {
-        diffOutputEl.innerHTML = '<span class="diff-equal">暂无内容</span>';
-        return;
+        return '<div class="diff-row equal"><div class="diff-plain"><div class="diff-line-no"> </div><div class="diff-cell">暂无内容</div></div><div class="diff-plain"><div class="diff-line-no"> </div><div class="diff-cell">暂无内容</div></div></div>';
     }
 
-    let html = '';
-    blocks.forEach((block) => {
-        const safe = escapeHtml(block.value || '');
-        const prefix = options.lineMode && block.type !== 'equal' ? (block.type === 'add' ? '+ ' : '- ') : '';
+    const rows = blocks.map((block) => {
+        const leftValue = block.left ?? '';
+        const rightValue = block.right ?? '';
+        const leftNo = block.leftLine !== null && block.leftLine !== undefined ? String(block.leftLine) : '';
+        const rightNo = block.rightLine !== null && block.rightLine !== undefined ? String(block.rightLine) : '';
 
-        if (block.type === 'add') {
-            html += `<span class="diff-add">${prefix}${safe}</span>` + (options.lineMode ? '\n' : '');
-        } else if (block.type === 'remove') {
-            html += `<span class="diff-remove">${prefix}${safe}</span>` + (options.lineMode ? '\n' : '');
-        } else {
-            html += `<span class="diff-equal">${safe}</span>` + (options.lineMode ? '\n' : '');
-        }
-    });
+        const leftCell = block.left === ''
+            ? '<span class="diff-empty">空</span>'
+            : escapeHtml(leftValue);
+        const rightCell = block.right === ''
+            ? '<span class="diff-empty">空</span>'
+            : escapeHtml(rightValue);
 
-    diffOutputEl.innerHTML = html;
+        return `
+          <div class="diff-row ${block.type}">
+            <div class="diff-plain">
+              <div class="diff-line-no">${leftNo || ' '}</div>
+              <div class="diff-cell">${leftCell}</div>
+            </div>
+            <div class="diff-plain">
+              <div class="diff-line-no">${rightNo || ' '}</div>
+              <div class="diff-cell">${rightCell}</div>
+            </div>
+          </div>
+        `;
+    }).join('');
+
+    return rows;
 }
 
 function computeSummary(blocks) {
@@ -156,7 +207,7 @@ function compareText() {
 
     if (!leftText && !rightText) {
         summaryBoxEl.textContent = '请输入两段文本后再进行比较。';
-        diffOutputEl.innerHTML = '<span class="diff-equal">暂无内容</span>';
+        diffOutputEl.innerHTML = '<div class="diff-row equal"><div class="diff-plain"><div class="diff-line-no"> </div><div class="diff-cell">暂无内容</div></div><div class="diff-plain"><div class="diff-line-no"> </div><div class="diff-cell">暂无内容</div></div></div>';
         return;
     }
 
@@ -174,7 +225,7 @@ function compareText() {
     const summary = computeSummary(blocks);
 
     summaryBoxEl.textContent = `新增 ${summary.added} • 删除 ${summary.removed} • 保持 ${summary.unchanged}`;
-    renderDiff(blocks, options);
+    diffOutputEl.innerHTML = buildDiffHtml(blocks);
 }
 
 function loadSample() {
@@ -187,7 +238,7 @@ function clearText() {
     leftTextEl.value = '';
     rightTextEl.value = '';
     summaryBoxEl.textContent = '已清空输入内容。';
-    diffOutputEl.innerHTML = '<span class="diff-equal">暂无内容</span>';
+    diffOutputEl.innerHTML = '<div class="diff-row equal"><div class="diff-plain"><div class="diff-line-no"> </div><div class="diff-cell">暂无内容</div></div><div class="diff-plain"><div class="diff-line-no"> </div><div class="diff-cell">暂无内容</div></div></div>';
 }
 
 function swapText() {
@@ -205,7 +256,7 @@ async function copyResult() {
     }
 
     try {
-        await navigator.clipboard.writeText(text);
+        await navigator.clipboard.writeText(text.replace(/\s+/g, ' ').trim());
         copyBtn.textContent = '已复制';
         setTimeout(() => {
             copyBtn.textContent = '复制结果';
@@ -213,6 +264,19 @@ async function copyResult() {
     } catch (error) {
         alert('复制失败，请手动选择文本复制。');
     }
+}
+
+function exportMergedResult() {
+    const mergedText = rightTextEl.value || leftTextEl.value || '';
+    const blob = new Blob([mergedText], { type: 'text/plain;charset=utf-8' });
+    const a = document.createElement('a');
+    const now = new Date();
+    const fileName = `merged-result-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}.txt`;
+
+    a.href = URL.createObjectURL(blob);
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(a.href);
 }
 
 function readFileAsText(file) {
@@ -271,6 +335,7 @@ clearBtn.addEventListener('click', clearText);
 swapBtn.addEventListener('click', swapText);
 sampleBtn.addEventListener('click', loadSample);
 copyBtn.addEventListener('click', copyResult);
+exportBtn.addEventListener('click', exportMergedResult);
 
 leftTextEl.addEventListener('input', compareText);
 rightTextEl.addEventListener('input', compareText);
