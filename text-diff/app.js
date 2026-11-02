@@ -148,39 +148,88 @@ function buildLcsDiff(leftItems, rightItems) {
     return blocks;
 }
 
-function buildDiffHtml(blocks) {
+function renderDiff(blocks) {
+    diffOutputEl.innerHTML = '';
+
     if (!blocks || blocks.length === 0) {
-        return '<div class="diff-row equal"><div class="diff-plain"><div class="diff-line-no"> </div><div class="diff-cell">暂无内容</div></div><div class="diff-plain"><div class="diff-line-no"> </div><div class="diff-cell">暂无内容</div></div></div>';
+        diffOutputEl.innerHTML = `
+            <div class="diff-row empty">
+                <div class="diff-side">
+                    <div class="diff-line-no"> </div>
+                    <div class="diff-content">暂无内容</div>
+                </div>
+                <div class="diff-side">
+                    <div class="diff-line-no"> </div>
+                    <div class="diff-content">暂无内容</div>
+                </div>
+            </div>
+        `;
+        return;
     }
 
-    const rows = blocks.map((block) => {
-        const leftValue = block.left ?? '';
-        const rightValue = block.right ?? '';
-        const leftNo = block.leftLine !== null && block.leftLine !== undefined ? String(block.leftLine) : '';
-        const rightNo = block.rightLine !== null && block.rightLine !== undefined ? String(block.rightLine) : '';
+    blocks.forEach((block) => {
+        const row = document.createElement('div');
+        row.className = `diff-row ${block.type}`;
 
-        const leftCell = block.left === ''
-            ? '<span class="diff-empty">空</span>'
-            : escapeHtml(leftValue);
-        const rightCell = block.right === ''
-            ? '<span class="diff-empty">空</span>'
-            : escapeHtml(rightValue);
+        const leftSide = document.createElement('div');
+        leftSide.className = 'diff-side left';
 
-        return `
-          <div class="diff-row ${block.type}">
-            <div class="diff-plain">
-              <div class="diff-line-no">${leftNo || ' '}</div>
-              <div class="diff-cell">${leftCell}</div>
-            </div>
-            <div class="diff-plain">
-              <div class="diff-line-no">${rightNo || ' '}</div>
-              <div class="diff-cell">${rightCell}</div>
-            </div>
-          </div>
-        `;
-    }).join('');
+        const leftNo = document.createElement('div');
+        leftNo.className = 'diff-line-no';
+        leftNo.textContent = block.leftLine ?? ' ';
 
-    return rows;
+        const leftContent = document.createElement('div');
+        leftContent.className = 'diff-content';
+
+        const leftBadge = document.createElement('span');
+        leftBadge.className = 'diff-badge';
+        leftBadge.textContent = block.type === 'remove' ? '−' : ' ';
+
+        const leftText = document.createElement('span');
+        leftText.className = 'diff-text';
+        if (block.type === 'remove') {
+            leftText.classList.add('removed');
+        }
+        leftText.textContent = block.type === 'remove' ? (block.left ?? '') : (block.left ?? '');
+
+        leftContent.appendChild(leftBadge);
+        leftContent.appendChild(leftText);
+
+        leftSide.appendChild(leftNo);
+        leftSide.appendChild(leftContent);
+
+        const rightSide = document.createElement('div');
+        rightSide.className = 'diff-side right';
+
+        const rightNo = document.createElement('div');
+        rightNo.className = 'diff-line-no';
+        rightNo.textContent = block.rightLine ?? ' ';
+
+        const rightContent = document.createElement('div');
+        rightContent.className = 'diff-content';
+
+        const rightBadge = document.createElement('span');
+        rightBadge.className = 'diff-badge';
+        rightBadge.textContent = block.type === 'add' ? '+' : ' ';
+
+        const rightText = document.createElement('span');
+        rightText.className = 'diff-text';
+        if (block.type === 'add') {
+            rightText.classList.add('added');
+        }
+        rightText.textContent = block.type === 'add' ? (block.right ?? '') : (block.right ?? '');
+
+        rightContent.appendChild(rightBadge);
+        rightContent.appendChild(rightText);
+
+        rightSide.appendChild(rightNo);
+        rightSide.appendChild(rightContent);
+
+        row.appendChild(leftSide);
+        row.appendChild(rightSide);
+
+        diffOutputEl.appendChild(row);
+    });
 }
 
 function computeSummary(blocks) {
@@ -207,7 +256,18 @@ function compareText() {
 
     if (!leftText && !rightText) {
         summaryBoxEl.textContent = '请输入两段文本后再进行比较。';
-        diffOutputEl.innerHTML = '<div class="diff-row equal"><div class="diff-plain"><div class="diff-line-no"> </div><div class="diff-cell">暂无内容</div></div><div class="diff-plain"><div class="diff-line-no"> </div><div class="diff-cell">暂无内容</div></div></div>';
+        diffOutputEl.innerHTML = `
+            <div class="diff-row empty">
+                <div class="diff-side">
+                    <div class="diff-line-no"> </div>
+                    <div class="diff-content">暂无内容</div>
+                </div>
+                <div class="diff-side">
+                    <div class="diff-line-no"> </div>
+                    <div class="diff-content">暂无内容</div>
+                </div>
+            </div>
+        `;
         return;
     }
 
@@ -219,13 +279,14 @@ function compareText() {
 
     const leftValue = normalizeText(leftText, options);
     const rightValue = normalizeText(rightText, options);
-    const leftItems = getItems(leftValue, options);
-    const rightItems = getItems(rightValue, options);
-    const blocks = buildLcsDiff(leftItems, rightItems);
-    const summary = computeSummary(blocks);
+    const blocks = buildLcsDiff(
+        getItems(leftValue, options),
+        getItems(rightValue, options)
+    );
 
+    const summary = computeSummary(blocks);
     summaryBoxEl.textContent = `新增 ${summary.added} • 删除 ${summary.removed} • 保持 ${summary.unchanged}`;
-    diffOutputEl.innerHTML = buildDiffHtml(blocks);
+    renderDiff(blocks);
 }
 
 function loadSample() {
@@ -238,7 +299,18 @@ function clearText() {
     leftTextEl.value = '';
     rightTextEl.value = '';
     summaryBoxEl.textContent = '已清空输入内容。';
-    diffOutputEl.innerHTML = '<div class="diff-row equal"><div class="diff-plain"><div class="diff-line-no"> </div><div class="diff-cell">暂无内容</div></div><div class="diff-plain"><div class="diff-line-no"> </div><div class="diff-cell">暂无内容</div></div></div>';
+    diffOutputEl.innerHTML = `
+        <div class="diff-row empty">
+            <div class="diff-side">
+                <div class="diff-line-no"> </div>
+                <div class="diff-content">暂无内容</div>
+            </div>
+            <div class="diff-side">
+                <div class="diff-line-no"> </div>
+                <div class="diff-content">暂无内容</div>
+            </div>
+        </div>
+    `;
 }
 
 function swapText() {
@@ -256,7 +328,7 @@ async function copyResult() {
     }
 
     try {
-        await navigator.clipboard.writeText(text.replace(/\s+/g, ' ').trim());
+        await navigator.clipboard.writeText(text);
         copyBtn.textContent = '已复制';
         setTimeout(() => {
             copyBtn.textContent = '复制结果';
@@ -295,7 +367,7 @@ function bindDropZone(zone) {
         event.preventDefault();
         zone.classList.remove('is-dragover');
 
-        const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+        const file = event.dataTransfer?.files?.[0];
         if (!file) return;
 
         try {
