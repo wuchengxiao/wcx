@@ -27,15 +27,6 @@ const sampleRight = `项目计划：
 - 补充测试用例
 - 完成用户反馈回收`;
 
-function escapeHtml(value) {
-    return String(value ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-}
-
 function normalizeText(text, options) {
     let value = text ?? '';
 
@@ -190,7 +181,7 @@ function renderDiff(blocks) {
         if (block.type === 'remove') {
             leftText.classList.add('removed');
         }
-        leftText.textContent = block.type === 'remove' ? (block.left ?? '') : (block.left ?? '');
+        leftText.textContent = block.left ?? '';
 
         leftContent.appendChild(leftBadge);
         leftContent.appendChild(leftText);
@@ -217,7 +208,7 @@ function renderDiff(blocks) {
         if (block.type === 'add') {
             rightText.classList.add('added');
         }
-        rightText.textContent = block.type === 'add' ? (block.right ?? '') : (block.right ?? '');
+        rightText.textContent = block.right ?? '';
 
         rightContent.appendChild(rightBadge);
         rightContent.appendChild(rightText);
