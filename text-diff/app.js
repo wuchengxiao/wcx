@@ -1,0 +1,236 @@
+const leftTextEl = document.getElementById('leftText');
+const rightTextEl = document.getElementById('rightText');
+const compareBtn = document.getElementById('compareBtn');
+const clearBtn = document.getElementById('clearBtn');
+const swapBtn = document.getElementById('swapBtn');
+const sampleBtn = document.getElementById('sampleBtn');
+const copyBtn = document.getElementById('copyBtn');
+const ignoreWhitespaceEl = document.getElementById('ignoreWhitespace');
+const ignoreCaseEl = document.getElementById('ignoreCase');
+const lineModeEl = document.getElementById('lineMode');
+const summaryBoxEl = document.getElementById('summaryBox');
+const diffOutputEl = document.getElementById('diffOutput');
+
+const sampleLeft = `项目计划：
+- 完成登录模块
+- 优化首页加载速度
+- 修复搜索结果分页问题
+- 补充测试用例`;
+
+const sampleRight = `项目计划：
+- 完成登录模块
+- 优化首页加载速度
+- 修复搜索结果分页问题
+- 增加接口监控
+- 补充测试用例
+- 完成用户反馈回收`;
+
+function escapeHtml(value) {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function normalizeText(text, options) {
+    let value = text ?? '';
+
+    if (options.ignoreCase) {
+        value = value.toLowerCase();
+    }
+
+    if (options.ignoreWhitespace) {
+        if (options.lineMode) {
+            value = value
+                .split(/\r?\n/)
+                .map(line => line.replace(/\s+/g, ' ').trim())
+                .join('\n');
+        } else {
+            value = value.replace(/\s+/g, ' ').trim();
+        }
+    }
+
+    return value;
+}
+
+function getItems(text, options) {
+    if (options.lineMode) {
+        return text.split(/\r?\n/);
+    }
+    return Array.from(text);
+}
+
+function buildLcsDiff(leftItems, rightItems) {
+    const rows = leftItems.length + 1;
+    const cols = rightItems.length + 1;
+    const dp = Array.from({ length: rows }, () => Array(cols).fill(0));
+
+    for (let i = leftItems.length - 1; i >= 0; i--) {
+        for (let j = rightItems.length - 1; j >= 0; j--) {
+            if (leftItems[i] === rightItems[j]) {
+                dp[i][j] = dp[i + 1][j + 1] + 1;
+            } else {
+                dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
+            }
+        }
+    }
+
+    const blocks = [];
+    let i = 0;
+    let j = 0;
+
+    while (i < leftItems.length && j < rightItems.length) {
+        if (leftItems[i] === rightItems[j]) {
+            blocks.push({ type: 'equal', value: leftItems[i] });
+            i += 1;
+            j += 1;
+        } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+            blocks.push({ type: 'remove', value: leftItems[i] });
+            i += 1;
+        } else {
+            blocks.push({ type: 'add', value: rightItems[j] });
+            j += 1;
+        }
+    }
+
+    while (i < leftItems.length) {
+        blocks.push({ type: 'remove', value: leftItems[i] });
+        i += 1;
+    }
+
+    while (j < rightItems.length) {
+        blocks.push({ type: 'add', value: rightItems[j] });
+        j += 1;
+    }
+
+    return blocks;
+}
+
+function renderDiff(blocks, options) {
+    if (!blocks || blocks.length === 0) {
+        diffOutputEl.innerHTML = '<span class="diff-equal">暂无内容</span>';
+        return;
+    }
+
+    let html = '';
+    blocks.forEach((block) => {
+        const safe = escapeHtml(block.value || '');
+        const prefix = options.lineMode && block.type !== 'equal' ? (block.type === 'add' ? '+ ' : '- ') : '';
+
+        if (block.type === 'add') {
+            html += `<span class="diff-add">${prefix}${safe}</span>` + (options.lineMode ? '\n' : '');
+        } else if (block.type === 'remove') {
+            html += `<span class="diff-remove">${prefix}${safe}</span>` + (options.lineMode ? '\n' : '');
+        } else {
+            html += `<span class="diff-equal">${safe}</span>` + (options.lineMode ? '\n' : '');
+        }
+    });
+
+    diffOutputEl.innerHTML = html;
+}
+
+function computeSummary(blocks) {
+    let added = 0;
+    let removed = 0;
+    let unchanged = 0;
+
+    blocks.forEach((block) => {
+        if (block.type === 'add') {
+            added += 1;
+        } else if (block.type === 'remove') {
+            removed += 1;
+        } else {
+            unchanged += 1;
+        }
+    });
+
+    return { added, removed, unchanged };
+}
+
+function compareText() {
+    const leftText = leftTextEl.value;
+    const rightText = rightTextEl.value;
+
+    if (!leftText && !rightText) {
+        summaryBoxEl.textContent = '请输入两段文本后再进行比较。';
+        diffOutputEl.innerHTML = '<span class="diff-equal">暂无内容</span>';
+        return;
+    }
+
+    const options = {
+        ignoreWhitespace: ignoreWhitespaceEl.checked,
+        ignoreCase: ignoreCaseEl.checked,
+        lineMode: lineModeEl.checked,
+    };
+
+    const leftValue = normalizeText(leftText, options);
+    const rightValue = normalizeText(rightText, options);
+    const leftItems = getItems(leftValue, options);
+    const rightItems = getItems(rightValue, options);
+    const blocks = buildLcsDiff(leftItems, rightItems);
+    const summary = computeSummary(blocks);
+
+    summaryBoxEl.textContent = `新增 ${summary.added} • 删除 ${summary.removed} • 保持 ${summary.unchanged}`;
+    renderDiff(blocks, options);
+}
+
+function loadSample() {
+    leftTextEl.value = sampleLeft;
+    rightTextEl.value = sampleRight;
+    compareText();
+}
+
+function clearText() {
+    leftTextEl.value = '';
+    rightTextEl.value = '';
+    summaryBoxEl.textContent = '已清空输入内容。';
+    diffOutputEl.innerHTML = '<span class="diff-equal">暂无内容</span>';
+}
+
+function swapText() {
+    const temp = leftTextEl.value;
+    leftTextEl.value = rightTextEl.value;
+    rightTextEl.value = temp;
+    compareText();
+}
+
+async function copyResult() {
+    const text = diffOutputEl.innerText || diffOutputEl.textContent || '';
+    if (!text.trim()) {
+        alert('当前没有可复制的比较结果。');
+        return;
+    }
+
+    try {
+        await navigator.clipboard.writeText(text);
+        copyBtn.textContent = '已复制';
+        setTimeout(() => {
+            copyBtn.textContent = '复制结果';
+        }, 1200);
+    } catch (error) {
+        alert('复制失败，请手动选择文本复制。');
+    }
+}
+
+compareBtn.addEventListener('click', compareText);
+clearBtn.addEventListener('click', clearText);
+swapBtn.addEventListener('click', swapText);
+sampleBtn.addEventListener('click', loadSample);
+copyBtn.addEventListener('click', copyResult);
+
+leftTextEl.addEventListener('input', compareText);
+rightTextEl.addEventListener('input', compareText);
+ignoreWhitespaceEl.addEventListener('change', compareText);
+ignoreCaseEl.addEventListener('change', compareText);
+lineModeEl.addEventListener('change', compareText);
+
+window.addEventListener('keydown', (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        event.preventDefault();
+        compareText();
+    }
+});
+
+loadSample();
