@@ -150,7 +150,7 @@
 <th width="40" class="txt-center">选择</th>
 <th>名称</th>
 <th width="85">类型</th>
-<th width="110">创建时间</th>
+<th width="110">修改时间</th>
 <th width="150" class="txt-center">操作</th>
 </tr>
 </thead>
@@ -242,7 +242,7 @@
 <span class="pt-title">📝 Notepad++ 多行编辑器 (作用于所选行/全文)</span>
 <div class="pt-row">
 <input type="text" id="pt-multi-prefix" placeholder="前缀(如 //, - )" />
-<input type="text" id="pt-multi-suffix" placeholder="后缀(如 ;, \\)" />
+<input type="text" id="pt-multi-suffix" placeholder="后缀(如 ;, \)" />
 <button id="btn-apply-prefix-suffix" class="btn btn-xs btn-primary">⚡ 插入字符</button>
 </div>
 <div class="pt-row" style="margin-top: 5px;">
@@ -316,12 +316,13 @@
 <script src="fileService.js"></script>
 
 <!-- 引入 AI API 请求模块 -->
-<script src="requestText.js"></script>
+<script src="requestBaiduAgent.js"></script>
 
 <!-- 引入 AI 协助模块 -->
 <script src="aiAssistant.js"></script>
 
 <!-- 引入 UI 与页面交互逻辑 -->
 <script src="app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/page-agent@1.12.4/dist/iife/page-agent.demo.js?lang=zh-CN&amp;t=0.6292741295495493" crossorigin="true" type="text/javascript"></script>
 </body>
 </html>
