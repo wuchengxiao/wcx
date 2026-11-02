@@ -256,7 +256,11 @@ button:hover {
     display: grid;
     grid-template-columns: 1fr 1fr;
     border-bottom: 1px solid var(--line);
-    min-height: 36px;
+    min-height: 40px;
+}
+
+.diff-row.empty {
+    background: #f8fafc;
 }
 
 .diff-row.equal {
@@ -264,21 +268,21 @@ button:hover {
 }
 
 .diff-row.added {
-    background: rgba(46, 125, 50, 0.07);
+    background: rgba(46, 125, 50, 0.08);
 }
 
 .diff-row.removed {
-    background: rgba(217, 48, 48, 0.07);
+    background: rgba(217, 48, 48, 0.08);
 }
 
-.diff-plain {
+.diff-side {
     display: grid;
     grid-template-columns: 52px 1fr;
-    min-height: 36px;
+    min-height: 40px;
     border-right: 1px solid var(--line);
 }
 
-.diff-row .diff-plain:last-child {
+.diff-row .diff-side:last-child {
     border-right: none;
 }
 
@@ -289,47 +293,60 @@ button:hover {
     background: rgba(148, 163, 184, 0.08);
     border-right: 1px solid var(--line);
     color: var(--muted);
-    user-select: none;
     font-weight: 600;
+    user-select: none;
 }
 
-.diff-cell {
+.diff-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 8px 10px;
+    overflow: hidden;
+}
+
+.diff-badge {
+    display: inline-block;
+    min-width: 16px;
+    text-align: center;
+    color: var(--muted);
+    font-weight: 700;
+    font-size: 16px;
+}
+
+.diff-text {
     white-space: pre-wrap;
     word-break: break-word;
-    padding: 8px 12px;
-    min-height: 36px;
+    display: inline-block;
+    flex: 1;
 }
 
-.diff-row.added .diff-plain:first-child {
-    background: rgba(46, 125, 50, 0.03);
+.diff-row.added .diff-badge {
+    color: var(--success);
 }
 
-.diff-row.added .diff-plain:first-child .diff-cell {
-    color: transparent;
+.diff-row.added .diff-text {
+    color: var(--success);
+    background: rgba(46, 125, 50, 0.08);
+    border-radius: 4px;
+    padding: 2px 6px;
 }
 
-.diff-row.added .diff-plain:last-child {
-    background: rgba(46, 125, 50, 0.1);
+.diff-row.removed .diff-badge {
+    color: var(--danger);
 }
 
-.diff-row.removed .diff-plain:first-child {
-    background: rgba(217, 48, 48, 0.1);
+.diff-row.removed .diff-text {
+    color: var(--danger);
+    background: rgba(217, 48, 48, 0.08);
+    border-radius: 4px;
+    padding: 2px 6px;
+    text-decoration: line-through;
 }
 
-.diff-row.removed .diff-plain:last-child {
-    background: rgba(217, 48, 48, 0.03);
-}
-
-.diff-row.removed .diff-plain:last-child .diff-cell {
-    color: transparent;
-}
-
-.diff-row.equal .diff-plain {
-    background: rgba(248, 250, 252, 0.6);
-}
-
-.diff-empty {
-    color: transparent;
+.diff-row.equal .diff-text {
+    color: var(--text);
 }
 
 @media (max-width: 900px) {
