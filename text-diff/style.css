@@ -252,101 +252,45 @@ button:hover {
     line-height: 1.7;
 }
 
-.diff-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+.diff-empty {
+    padding: 18px 16px;
+    color: var(--muted);
+}
+
+.diff-line {
+    padding: 8px 16px;
     border-bottom: 1px solid var(--line);
-    min-height: 40px;
+    background: #fff;
 }
 
-.diff-row.empty {
-    background: #f8fafc;
-}
-
-.diff-row.equal {
-    background: rgba(248, 250, 252, 0.7);
-}
-
-.diff-row.added {
-    background: rgba(46, 125, 50, 0.08);
-}
-
-.diff-row.removed {
-    background: rgba(217, 48, 48, 0.08);
-}
-
-.diff-side {
-    display: grid;
-    grid-template-columns: 52px 1fr;
-    min-height: 40px;
-    border-right: 1px solid var(--line);
-}
-
-.diff-row .diff-side:last-child {
-    border-right: none;
-}
-
-.diff-line-no {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(148, 163, 184, 0.08);
-    border-right: 1px solid var(--line);
-    color: var(--muted);
-    font-weight: 600;
-    user-select: none;
-}
-
-.diff-content {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-height: 40px;
-    padding: 8px 10px;
-    overflow: hidden;
-}
-
-.diff-badge {
-    display: inline-block;
-    min-width: 16px;
-    text-align: center;
-    color: var(--muted);
-    font-weight: 700;
-    font-size: 16px;
-}
-
-.diff-text {
+.diff-line-text {
     white-space: pre-wrap;
     word-break: break-word;
-    display: inline-block;
-    flex: 1;
+    line-height: 1.8;
+    min-height: 24px;
 }
 
-.diff-row.added .diff-badge {
-    color: var(--success);
-}
-
-.diff-row.added .diff-text {
-    color: var(--success);
-    background: rgba(46, 125, 50, 0.08);
+.diff-segment {
+    display: inline;
     border-radius: 4px;
-    padding: 2px 6px;
+    padding: 1px 2px;
 }
 
-.diff-row.removed .diff-badge {
-    color: var(--danger);
-}
-
-.diff-row.removed .diff-text {
-    color: var(--danger);
-    background: rgba(217, 48, 48, 0.08);
-    border-radius: 4px;
-    padding: 2px 6px;
-    text-decoration: line-through;
-}
-
-.diff-row.equal .diff-text {
+.diff-segment.equal {
     color: var(--text);
+}
+
+.diff-segment.added {
+    background: rgba(46, 125, 50, 0.12);
+    color: var(--success);
+    font-weight: 600;
+}
+
+.diff-segment.removed {
+    background: rgba(217, 48, 48, 0.12);
+    color: var(--danger);
+    text-decoration: line-through;
+    font-weight: 600;
 }
 
 @media (max-width: 900px) {
