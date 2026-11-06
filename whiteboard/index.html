@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+    <title>UML Drawer - 免费在线UML绘图工具 | UML类图、用例图、序列图制作</title>
+    <meta name="description" content="UML Drawer是一款免费的在线UML绘图工具，无需安装即可绘制类图、用例图、序列图等。支持矩形、椭圆、便签、画笔等多种图形工具，提供属性编辑、拖拽、缩放等功能。">
+    <meta name="keywords" content="UML绘图工具,在线UML,免费UML工具,UML类图制作,用例图绘制,序列图工具,在线画图软件,白板工具,网页制图">
+    <meta name="author" content="UML Drawer">
+    <meta name="robots" content="index, follow">
+    <meta name="language" content="Chinese">
+    <meta name="revisit-after" content="7 days">
+
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="theme-color" content="#4CAF50">
+
+    <link rel="canonical" href="https://wuchengxiao.github.io/wcx/whiteboard/index.html">
+
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%234CAF50' width='100' height='100' rx='15'/><text x='50' y='65' font-size='50' text-anchor='middle' fill='white'>U</text></svg>">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%234CAF50' width='100' height='100' rx='15'/><text x='50' y='65' font-size='50' text-anchor='middle' fill='white'>U</text></svg>">
+
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="UML Drawer - 免费在线UML绘图工具">
+    <meta property="og:description" content="一款免费的在线UML绘图工具，支持绘制类图、用例图、序列图等多种UML图形。无需安装，操作简单，功能丰富。">
+    <meta property="og:url" content="https://wuchengxiao.github.io/wcx/whiteboard/index.html">
+    <meta property="og:site_name" content="UML Drawer">
+    <meta property="og:locale" content="zh_CN">
+
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="UML Drawer - 免费在线UML绘图工具">
+    <meta name="twitter:description" content="一款免费的在线UML绘图工具，支持绘制类图、用例图、序列图等多种UML图形。无需安装，操作简单，功能丰富。">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "UML Drawer",
+        "description": "免费的在线UML绘图工具，支持绘制类图、用例图、序列图等多种UML图形",
+        "url": "https://wuchengxiao.github.io/wcx/whiteboard/index.html",
+        "applicationCategory": "DesignApplication",
+        "operatingSystem": "Any",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "CNY"
+        },
+        "featureList": [
+            "UML类图绘制",
+            "用例图制作",
+            "序列图工具",
+            "在线画图",
+            "便签功能",
+            "图形编辑",
+            "图片导出"
+        ],
+        "aggregateRating": {
+            "@type": "AggregateRating",
+            "ratingValue": "4.8",
+            "ratingCount": "156"
+        }
+    }
+    </script>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="uml-drawer">
+        <header class="toolbar" role="banner">
+            <h1>UML Drawer</h1>
+            <div class="toolbar-actions">
+                <button id="new-diagram" aria-label="新建图表">新建图</button>
+                <button id="download-diagram" aria-label="下载图表">下载图</button>
+                <button id="download-design" aria-label="下载设计">下载设计</button>
+                <button id="upload-design" aria-label="上传设计">上传设计</button>
+                <input id="upload-design-input" type="file" accept=".json,application/json" style="display:none" />
+                <button id="clear-diagram" aria-label="清空图表">清空</button>
+                <button id="help" aria-label="查看帮助">帮助</button>
+                <button id="settings" aria-label="快捷键设置">设置</button>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <aside id="drawing-sidebar" class="sidebar" role="complementary" aria-label="绘图工具">
+                <button id="sidebar-collapse" class="sidebar-collapse" aria-label="收缩操作面板" aria-expanded="true" aria-controls="drawing-sidebar" title="收缩操作面板">‹</button>
+                <h3>图形工具</h3>
+                <div class="tool-group">
+                    <h4>基本图形</h4>
+                    <div class="tools" role="group" aria-label="基本图形工具">
+                        <button class="tool" data-tool="rectangle" aria-label="绘制矩形">
+                            <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                                <rect x="2" y="2" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>矩形</span>
+                        </button>
+                        <button class="tool" data-tool="ellipse" aria-label="绘制椭圆">
+                            <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                                <ellipse cx="12" cy="12" rx="10" ry="10" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>椭圆</span>
+                        </button>
+                        <button class="tool" data-tool="text" aria-label="添加文本">
+                            <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <polyline points="14 2 14 8 20 8" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <line x1="16" y1="13" x2="8" y2="13" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <line x1="16" y1="17" x2="8" y2="17" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <polyline points="10 9 9 9 8 9" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>文本</span>
+                        </button>
+                        <button class="tool" data-tool="line" aria-label="绘制直线">
+                            <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                                <line x1="2" y1="12" x2="22" y2="12" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>直线</span>
+                        </button>
+                        <button class="tool" data-tool="triangle" aria-label="绘制三角形">
+                            <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                                <polygon points="12,4 20,20 4,20" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>三角形</span>
+                        </button>
+                        <button class="tool" data-tool="diamond" aria-label="绘制菱形">
+                            <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                                <polygon points="12,3 21,12 12,21 3,12" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>菱形</span>
+                        </button>
+                        <button class="tool" data-tool="arrow" aria-label="绘制箭头">
+                            <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                                <line x1="5" y1="12" x2="19" y2="12" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <polyline points="12 5 19 12 12 19" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>箭头</span>
+                        </button>
+                        <button class="tool" data-tool="curved-arrow" aria-label="绘制弧线箭头">
+                            <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M4 16 Q12 4 20 12" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <polyline points="16 8 20 12 15 13" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>弧线箭头</span>
+                        </button>
+                        <button class="tool" data-tool="orthogonal-arrow" aria-label="绘制折线">
+                            <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                                <polyline points="4 6 11 6 11 12 18 12 18 17" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <polyline points="15 14 18 17 21 14" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>折线</span>
+                        </button>
+                        <button class="tool" data-tool="pen" aria-label="自由绘制">
+                            <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 19l7-7 3 3-7 7-3-3z" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <path d="M2 2l7.586 7.586" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <circle cx="11" cy="11" r="2" fill="currentColor"/>
+                            </svg>
+                            <span>画笔</span>
+                        </button>
+                        <button class="tool" data-tool="sticky" aria-label="添加便签">
+                            <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M15.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L15.5 2z" fill="#FFEB3B" stroke="#F9A825" stroke-width="1.5"/>
+                                <path d="M16 2v6h6" fill="none" stroke="#F9A825" stroke-width="1.5"/>
+                                <line x1="8" y1="10" x2="14" y2="10" stroke="#5D4037" stroke-width="1.5"/>
+                                <line x1="8" y1="13" x2="12" y2="13" stroke="#5D4037" stroke-width="1.5"/>
+                                <line x1="8" y1="16" x2="13" y2="16" stroke="#5D4037" stroke-width="1.5"/>
+                            </svg>
+                            <span>便签</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="tool-group">
+                    <h4>UML图形</h4>
+                    <div class="tools" role="group" aria-label="UML图形工具">
+                        <button class="tool" data-tool="class" aria-label="绘制UML类图">
+                            <div class="class-icon" aria-hidden="true">
+                                <div class="class-top"></div>
+                                <div class="class-middle"></div>
+                                <div class="class-bottom"></div>
+                            </div>
+                            <span>类</span>
+                        </button>
+                        <button class="tool" data-tool="use-case" aria-label="绘制用例图">
+                            <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>用例</span>
+                        </button>
+                        <button class="tool" data-tool="actor" aria-label="绘制参与者">
+                            <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="12" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <path d="M5 21h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2z" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>参与者</span>
+                        </button>
+                        <button class="tool" data-tool="package" aria-label="绘制包图">
+                            <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <polyline points="3.27 6.96 12 12.01 20.73 6.96" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <line x1="12" y1="22.08" x2="12" y2="12" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>包</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="tool-group">
+                    <h4>自定义图形</h4>
+                    <div class="custom-shape-actions-row">
+                        <button id="create-custom-shape" class="create-custom-shape-btn" aria-label="将当前选中元素组合并保存为自定义图形">组合为图形</button>
+                        <button id="ungroup-shape" class="ungroup-shape-btn" aria-label="拆分当前选中的组合图形">拆分图形</button>
+                    </div>
+                    <div style="display:flex; gap:8px; margin-bottom:8px;">
+                        <button id="download-shapes" class="create-custom-shape-btn" aria-label="下载自定义图形">下载图形</button>
+                        <button id="import-shapes" class="ungroup-shape-btn" aria-label="导入自定义图形">导入图形</button>
+                        <input id="import-shapes-input" type="file" accept="application/json" style="display:none" />
+                    </div>
+                    <div id="custom-shapes-list" class="custom-shapes-list" role="group" aria-label="自定义图形列表"></div>
+                </div>
+                <div class="tool-group">
+                    <h4>操作</h4>
+                    <div class="tools" role="group" aria-label="操作工具">
+                        <button id="sidebar-paste" class="tool" aria-label="黏贴" title="黏贴">
+                            <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M19 7h-3V4H8v3H5v13h14V7zM9 4h6v3H9V4z" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <rect x="9" y="10" width="6" height="6" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>黏贴</span>
+                        </button>
+                        <button class="tool" data-tool="select" aria-label="选择工具">
+                            <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                                <rect x="3" y="3" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="4"/>
+                            </svg>
+                            <span>选择</span>
+                        </button>
+                        <button class="tool" data-tool="pan" aria-label="拖拽画布">
+                            <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <path d="M12 2v3m0 14v3M2 12h3m14 0h3" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>拖拽</span>
+                        </button>
+                        <button class="tool" data-tool="delete" aria-label="删除元素">
+                            <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                                <polyline points="3 6 5 6 21 6" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>删除</span>
+                        </button>
+                    </div>
+                </div>
+            </aside>
+
+            <main class="canvas-area" role="main">
+                <nav class="diagram-tabs" aria-label="图表导航">
+                    <div class="tab active" data-diagram="1" role="tab" aria-selected="true" tabindex="0">
+                        图 1
+                        <button class="close-tab" aria-label="关闭标签">×</button>
+                    </div>
+                </nav>
+
+                <div class="canvas-container">
+                    <canvas id="canvas" width="1200" height="800" role="img" aria-label="UML绘图画布"></canvas>
+                    <textarea id="inline-text-editor" class="inline-text-editor" aria-label="图形文本快速编辑"></textarea>
+
+                    <div class="zoom-controls" aria-label="画布缩放控制">
+                        <button id="zoom-out" class="zoom-btn" aria-label="缩小画布" title="缩小">
+                            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <line x1="8" y1="11" x2="14" y2="11" stroke="currentColor" stroke-width="2"/>
+                                <line x1="16.65" y1="16.65" x2="21" y2="21" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                        </button>
+                        <button id="zoom-reset" class="zoom-btn zoom-rate" aria-label="重置缩放比例" title="重置缩放">100%</button>
+                        <button id="zoom-in" class="zoom-btn" aria-label="放大画布" title="放大">
+                            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <line x1="11" y1="8" x2="11" y2="14" stroke="currentColor" stroke-width="2"/>
+                                <line x1="8" y1="11" x2="14" y2="11" stroke="currentColor" stroke-width="2"/>
+                                <line x1="16.65" y1="16.65" x2="21" y2="21" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="quick-tool-controls" aria-label="常用操作">
+                        <button id="quick-paste" class="zoom-btn" aria-label="黏贴" title="黏贴">
+                            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M19 7h-3V4H8v3H5v13h14V7zM9 4h6v3H9V4z" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <rect x="9" y="10" width="6" height="6" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                        </button>
+                        <button id="quick-select" class="zoom-btn" aria-label="选择工具" title="选择">
+                            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                                <rect x="3" y="3" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="4"/>
+                            </svg>
+                        </button>
+                        <button id="quick-pan" class="zoom-btn" aria-label="拖拽画布" title="拖拽">
+                            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <path d="M12 2v3m0 14v3M2 12h3m14 0h3" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                        </button>
+                        <button id="quick-delete" class="zoom-btn" aria-label="删除工具" title="删除">
+                            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                                <polyline points="3 6 5 6 21 6" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div id="floating-buttons" class="floating-buttons" aria-label="移动端工具按钮">
+                        <button id="btn-tools" class="floating-btn" aria-label="打开工具面板">
+                            <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                                <rect x="3" y="3" width="7" height="7" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <rect x="14" y="3" width="7" height="7" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <rect x="14" y="14" width="7" height="7" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <rect x="3" y="14" width="7" height="7" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="bottom-toolbar" class="bottom-toolbar" style="display: none;" role="toolbar" aria-label="底部操作栏">
+                    <button id="btn-copy" class="bottom-btn" aria-label="复制">
+                        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+                            <rect x="9" y="9" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"/>
+                            <rect x="5" y="5" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                        <span>复制</span>
+                    </button>
+                    <button id="btn-property" class="bottom-btn" aria-label="属性设置">
+                        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" fill="none" stroke="currentColor" stroke-width="2"/>
+                            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" fill="none" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                        <span>属性</span>
+                    </button>
+                    <button id="btn-delete" class="bottom-btn" aria-label="删除">
+                        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+                            <polyline points="3 6 5 6 21 6" fill="none" stroke="currentColor" stroke-width="2"/>
+                            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" fill="none" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                        <span>删除</span>
+                    </button>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div id="help-dialog" class="help-dialog" role="dialog" aria-labelledby="help-title" aria-modal="true">
+        <div class="help-content">
+            <h2 id="help-title">快捷键帮助</h2>
+            <div class="help-section">
+                <h3>选择操作</h3>
+                <ul>
+                    <li><strong>点击</strong> - 选择单个元素</li>
+                    <li><strong>Ctrl+点击</strong> - 多选/取消选择元素</li>
+                    <li><strong>拖拽</strong> - 移动选中的元素</li>
+                    <li><strong>框选</strong> - 拖拽选择多个元素</li>
+                </ul>
+            </div>
+            <div class="help-section">
+                <h3>画布操作</h3>
+                <ul>
+                    <li><strong>按住 <span id="help-shortcut-pan">空格</span> + 左键拖动</strong> - 抓取并移动画布</li>
+                    <li><strong>选择拖拽工具</strong> - 也可点击工具栏中的"拖拽"按钮</li>
+                    <li><strong>PC端备选</strong> - 中键拖拽或Alt+左键拖拽</li>
+                </ul>
+            </div>
+            <div class="help-section">
+                <h3>调整大小</h3>
+                <ul>
+                    <li><strong>选中单个元素</strong> - 显示8个控制点</li>
+                    <li><strong>拖拽控制点</strong> - 调整元素大小</li>
+                </ul>
+            </div>
+            <div class="help-section">
+                <h3>编辑操作</h3>
+                <ul>
+                    <li><strong id="help-shortcut-delete">Backspace</strong> - 删除选中元素</li>
+                    <li><strong id="help-shortcut-copy">Ctrl+C</strong> - 复制选中元素</li>
+                    <li><strong id="help-shortcut-paste">Ctrl+V</strong> - 粘贴元素</li>
+                    <li><strong><span id="help-shortcut-moveUp">↑</span>/<span id="help-shortcut-moveDown">↓</span>/<span id="help-shortcut-moveLeft">←</span>/<span id="help-shortcut-moveRight">→</span></strong> - 移动选中元素；未选中时移动视角</li>
+                    <li><strong>设置</strong> - 自定义以上快捷键</li>
+                    <li><strong>Ctrl+G</strong> - 组合选中元素</li>
+                    <li><strong>Ctrl+U</strong> - 取消组合</li>
+                </ul>
+            </div>
+            <div class="help-section">
+                <h3>画笔工具</h3>
+                <ul>
+                    <li><strong>选择画笔</strong> - 点击画笔工具按钮</li>
+                    <li><strong>绘制</strong> - 按住鼠标拖拽绘制自由线条</li>
+                    <li><strong>完成</strong> - 松开鼠标完成绘制</li>
+                </ul>
+            </div>
+            <button class="close-help" id="close-help">关闭</button>
+        </div>
+    </div>
+
+    <div id="settings-dialog" class="help-dialog" role="dialog" aria-labelledby="settings-title" aria-modal="true">
+        <div class="help-content settings-content">
+            <h2 id="settings-title">快捷键设置</h2>
+            <p class="settings-hint">点击快捷键后按下新的按键组合；方向键在选中元素时移动元素，否则移动视角。</p>
+            <div class="shortcut-list">
+                <div class="shortcut-row"><span>复制</span><button type="button" class="shortcut-capture" data-shortcut="copy">Ctrl+C</button></div>
+                <div class="shortcut-row"><span>粘贴</span><button type="button" class="shortcut-capture" data-shortcut="paste">Ctrl+V</button></div>
+                <div class="shortcut-row"><span>向上移动 / 向上移动视角</span><button type="button" class="shortcut-capture" data-shortcut="moveUp">↑</button></div>
+                <div class="shortcut-row"><span>向下移动 / 向下移动视角</span><button type="button" class="shortcut-capture" data-shortcut="moveDown">↓</button></div>
+                <div class="shortcut-row"><span>向左移动 / 向左移动视角</span><button type="button" class="shortcut-capture" data-shortcut="moveLeft">←</button></div>
+                <div class="shortcut-row"><span>向右移动 / 向右移动视角</span><button type="button" class="shortcut-capture" data-shortcut="moveRight">→</button></div>
+                <div class="shortcut-row"><span>删除选中元素</span><button type="button" class="shortcut-capture" data-shortcut="delete">Backspace</button></div>
+                <div class="shortcut-row"><span>按住抓取画板</span><button type="button" class="shortcut-capture" data-shortcut="pan">空格</button></div>
+            </div>
+            <p id="shortcut-settings-status" class="settings-status" aria-live="polite"></p>
+            <div class="settings-actions">
+                <button id="reset-shortcuts" type="button">恢复默认</button>
+                <button id="close-settings" type="button" class="close-help">完成</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="property-dialog" class="help-dialog" role="dialog" aria-labelledby="property-title" aria-modal="true">
+        <div class="help-content" style="max-width: 400px;">
+            <h2 id="property-title">属性设置</h2>
+
+            <div class="help-section">
+                <h3>尺寸</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                    <div>
+                        <label for="prop-width">宽度:</label>
+                        <input type="number" id="prop-width" min="10" style="width: 100%; padding: 5px;">
+                    </div>
+                    <div>
+                        <label for="prop-height">高度:</label>
+                        <input type="number" id="prop-height" min="10" style="width: 100%; padding: 5px;">
+                    </div>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <h3>线条样式</h3>
+                <div style="margin-bottom: 10px;">
+                    <label for="prop-stroke-width">线条粗细:</label>
+                    <input type="number" id="prop-stroke-width" min="1" max="20" style="width: 100%; padding: 5px;">
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <label for="prop-stroke-color">线条颜色:</label>
+                    <input type="color" id="prop-stroke-color" style="width: 100%; padding: 5px;">
+                </div>
+            </div>
+
+            <div class="help-section">
+                <h3>填充样式</h3>
+                <div style="margin-bottom: 10px;">
+                    <label for="prop-fill-color">背景颜色:</label>
+                    <input type="color" id="prop-fill-color" style="width: 100%; padding: 5px;">
+                </div>
+            </div>
+
+            <div class="help-section">
+                <h3>文本内容</h3>
+                <div style="margin-bottom: 10px;">
+                    <label for="prop-text">文本:</label>
+                    <textarea id="prop-text" rows="3" style="width: 100%; padding: 5px;"></textarea>
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <label for="prop-font-size">字体大小:</label>
+                    <input type="number" id="prop-font-size" min="8" max="72" style="width: 100%; padding: 5px;">
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <label for="prop-text-color">文本颜色:</label>
+                    <input type="color" id="prop-text-color" style="width: 100%; padding: 5px;">
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <label for="prop-text-position">文本位置:</label>
+                    <select id="prop-text-position" style="width: 100%; padding: 5px;">
+                        <option value="center">居中</option>
+                        <option value="top">顶部</option>
+                        <option value="bottom">底部</option>
+                        <option value="left">左侧</option>
+                        <option value="right">右侧</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <h3>共通属性</h3>
+                <div style="margin-bottom: 10px;">
+                    <label for="prop-layer">层级:</label>
+                    <input type="number" id="prop-layer" min="1" step="1" style="width: 100%; padding: 5px;">
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <button id="prop-layer-up" type="button" style="padding: 8px 10px;">上移一层</button>
+                    <button id="prop-layer-down" type="button" style="padding: 8px 10px;">下移一层</button>
+                    <button id="prop-layer-top" type="button" style="padding: 8px 10px;">置于顶层</button>
+                    <button id="prop-layer-bottom" type="button" style="padding: 8px 10px;">置于底层</button>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button id="close-property" style="padding: 8px 16px;">取消</button>
+                <button id="apply-property" style="padding: 8px 16px; background: #4CAF50; color: white; border: none;">应用</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="drawing-tools.js"></script>
+</body>
+</html>
