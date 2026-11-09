@@ -1,6 +1,7 @@
 window.DrawingToolModules = window.DrawingToolModules || {};
 window.DrawingToolModules.rectangle = {
     kind: 'shape',
+    properties: 'shape',
     create(x, y) {
         return window.DrawingToolShared.createBox('rectangle', x, y);
     },

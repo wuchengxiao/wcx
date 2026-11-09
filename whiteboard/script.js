@@ -184,26 +184,12 @@ class UMLDrawer {
     }
     
     showPropertyDialog(element) {
-        this.currentEditingElement = element;
-        this.ensureDiagramElementLayers(this.diagrams[this.currentDiagram]);
-        
-        // 填充当前值
-        document.getElementById('prop-width').value = Math.abs(element.width);
-        document.getElementById('prop-height').value = Math.abs(element.height);
-        document.getElementById('prop-stroke-width').value = element.strokeWidth || 2;
-        document.getElementById('prop-stroke-color').value = element.stroke || '#333333';
-        document.getElementById('prop-fill-color').value = element.fill || '#ffffff';
-        document.getElementById('prop-text').value = element.text || '';
-        document.getElementById('prop-font-size').value = element.fontSize || 14;
-        document.getElementById('prop-text-color').value = element.textColor || '#333333';
-        document.getElementById('prop-text-position').value = element.textPosition || 'center';
-        document.getElementById('prop-layer').value = this.getElementLayer(element);
-        
-        document.getElementById('property-dialog').classList.add('show');
+        window.DrawingPropertySettings.show(this, element);
     }
     
     hidePropertyDialog() {
-        document.getElementById('property-dialog').classList.remove('show');
+        const dialog = document.getElementById('property-dialog');
+        if (dialog) dialog.classList.remove('show');
         this.currentEditingElement = null;
     }
 
@@ -295,13 +281,13 @@ class UMLDrawer {
             this.ctx.font = `${element.fontSize || 14}px ${element.fontFamily || 'Arial'}`;
             const lines = String(element.text || '').split('\n');
             const widths = lines.map(line => this.ctx.measureText(line).width);
-            const width = Math.max(40, ...(widths.length ? widths : [0]));
+            const measuredWidth = Math.max(40, ...(widths.length ? widths : [0]));
             const lineHeight = (element.fontSize || 14) * 1.2;
             return {
                 x: element.x,
                 y: element.y - (element.fontSize || 14),
-                width,
-                height: Math.max(lineHeight, lines.length * lineHeight)
+                width: Number(element.width) > 0 ? Number(element.width) : measuredWidth,
+                height: Number(element.height) > 0 ? Number(element.height) : Math.max(lineHeight, lines.length * lineHeight)
             };
         }
 
@@ -405,39 +391,7 @@ class UMLDrawer {
     }
 
     applyPropertyChanges() {
-        if (!this.currentEditingElement) return;
-        
-        const element = this.currentEditingElement;
-        
-        // 应用尺寸
-        const newWidth = parseInt(document.getElementById('prop-width').value);
-        const newHeight = parseInt(document.getElementById('prop-height').value);
-        if (newWidth > 0) element.width = newWidth;
-        if (newHeight > 0) element.height = newHeight;
-        
-        // 应用样式
-        element.strokeWidth = parseInt(document.getElementById('prop-stroke-width').value) || 2;
-        element.stroke = document.getElementById('prop-stroke-color').value;
-        element.fill = document.getElementById('prop-fill-color').value;
-        
-        // 应用文本
-        element.text = document.getElementById('prop-text').value;
-        element.fontSize = parseInt(document.getElementById('prop-font-size').value) || 14;
-        element.textColor = document.getElementById('prop-text-color').value;
-        element.textPosition = document.getElementById('prop-text-position').value;
-
-        // 应用共通属性：层级
-        const newLayer = parseInt(document.getElementById('prop-layer').value, 10);
-        if (Number.isFinite(newLayer) && newLayer >= 1) {
-            this.setElementLayer(element, newLayer);
-        }
-
-        if (element.id) {
-            this.syncAttachedArrowsForElementIds(new Set([element.id]));
-        }
-        
-        this.hidePropertyDialog();
-        this.render();
+        window.DrawingPropertySettings.apply(this);
     }
     
     handleWindowResize() {
@@ -545,16 +499,11 @@ class UMLDrawer {
             'close-settings': this.hideSettings.bind(this),
             'reset-shortcuts': this.resetKeybindings.bind(this),
             'close-help': this.hideHelp.bind(this),
-            'close-property': this.hidePropertyDialog.bind(this),
-            'apply-property': this.applyPropertyChanges.bind(this),
-            'prop-layer-up': this.moveEditingElementLayerUp.bind(this),
-            'prop-layer-down': this.moveEditingElementLayerDown.bind(this),
-            'prop-layer-top': this.moveEditingElementLayerToTop.bind(this),
-            'prop-layer-bottom': this.moveEditingElementLayerToBottom.bind(this),
             'btn-delete': this.deleteSelectedElements.bind(this),
             'btn-tools': this.toggleToolsPanel.bind(this),
             'sidebar-collapse': this.toggleSidebarCollapse.bind(this),
             'btn-property': this.showPropertyForSelected.bind(this),
+            'btn-align': this.toggleAlignmentMenu.bind(this),
             'btn-copy': this.handleCopyButtonClick.bind(this),
             'quick-paste': this.handlePasteButtonClick.bind(this),
             'sidebar-paste': this.handlePasteButtonClick.bind(this),
@@ -578,6 +527,14 @@ class UMLDrawer {
                 console.warn(`Element with id '${id}' not found`);
             }
         }
+
+        document.querySelectorAll('#alignment-menu [data-align]').forEach(button => {
+            button.addEventListener('click', () => this.alignSelectedElements(button.dataset.align));
+        });
+        document.addEventListener('click', event => {
+            const control = document.querySelector('.alignment-control');
+            if (control && !control.contains(event.target)) this.closeAlignmentMenu();
+        });
 
         document.querySelectorAll('.shortcut-capture').forEach(button => {
             button.addEventListener('click', () => this.startShortcutCapture(button.dataset.shortcut));
@@ -744,6 +701,55 @@ class UMLDrawer {
         }
     }
 
+    toggleAlignmentMenu() {
+        const menu = document.getElementById('alignment-menu');
+        const button = document.getElementById('btn-align');
+        if (!menu || !button) return;
+        menu.hidden = !menu.hidden;
+        button.setAttribute('aria-expanded', String(!menu.hidden));
+    }
+
+    closeAlignmentMenu() {
+        const menu = document.getElementById('alignment-menu');
+        const button = document.getElementById('btn-align');
+        if (menu) menu.hidden = true;
+        if (button) button.setAttribute('aria-expanded', 'false');
+    }
+
+    alignSelectedElements(alignment) {
+        const selected = this.diagrams[this.currentDiagram].selectedElements;
+        if (selected.length < 2) return;
+
+        const bounds = selected.map(element => this.getElementBounds(element));
+        const minX = Math.min(...bounds.map(item => item.x));
+        const minY = Math.min(...bounds.map(item => item.y));
+        const maxX = Math.max(...bounds.map(item => item.x + item.width));
+        const maxY = Math.max(...bounds.map(item => item.y + item.height));
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        const movedElementIds = new Set();
+
+        selected.forEach((element, index) => {
+            const item = bounds[index];
+            let dx = 0;
+            let dy = 0;
+            if (alignment === 'top') dy = minY - item.y;
+            else if (alignment === 'horizontal-center') dx = centerX - (item.x + item.width / 2);
+            else if (alignment === 'bottom') dy = maxY - (item.y + item.height);
+            else if (alignment === 'left') dx = minX - item.x;
+            else if (alignment === 'vertical-center') dy = centerY - (item.y + item.height / 2);
+            else if (alignment === 'right') dx = maxX - (item.x + item.width);
+            else return;
+
+            if (element.id) movedElementIds.add(element.id);
+            this.translateElement(element, dx, dy);
+        });
+
+        this.syncAttachedArrowsForElementIds(movedElementIds);
+        this.closeAlignmentMenu();
+        this.render();
+    }
+
     async handleCopyButtonClick() {
         await this.copySelectedElementsToSystemClipboard();
     }
@@ -755,9 +761,15 @@ class UMLDrawer {
     updateBottomToolbar() {
         const diagram = this.diagrams[this.currentDiagram];
         const bottomToolbar = document.getElementById('bottom-toolbar');
-        const hasSelection = diagram.selectedElements.length > 0;
+        const selectionCount = diagram.selectedElements.length;
+        const hasSelection = selectionCount > 0;
 
         bottomToolbar.style.display = hasSelection ? 'flex' : 'none';
+        const propertyButton = document.getElementById('btn-property');
+        const alignmentButton = document.getElementById('btn-align');
+        if (propertyButton) propertyButton.style.display = selectionCount === 1 ? 'flex' : 'none';
+        if (alignmentButton) alignmentButton.style.display = selectionCount > 1 ? 'flex' : 'none';
+        if (selectionCount < 2) this.closeAlignmentMenu();
     }
 
     handleWheel(e) {
@@ -2184,7 +2196,7 @@ class UMLDrawer {
         if (!this.currentEditingElement) return;
         const current = this.getElementLayer(this.currentEditingElement);
         this.setElementLayer(this.currentEditingElement, current + 1);
-        document.getElementById('prop-layer').value = this.getElementLayer(this.currentEditingElement);
+        this.updatePropertyLayerField();
         this.render();
     }
 
@@ -2192,7 +2204,7 @@ class UMLDrawer {
         if (!this.currentEditingElement) return;
         const current = this.getElementLayer(this.currentEditingElement);
         this.setElementLayer(this.currentEditingElement, current - 1);
-        document.getElementById('prop-layer').value = this.getElementLayer(this.currentEditingElement);
+        this.updatePropertyLayerField();
         this.render();
     }
 
@@ -2200,15 +2212,20 @@ class UMLDrawer {
         if (!this.currentEditingElement) return;
         const diagram = this.diagrams[this.currentDiagram];
         this.setElementLayer(this.currentEditingElement, diagram.elements.length);
-        document.getElementById('prop-layer').value = this.getElementLayer(this.currentEditingElement);
+        this.updatePropertyLayerField();
         this.render();
     }
 
     moveEditingElementLayerToBottom() {
         if (!this.currentEditingElement) return;
         this.setElementLayer(this.currentEditingElement, 1);
-        document.getElementById('prop-layer').value = this.getElementLayer(this.currentEditingElement);
+        this.updatePropertyLayerField();
         this.render();
+    }
+
+    updatePropertyLayerField() {
+        const field = document.querySelector('[data-property-key="layer"]');
+        if (field && this.currentEditingElement) field.value = this.getElementLayer(this.currentEditingElement);
     }
 
     addElementToDiagram(diagram, element) {
@@ -3185,6 +3202,12 @@ class UMLDrawer {
         const textPosition = element.textPosition || 'center';
         const padding = ['line', 'arrow', 'curved-arrow', 'orthogonal-arrow'].includes(element.type) ? 8 : 5;
         const textBounds = this.getElementTextLayoutBounds(element);
+
+        const backgroundColor = element.type === 'text' ? null : element.textBackgroundColor;
+        if (backgroundColor) {
+            ctx.fillStyle = backgroundColor;
+            ctx.fillRect(textBounds.x, textBounds.y, textBounds.width, textBounds.height);
+        }
 
         // Path/layout calculations can change the shared canvas context font.
         // Apply this element's label style after calculating its layout.

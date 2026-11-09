@@ -340,6 +340,19 @@
                         </svg>
                         <span>属性</span>
                     </button>
+                    <div class="alignment-control">
+                        <button id="btn-align" class="bottom-btn" aria-label="对齐" aria-expanded="false" aria-controls="alignment-menu" style="display: none;">
+                            <span>对齐</span>
+                        </button>
+                        <div id="alignment-menu" class="alignment-menu" role="menu" aria-label="对齐方式" hidden>
+                            <button type="button" data-align="top" role="menuitem">顶部对齐</button>
+                            <button type="button" data-align="horizontal-center" role="menuitem">水平居中</button>
+                            <button type="button" data-align="bottom" role="menuitem">底部对齐</button>
+                            <button type="button" data-align="left" role="menuitem">左对齐</button>
+                            <button type="button" data-align="vertical-center" role="menuitem">竖直居中</button>
+                            <button type="button" data-align="right" role="menuitem">右对齐</button>
+                        </div>
+                    </div>
                     <button id="btn-delete" class="bottom-btn" aria-label="删除">
                         <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
                             <polyline points="3 6 5 6 21 6" fill="none" stroke="currentColor" stroke-width="2"/>
@@ -425,90 +438,6 @@
         </div>
     </div>
 
-    <div id="property-dialog" class="help-dialog" role="dialog" aria-labelledby="property-title" aria-modal="true">
-        <div class="help-content" style="max-width: 400px;">
-            <h2 id="property-title">属性设置</h2>
-
-            <div class="help-section">
-                <h3>尺寸</h3>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
-                    <div>
-                        <label for="prop-width">宽度:</label>
-                        <input type="number" id="prop-width" min="10" style="width: 100%; padding: 5px;">
-                    </div>
-                    <div>
-                        <label for="prop-height">高度:</label>
-                        <input type="number" id="prop-height" min="10" style="width: 100%; padding: 5px;">
-                    </div>
-                </div>
-            </div>
-
-            <div class="help-section">
-                <h3>线条样式</h3>
-                <div style="margin-bottom: 10px;">
-                    <label for="prop-stroke-width">线条粗细:</label>
-                    <input type="number" id="prop-stroke-width" min="1" max="20" style="width: 100%; padding: 5px;">
-                </div>
-                <div style="margin-bottom: 10px;">
-                    <label for="prop-stroke-color">线条颜色:</label>
-                    <input type="color" id="prop-stroke-color" style="width: 100%; padding: 5px;">
-                </div>
-            </div>
-
-            <div class="help-section">
-                <h3>填充样式</h3>
-                <div style="margin-bottom: 10px;">
-                    <label for="prop-fill-color">背景颜色:</label>
-                    <input type="color" id="prop-fill-color" style="width: 100%; padding: 5px;">
-                </div>
-            </div>
-
-            <div class="help-section">
-                <h3>文本内容</h3>
-                <div style="margin-bottom: 10px;">
-                    <label for="prop-text">文本:</label>
-                    <textarea id="prop-text" rows="3" style="width: 100%; padding: 5px;"></textarea>
-                </div>
-                <div style="margin-bottom: 10px;">
-                    <label for="prop-font-size">字体大小:</label>
-                    <input type="number" id="prop-font-size" min="8" max="72" style="width: 100%; padding: 5px;">
-                </div>
-                <div style="margin-bottom: 10px;">
-                    <label for="prop-text-color">文本颜色:</label>
-                    <input type="color" id="prop-text-color" style="width: 100%; padding: 5px;">
-                </div>
-                <div style="margin-bottom: 10px;">
-                    <label for="prop-text-position">文本位置:</label>
-                    <select id="prop-text-position" style="width: 100%; padding: 5px;">
-                        <option value="center">居中</option>
-                        <option value="top">顶部</option>
-                        <option value="bottom">底部</option>
-                        <option value="left">左侧</option>
-                        <option value="right">右侧</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="help-section">
-                <h3>共通属性</h3>
-                <div style="margin-bottom: 10px;">
-                    <label for="prop-layer">层级:</label>
-                    <input type="number" id="prop-layer" min="1" step="1" style="width: 100%; padding: 5px;">
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                    <button id="prop-layer-up" type="button" style="padding: 8px 10px;">上移一层</button>
-                    <button id="prop-layer-down" type="button" style="padding: 8px 10px;">下移一层</button>
-                    <button id="prop-layer-top" type="button" style="padding: 8px 10px;">置于顶层</button>
-                    <button id="prop-layer-bottom" type="button" style="padding: 8px 10px;">置于底层</button>
-                </div>
-            </div>
-
-            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
-                <button id="close-property" style="padding: 8px 16px;">取消</button>
-                <button id="apply-property" style="padding: 8px 16px; background: #4CAF50; color: white; border: none;">应用</button>
-            </div>
-        </div>
-    </div>
 
     <script src="drawing-tools.js"></script>
 </body>

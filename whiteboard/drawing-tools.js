@@ -1,5 +1,6 @@
 (function () {
     const toolScripts = [
+        '../property-settings.js',
         'shared.js',
         'rectangle.js', 'ellipse.js', 'triangle.js', 'diamond.js', 'sticky.js',
         'class.js', 'use-case.js', 'actor.js', 'package.js',
@@ -23,6 +24,14 @@
         const tools = window.DrawingToolModules;
         const shapeTypes = new Set(['rectangle', 'ellipse', 'triangle', 'diamond', 'sticky', 'class', 'use-case', 'actor', 'package']);
         const lineTypes = new Set(['line', 'arrow', 'curved-arrow', 'orthogonal-arrow']);
+
+        Object.values(tools).forEach(tool => {
+            if (tool.properties) return;
+            if (tool.kind === 'shape') tool.properties = 'shape';
+            else if (tool.kind === 'line') tool.properties = 'line';
+            else if (tool.kind === 'text') tool.properties = 'text';
+            else if (tool.kind === 'pen') tool.properties = 'pen';
+        });
 
         window.DrawingTools = {
             registry: tools,
