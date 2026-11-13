@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebSocket 中继聊天</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --card: #ffffff;
+      --line: #e2e6eb;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --accent-dark: #1d4ed8;
+      --ok: #16a34a;
+      --warn: #d97706;
+      --err: #dc2626;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+
+    .app {
+      width: min(100%, 840px);
+      margin: 0 auto;
+      padding: 24px 16px 40px;
+    }
+
+    header h1 {
+      margin: 0 0 8px;
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .steps {
+      margin: 0 0 8px;
+      padding-left: 22px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .steps li {
+      margin: 3px 0;
+    }
+
+    .steps strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .warn {
+      margin: 8px 0 18px;
+      color: var(--warn);
+      font-size: 13px;
+    }
+
+    kbd {
+      padding: 1px 5px;
+      border: 1px solid var(--line);
+      border-bottom-width: 2px;
+      border-radius: 4px;
+      background: #fff;
+      color: var(--text);
+      font: 12px/1.4 Consolas, monospace;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+
+    .config {
+      padding: 16px;
+    }
+
+    .config-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 12px;
+      align-items: end;
+    }
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    input, textarea {
+      width: 100%;
+      padding: 9px 11px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+      outline: none;
+    }
+
+    input:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    }
+
+    input:disabled, textarea:disabled {
+      background: #f8f9fb;
+      color: #9ca3af;
+      cursor: not-allowed;
+    }
+
+    button {
+      padding: 9px 20px;
+      border: 0;
+      border-radius: 7px;
+      background: var(--accent);
+      color: #fff;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+
+    button:hover:not(:disabled) {
+      background: var(--accent-dark);
+    }
+
+    button:disabled {
+      background: #c7d2e3;
+      cursor: not-allowed;
+    }
+
+    .advanced {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .advanced summary {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .advanced label {
+      margin-top: 10px;
+    }
+
+    .advanced p {
+      margin: 6px 0 0;
+    }
+    .chat {
+      margin-top: 16px;
+      overflow: hidden;
+    }
+
+    .chat-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 18px;
+      padding: 11px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfd;
+      font-size: 13px;
+    }
+
+    .status {
+      font-weight: 600;
+    }
+
+    .status::before {
+      content: "";
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      margin-right: 6px;
+      border-radius: 50%;
+      background: #9ca3af;
+      vertical-align: 1px;
+    }
+
+    .status[data-state="connecting"]::before {
+      background: var(--warn);
+    }
+
+    .status[data-state="online"]::before {
+      background: var(--ok);
+    }
+
+    .status[data-state="error"]::before {
+      background: var(--err);
+    }
+
+    .chat-head .meta {
+      color: var(--muted);
+    }
+
+    .chat-head .meta:last-child {
+      margin-left: auto;
+    }
+
+    .messages {
+      height: min(52vh, 480px);
+      min-height: 260px;
+      overflow-y: auto;
+      padding: 14px 16px;
+      background: #fafbfc;
+    }
+
+    .msg {
+      margin: 0 0 12px;
+    }
+
+    .msg .meta {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 3px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .msg .who {
+      font-weight: 600;
+      color: #4b5563;
+    }
+
+    .msg .bubble {
+      display: inline-block;
+      max-width: 82%;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 4px 12px 12px 12px;
+      background: #fff;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .msg.own {
+      text-align: right;
+    }
+
+    .msg.own .meta {
+      justify-content: flex-end;
+    }
+
+    .msg.own .who {
+      color: var(--accent);
+    }
+
+    .msg.own .bubble {
+      border-color: var(--accent);
+      border-radius: 12px 4px 12px 12px;
+      background: var(--accent);
+      color: #fff;
+      text-align: left;
+    }
+
+    .sys {
+      margin: 10px 0;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .composer {
+      display: flex;
+      gap: 10px;
+      padding: 12px 16px;
+      border-top: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .composer textarea {
+      flex: 1;
+      height: 64px;
+      resize: none;
+    }
+
+    .composer button {
+      align-self: stretch;
+    }
+
+    @media (max-width: 640px) {
+      .app {
+        padding: 16px 10px 28px;
+      }
+
+      .config-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .config-grid button {
+        width: 100%;
+      }
+
+      .messages {
+        height: 48vh;
+      }
+
+      .chat-head .meta:last-child {
+        margin-left: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <h1>WebSocket 中继聊天</h1>
+      <ol class="steps">
+        <li>双方打开本页，填写<strong>相同的房间名</strong>和昵称，点「连接」。</li>
+        <li>在下方输入消息，按 <kbd>Enter</kbd> 发送，<kbd>Shift</kbd> + <kbd>Enter</kbd> 换行。</li>
+        <li>消息由公共 WebSocket 服务器转发给同一房间的其他页面，不建立 WebRTC 点对点连接。</li>
+      </ol>
+      <p class="warn">房间名相当于口令，请使用不易猜到的名字；公共服务器可读取并记录消息，请勿发送敏感内容。</p>
+    </header>
+
+    <section class="card config">
+      <div class="config-grid">
+        <label>房间名
+          <input id="room" maxlength="48" placeholder="例如 my-room-8f3k" value="my-room-8f3k" autocomplete="off" spellcheck="false">
+        </label>
+        <label>昵称
+          <input id="name" maxlength="24" placeholder="访客" autocomplete="off">
+        </label>
+        <button id="connectBtn" type="button">连接</button>
+      </div>
+      <details class="advanced">
+        <summary>高级设置：中继服务器地址</summary>
+        <label>WebSocket 地址
+          <input id="server" autocomplete="off" spellcheck="false">
+        </label>
+        <p>默认 <code>wss://y-webrtc.fly.dev</code>，需兼容 y-webrtc 的 subscribe / publish 广播协议；修改后请重新连接。</p>
+      </details>
+    </section>
+
+    <section class="card chat">
+      <div class="chat-head">
+        <span id="status" class="status" data-state="idle">未连接</span>
+        <span id="online" class="meta">在线 0 人</span>
+        <span id="myId" class="meta"></span>
+      </div>
+      <div id="messages" class="messages" aria-live="polite"></div>
+      <form id="composer" class="composer">
+        <textarea id="text" rows="2" maxlength="2000" placeholder="连接后即可输入消息…" disabled></textarea>
+        <button id="sendBtn" type="submit" disabled>发送</button>
+      </form>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      // ---------------------------------------------------------------- 配置
+      // 第三方免费公共 WebSocket 服务器：y-webrtc 的 pub/sub 广播服务。
+      // 这里只使用它的 topic 广播能力转发文本消息，不涉及 WebRTC / SDP / ICE。
+      const DEFAULT_SERVER = "wss://y-webrtc.fly.dev";
+      const TOPIC_PREFIX = "cline-ws2-relay:";
+      const HEARTBEAT_MS = 4000;
+      const PEER_TIMEOUT_MS = 12000;
+      const RECONNECT_MS = 3000;
+      const MAX_TEXT_LENGTH = 2000;
+      const MAX_MESSAGES = 300;
+
+      const els = {
+        room: document.getElementById("room"),
+        name: document.getElementById("name"),
+        server: document.getElementById("server"),
+        connectBtn: document.getElementById("connectBtn"),
+        status: document.getElementById("status"),
+        online: document.getElementById("online"),
+        myId: document.getElementById("myId"),
+        messages: document.getElementById("messages"),
+        composer: document.getElementById("composer"),
+        text: document.getElementById("text"),
+        sendBtn: document.getElementById("sendBtn")
+      };
+
+      const myId = randomId();
+      const peers = new Map(); // id -> { name, lastSeen }
+
+      let socket = null;
+      let generation = 0;       // 防止旧连接的 close 事件干扰新连接
+      let manualClose = false;
+      let reconnectTimer = null;
+      let heartbeatTimer = null;
+      let sweepTimer = null;
+
+      let currentRoom = "";
+      let currentName = "";
+      let topic = "";
+      let serverUrl = DEFAULT_SERVER;
+
+      init();
+
+      // ---------------------------------------------------------------- 初始化
+      function init() {
+        const queryRoom = new URLSearchParams(location.search).get("room");
+
+        els.room.value = queryRoom || readSetting("ws2.room") || "";
+        els.name.value = readSetting("ws2.name") || ("访客-" + myId.slice(0, 4));
+        els.server.value = readSetting("ws2.server") || DEFAULT_SERVER;
+        els.myId.textContent = "我的 ID：" + myId.toUpperCase();
+
+        els.connectBtn.addEventListener("click", () => {
+          if (socket) {
+            disconnect();
+          } else {
+            connect();
+          }
+        });
+        els.composer.addEventListener("submit", event => {
+          event.preventDefault();
+          submitMessage();
+        });
+        els.text.addEventListener("keydown", event => {
+          if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+            event.preventDefault();
+            submitMessage();
+          }
+        });
+        window.addEventListener("pagehide", () => {
+          manualClose = true;
+          if (isOpen()) {
+            try { announce("leave"); } catch (error) { /* 关页时忽略 */ }
+          }
+          if (socket) {
+            try { socket.close(1000, "pagehide"); } catch (error) { /* 忽略 */ }
+          }
+        });
+        window.addEventListener("pageshow", event => {
+          // 从往返缓存（bfcache）恢复时，旧连接已关闭，重置为未连接状态
+          if (event.persisted) {
+            disconnect();
+          }
+        });
+
+        setStatus("未连接", "idle");
+        updateOnline();
+      }
+
+      // ---------------------------------------------------------------- 连接
+      function connect() {
+        if (socket) {
+          return;
+        }
+
+        const room = els.room.value.trim();
+        if (!room) {
+          setStatus("请先填写房间名", "error");
+          els.room.focus();
+          return;
+        }
+
+        currentRoom = room.slice(0, 48);
+        currentName = (els.name.value.trim() || "匿名").slice(0, 24);
+        serverUrl = els.server.value.trim() || DEFAULT_SERVER;
+
+        if (!/^wss?:\/\//i.test(serverUrl)) {
+          setStatus("服务器地址需以 ws:// 或 wss:// 开头", "error");
+          els.server.focus();
+          return;
+        }
+        if (location.protocol === "https:" && /^ws:\/\//i.test(serverUrl)) {
+          setStatus("HTTPS 页面只能连接 wss:// 地址", "error");
+          els.server.focus();
+          return;
+        }
+
+        topic = TOPIC_PREFIX + currentRoom;
+        writeSetting("ws2.room", currentRoom);
+        writeSetting("ws2.name", currentName);
+        writeSetting("ws2.server", serverUrl);
+
+        manualClose = false;
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+        generation += 1;
+        const gen = generation;
+
+        peers.clear();
+        updateOnline();
+        setLocked(true);
+        setStatus("连接中…", "connecting");
+        els.connectBtn.textContent = "断开";
+
+        let ws;
+        try {
+          ws = new WebSocket(serverUrl);
+        } catch (error) {
+          setStatus("无法创建 WebSocket：" + error.message, "error");
+          els.connectBtn.textContent = "连接";
+          setLocked(false);
+          scheduleReconnect();
+          return;
+        }
+
+        socket = ws;
+
+        ws.addEventListener("open", () => {
+          if (gen !== generation) {
+            return;
+          }
+          setStatus("已连接 · 房间 " + currentRoom, "online");
+          els.text.disabled = false;
+          els.sendBtn.disabled = false;
+          els.text.focus();
+
+          sendJson({ type: "subscribe", topics: [topic] });
+          announce("hello");
+          startHeartbeat();
+          appendSystem("已进入房间「" + currentRoom + "」，等待其他页面加入…");
+        });
+
+        ws.addEventListener("message", event => {
+          if (gen !== generation) {
+            return;
+          }
+          handleMessage(event.data);
+        });
+
+        ws.addEventListener("error", () => {
+          if (gen !== generation || manualClose) {
+            return;
+          }
+          setStatus("连接出错，准备重连…", "error");
+        });
+
+        ws.addEventListener("close", () => {
+          if (gen !== generation) {
+            return;
+          }
+          socket = null;
+          stopHeartbeat();
+          peers.clear();
+          updateOnline();
+          setLocked(false);
+          els.text.disabled = true;
+          els.sendBtn.disabled = true;
+          els.connectBtn.textContent = "连接";
+
+          if (manualClose) {
+            setStatus("已断开", "idle");
+          } else {
+            setStatus("连接已断开，" + (RECONNECT_MS / 1000) + " 秒后重连…", "error");
+            scheduleReconnect();
+          }
+        });
+      }
+
+      function disconnect() {
+        manualClose = true;
+        generation += 1;
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+        stopHeartbeat();
+
+        if (isOpen()) {
+          announce("leave");
+        }
+        if (socket) {
+          try { socket.close(1000, "bye"); } catch (error) { /* 忽略 */ }
+        }
+
+        socket = null;
+        peers.clear();
+        updateOnline();
+        setLocked(false);
+        els.text.disabled = true;
+        els.sendBtn.disabled = true;
+        els.connectBtn.textContent = "连接";
+        setStatus("已断开", "idle");
+      }
+
+      function scheduleReconnect() {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = null;
+          if (!manualClose) {
+            connect();
+          }
+        }, RECONNECT_MS);
+      }
+
+      function setLocked(locked) {
+        els.room.disabled = locked;
+        els.name.disabled = locked;
+        els.server.disabled = locked;
+      }
+
+
+      // ---------------------------------------------------------------- 收发
+      function publish(data) {
+        if (!isOpen()) {
+          return false;
+        }
+        return sendJson({
+          type: "publish",
+          topic: topic,
+          data: Object.assign({}, data, {
+            from: myId,
+            name: currentName,
+            ts: Date.now()
+          })
+        });
+      }
+
+      function announce(kind) {
+        return publish({ kind: kind });
+      }
+
+      function sendJson(payload) {
+        if (!isOpen()) {
+          return false;
+        }
+        try {
+          socket.send(JSON.stringify(payload));
+          return true;
+        } catch (error) {
+          return false;
+        }
+      }
+
+      function handleMessage(raw) {
+        let message;
+        try {
+          message = JSON.parse(raw);
+        } catch (error) {
+          return;
+        }
+
+        // y-webrtc 服务器会把 publish 广播给 topic 下所有订阅者（包括发送者）
+        if (!message || message.type !== "publish" || message.topic !== topic || !message.data) {
+          return;
+        }
+
+        const data = message.data;
+        if (typeof data.from !== "string" || data.from === myId) {
+          return; // 自己的消息已在本地渲染，忽略服务器回显
+        }
+
+        const name = typeof data.name === "string" && data.name.trim()
+          ? data.name.trim().slice(0, 24)
+          : "匿名";
+
+        if (data.kind === "hello" || data.kind === "chat") {
+          const isNew = !peers.has(data.from);
+          peers.set(data.from, { name: name, lastSeen: Date.now() });
+          updateOnline();
+          if (isNew && data.kind === "hello") {
+            appendSystem(name + " 加入了房间");
+          }
+        }
+
+        if (data.kind === "chat" && typeof data.text === "string") {
+          appendMessage({
+            name: name,
+            text: data.text.slice(0, MAX_TEXT_LENGTH),
+            own: false,
+            ts: Number(data.ts) || Date.now()
+          });
+          return;
+        }
+
+        if (data.kind === "leave") {
+          if (peers.delete(data.from)) {
+            updateOnline();
+            appendSystem(name + " 离开了房间");
+          }
+        }
+      }
+
+      function submitMessage() {
+        const text = els.text.value.trim();
+        if (!text) {
+          return;
+        }
+        if (!isOpen()) {
+          setStatus("尚未连接，无法发送", "error");
+          return;
+        }
+        if (!publish({ kind: "chat", text: text.slice(0, MAX_TEXT_LENGTH) })) {
+          setStatus("发送失败，连接可能已断开", "error");
+          return;
+        }
+
+        appendMessage({
+          name: currentName,
+          text: text.slice(0, MAX_TEXT_LENGTH),
+          own: true,
+          ts: Date.now()
+        });
+        els.text.value = "";
+        els.text.focus();
+      }
+
+      // ---------------------------------------------------------------- 心跳
+      function startHeartbeat() {
+        stopHeartbeat();
+        heartbeatTimer = setInterval(() => announce("hello"), HEARTBEAT_MS);
+        sweepTimer = setInterval(sweepPeers, HEARTBEAT_MS);
+      }
+
+      function stopHeartbeat() {
+        clearInterval(heartbeatTimer);
+        clearInterval(sweepTimer);
+        heartbeatTimer = null;
+        sweepTimer = null;
+      }
+
+      function sweepPeers() {
+        const now = Date.now();
+        peers.forEach((peer, id) => {
+          if (now - peer.lastSeen > PEER_TIMEOUT_MS) {
+            peers.delete(id);
+            appendSystem(peer.name + " 已离线");
+          }
+        });
+        updateOnline();
+      }
+
+      // ---------------------------------------------------------------- 界面
+      function setStatus(text, state) {
+        els.status.textContent = text;
+        els.status.dataset.state = state;
+      }
+
+      function updateOnline() {
+        const count = peers.size + (isOpen() ? 1 : 0);
+        els.online.textContent = "在线 " + count + " 人";
+      }
+
+      function appendMessage(options) {
+        const wrap = document.createElement("div");
+        wrap.className = "msg" + (options.own ? " own" : "");
+
+        const meta = document.createElement("div");
+        meta.className = "meta";
+
+        const who = document.createElement("span");
+        who.className = "who";
+        who.textContent = options.own ? "我" : options.name;
+
+        const time = document.createElement("time");
+        time.textContent = formatTime(options.ts);
+
+        meta.append(who, time);
+
+        const bubble = document.createElement("div");
+        bubble.className = "bubble";
+        bubble.textContent = options.text; // 用 textContent，避免 HTML 注入
+
+        wrap.append(meta, bubble);
+        appendNode(wrap);
+      }
+
+      function appendSystem(text) {
+        const line = document.createElement("div");
+        line.className = "sys";
+        line.textContent = text;
+        appendNode(line);
+      }
+
+      function appendNode(node) {
+        els.messages.appendChild(node);
+        while (els.messages.children.length > MAX_MESSAGES) {
+          els.messages.firstElementChild.remove();
+        }
+        els.messages.scrollTop = els.messages.scrollHeight;
+      }
+
+      // ---------------------------------------------------------------- 工具
+      function isOpen() {
+        return Boolean(socket) && socket.readyState === WebSocket.OPEN;
+      }
+
+      function randomId() {
+        try {
+          if (window.crypto && typeof window.crypto.randomUUID === "function") {
+            return window.crypto.randomUUID().replace(/-/g, "").slice(0, 8);
+          }
+          if (window.crypto && typeof window.crypto.getRandomValues === "function") {
+            const bytes = new Uint8Array(4);
+            window.crypto.getRandomValues(bytes);
+            return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+          }
+        } catch (error) {
+          // 忽略，退回 Math.random
+        }
+        return Math.random().toString(16).slice(2, 10);
+      }
+
+      function formatTime(value) {
+        const date = new Date(Number(value) || Date.now());
+        return date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+      }
+
+      function readSetting(key) {
+        try {
+          return window.localStorage.getItem(key);
+        } catch (error) {
+          return null;
+        }
+      }
+
+      function writeSetting(key, value) {
+        try {
+          window.localStorage.setItem(key, value);
+        } catch (error) {
+          // file:// 或隐私模式下可能不可用，忽略
+        }
+      }
+
+      // 控制台调试：ws2Debug()
+      window.ws2Debug = () => ({
+        myId: myId,
+        room: currentRoom,
+        name: currentName,
+        server: serverUrl,
+        topic: topic,
+        socketState: socket ? socket.readyState : null,
+        connected: isOpen(),
+        online: peers.size + (isOpen() ? 1 : 0),
+        peers: Array.from(peers.entries()).map(([id, peer]) => ({
+          id: id,
+          name: peer.name,
+          ageMs: Date.now() - peer.lastSeen
+        }))
+      });
+    })();
+  </script>
+</body>
+</html>
+
