@@ -66,6 +66,57 @@
     .system { color: #777; font-style: italic; }
     .mine { color: #0757a6; }
     .other { color: #16803c; }
+
+    #toolbar {
+      position: relative;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 10px;
+    }
+
+    .tool-button {
+      min-width: 42px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: #fff;
+    }
+
+    .tool-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    #emojiPicker {
+      position: absolute;
+      bottom: 42px;
+      left: 0;
+      display: grid;
+      grid-template-columns: repeat(8, 36px);
+      gap: 4px;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background: #fff;
+      box-shadow: 0 3px 12px rgba(0, 0, 0, 0.15);
+      z-index: 1;
+    }
+
+    #emojiPicker[hidden] { display: none; }
+
+    .emoji-option {
+      padding: 5px;
+      border: 0;
+      background: transparent;
+      font-size: 20px;
+    }
+
+    .emoji-option:hover { background: #f0f0f0; }
+
+    .file-link {
+      color: #0757a6;
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
@@ -83,6 +134,26 @@
   <div id="status">正在连接信令服务...</div>
   <div id="messages"></div>
 
+  <div id="toolbar" aria-label="聊天工具栏">
+    <button id="emojiButton" class="tool-button" type="button" title="选择表情" disabled>😊</button>
+    <button id="fileButton" class="tool-button" type="button" title="发送文件" disabled>📎</button>
+    <input id="fileInput" type="file" hidden />
+    <div id="emojiPicker" hidden aria-label="表情选择器">
+      <button class="emoji-option" type="button">😀</button>
+      <button class="emoji-option" type="button">😂</button>
+      <button class="emoji-option" type="button">😍</button>
+      <button class="emoji-option" type="button">😎</button>
+      <button class="emoji-option" type="button">🤔</button>
+      <button class="emoji-option" type="button">😭</button>
+      <button class="emoji-option" type="button">👍</button>
+      <button class="emoji-option" type="button">❤️</button>
+      <button class="emoji-option" type="button">🎉</button>
+      <button class="emoji-option" type="button">🔥</button>
+      <button class="emoji-option" type="button">✅</button>
+      <button class="emoji-option" type="button">🙏</button>
+    </div>
+  </div>
+
   <div class="row">
     <label class="visually-hidden" for="messageInput">聊天消息</label>
     <input id="messageInput" placeholder="输入消息" disabled />
@@ -98,9 +169,14 @@
     const messagesElement = document.getElementById("messages");
     const messageInput = document.getElementById("messageInput");
     const sendButton = document.getElementById("sendButton");
+    const emojiButton = document.getElementById("emojiButton");
+    const fileButton = document.getElementById("fileButton");
+    const fileInput = document.getElementById("fileInput");
+    const emojiPicker = document.getElementById("emojiPicker");
 
     let peer = null;
     let connection = null;
+    let incomingFile = null;
 
     function setStatus(message) {
       statusElement.textContent = message;
@@ -117,6 +193,68 @@
     function setChatEnabled(enabled) {
       messageInput.disabled = !enabled;
       sendButton.disabled = !enabled;
+      emojiButton.disabled = !enabled;
+      fileButton.disabled = !enabled;
+    }
+
+    function addDownloadMessage(fileName, url) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "message other";
+      wrapper.append("对方发送了文件：");
+
+      const link = document.createElement("a");
+      link.className = "file-link";
+      link.href = url;
+      link.download = fileName;
+      link.textContent = fileName;
+      wrapper.appendChild(link);
+
+      messagesElement.appendChild(wrapper);
+      messagesElement.scrollTop = messagesElement.scrollHeight;
+    }
+
+    function base64ToBytes(base64) {
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
+      }
+      return bytes;
+    }
+
+    function bytesToBase64(bytes) {
+      let binary = "";
+      const blockSize = 0x8000;
+      for (let index = 0; index < bytes.length; index += blockSize) {
+        binary += String.fromCharCode(...bytes.subarray(index, index + blockSize));
+      }
+      return btoa(binary);
+    }
+
+    function handleIncomingData(data) {
+      if (!data || typeof data !== "object" || !data.type) {
+        addMessage(`对方：${data}`, "other");
+        return;
+      }
+
+      if (data.type === "file-start") {
+        incomingFile = {
+          name: data.name,
+          mime: data.mime || "application/octet-stream",
+          chunks: [],
+          received: 0,
+          size: data.size
+        };
+        addMessage(`正在接收文件：${data.name}`, "system");
+      } else if (data.type === "file-chunk" && incomingFile) {
+        incomingFile.chunks.push(base64ToBytes(data.content));
+        incomingFile.received += data.content.length;
+      } else if (data.type === "file-end" && incomingFile) {
+        const blob = new Blob(incomingFile.chunks, { type: incomingFile.mime });
+        const url = URL.createObjectURL(blob);
+        addDownloadMessage(incomingFile.name, url);
+        incomingFile = null;
+      }
     }
 
     function setupConnection(conn) {
@@ -129,9 +267,7 @@
         addMessage("WebRTC DataChannel 已建立", "system");
       });
 
-      conn.on("data", data => {
-        addMessage(`对方：${data}`, "other");
-      });
+      conn.on("data", handleIncomingData);
 
       conn.on("close", () => {
         setStatus("对方已断开连接");
@@ -220,12 +356,71 @@
       messageInput.focus();
     }
 
+    async function sendFile(file) {
+      if (!file || !connection || !connection.open) {
+        addMessage("当前没有可用连接，无法发送文件", "system");
+        return;
+      }
+
+      const maxFileSize = 20 * 1024 * 1024;
+      if (file.size > maxFileSize) {
+        addMessage("文件不能超过 20 MB", "system");
+        return;
+      }
+
+      const chunkSize = 12 * 1024;
+      connection.send({
+        type: "file-start",
+        name: file.name,
+        mime: file.type,
+        size: file.size
+      });
+
+      for (let offset = 0; offset < file.size; offset += chunkSize) {
+        const bytes = new Uint8Array(await file.slice(offset, offset + chunkSize).arrayBuffer());
+        connection.send({
+          type: "file-chunk",
+          content: bytesToBase64(bytes)
+        });
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+
+      connection.send({ type: "file-end" });
+      addMessage(`我发送了文件：${file.name}`, "mine");
+    }
+
     sendButton.addEventListener("click", sendMessage);
     messageInput.addEventListener("keydown", event => {
       if (event.key === "Enter") sendMessage();
     });
+
+    emojiButton.addEventListener("click", () => {
+      emojiPicker.hidden = !emojiPicker.hidden;
+    });
+
+    document.querySelectorAll(".emoji-option").forEach(button => {
+      button.addEventListener("click", () => {
+        const start = messageInput.selectionStart;
+        const end = messageInput.selectionEnd;
+        messageInput.value = `${messageInput.value.slice(0, start)}${button.textContent}${messageInput.value.slice(end)}`;
+        messageInput.focus();
+        messageInput.setSelectionRange(start + button.textContent.length, start + button.textContent.length);
+        emojiPicker.hidden = true;
+      });
+    });
+
+    fileButton.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", () => {
+      const [file] = fileInput.files;
+      if (file) sendFile(file);
+      fileInput.value = "";
+    });
+
+    document.addEventListener("click", event => {
+      if (!emojiPicker.contains(event.target) && event.target !== emojiButton) {
+        emojiPicker.hidden = true;
+      }
+    });
   </script>
 </body>
 </html>
-
-
