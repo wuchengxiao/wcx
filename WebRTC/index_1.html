@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WebRTC DataChannel 聊天（静态版 · 免费公共信令）</title>
+  <title>WebRTC 点对点聊天</title>
   <style>
     * { box-sizing: border-box; }
 
@@ -19,11 +19,14 @@
     h1 { font-size: 22px; margin: 0 0 6px; }
     h2 { font-size: 15px; margin: 0 0 8px; color: #444; }
 
-    .hint {
+    .steps {
       margin: 0 0 18px;
+      padding-left: 22px;
       font-size: 13px;
       color: #666;
     }
+
+    .steps li { margin: 3px 0; }
 
     .panel {
       padding: 12px 14px;
@@ -214,12 +217,14 @@
   </style>
 </head>
 <body>
-  <h1>WebRTC DataChannel 聊天（静态版）</h1>
-  <p class="hint">
-    纯 HTML + JS，无需自建后端：SDP / ICE 通过第三方免费 WebSocket 信令服务器（默认
-    <code>wss://y-webrtc.fly.dev</code>）在同一房间内广播，聊天与文件走 P2P 数据通道。
-    双方需填写相同的“房间”名称。
-  </p>
+  <h1>WebRTC 点对点聊天</h1>
+  <ol class="steps">
+    <li>双方各自打开本页面。</li>
+    <li>填写<b>相同的房间名</b>，点“应用房间 / 重连信令”。</li>
+    <li>在“同一房间的在线设备”里点对方 ID 的“连接”（双方同时点也没关系）。</li>
+    <li>状态显示“已连接：…”、输入框变为可用后，即可发送消息、表情和文件。</li>
+    <li>连不上时先点“网络检测”，按提示补充 TURN 服务器；详见 README.md。</li>
+  </ol>
 
   <div class="panel">
     <div class="field">
@@ -237,7 +242,7 @@
     <div class="field">
       <span></span>
       <button id="applyButton" type="button">应用房间 / 重连信令</button>
-      <button id="diagButton" type="button" title="检测本机 STUN/TURN 可用性">网络检测</button>
+      <button id="diagButton" type="button" title="检查网络与中继可用性">网络检测</button>
     </div>
   </div>
 
@@ -1129,7 +1134,7 @@
 
       function init() {
         myIdElement.textContent = myId;
-        document.title = "WebRTC 聊天（静态版）· " + myId;
+        document.title = "WebRTC 点对点聊天 · " + myId;
         buildEmojiPicker();
         bindEvents();
         setChatEnabled(false);
