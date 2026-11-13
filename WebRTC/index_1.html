@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebRTC DataChannel 聊天（静态版 · 免费公共信令）</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      max-width: 780px;
+      margin: 32px auto 48px;
+      padding: 0 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+      color: #222;
+      line-height: 1.5;
+    }
+
+    h1 { font-size: 22px; margin: 0 0 6px; }
+    h2 { font-size: 15px; margin: 0 0 8px; color: #444; }
+
+    .hint {
+      margin: 0 0 18px;
+      font-size: 13px;
+      color: #666;
+    }
+
+    .panel {
+      padding: 12px 14px;
+      border: 1px solid #e2e2e2;
+      border-radius: 8px;
+      background: #fafafa;
+      margin-bottom: 14px;
+    }
+
+    .field {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+
+    .field:last-child { margin-bottom: 0; }
+
+    .field > span,
+    .field > label {
+      flex: 0 0 84px;
+      font-size: 13px;
+      color: #555;
+    }
+
+    .field input {
+      flex: 1;
+      min-width: 0;
+      padding: 8px 10px;
+      font-size: 13px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background: #fff;
+    }
+
+    #myId {
+      font-family: Consolas, Menlo, monospace;
+      font-size: 14px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: #eef4ff;
+      color: #0b4ea2;
+      word-break: break-all;
+    }
+
+    button {
+      cursor: pointer;
+      font-size: 13px;
+      padding: 8px 12px;
+      border: 1px solid #ccd;
+      border-radius: 6px;
+      background: #fff;
+      transition: background 0.15s ease;
+    }
+
+    button:hover:not(:disabled) { background: #f0f4ff; }
+    button:disabled { cursor: not-allowed; opacity: 0.45; }
+
+    #status {
+      margin: 0 0 14px;
+      padding: 10px 12px;
+      border-radius: 6px;
+      background: #fff7e6;
+      border: 1px solid #ffe0a3;
+      color: #7a5200;
+      font-size: 13px;
+      word-break: break-word;
+    }
+
+    #status.ok {
+      background: #eaf7ee;
+      border-color: #b7e2c3;
+      color: #1c6b35;
+    }
+
+    #status.error {
+      background: #fdeeee;
+      border-color: #f3c2c2;
+      color: #9c2b2b;
+    }
+
+    .peers {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      min-height: 30px;
+      align-items: center;
+    }
+
+    .peer {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px 6px 10px;
+      border: 1px solid #d8e2f5;
+      border-radius: 999px;
+      background: #f4f8ff;
+      font-size: 12px;
+    }
+
+    .peer code {
+      font-family: Consolas, Menlo, monospace;
+      color: #0b4ea2;
+    }
+
+    .peer button { padding: 4px 10px; font-size: 12px; border-radius: 999px; }
+
+    .muted { color: #8a8a8a; font-size: 12px; }
+
+    #messages {
+      height: 320px;
+      overflow-y: auto;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      background: #fcfcfc;
+      margin-bottom: 10px;
+    }
+
+    .message { margin: 7px 0; font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+    .system { color: #7b7b7b; font-style: italic; font-size: 13px; }
+    .mine { color: #0757a6; }
+    .other { color: #16803c; }
+
+    #toolbar {
+      position: relative;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    #messageInput {
+      flex: 1;
+      min-width: 0;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .tool-button {
+      min-width: 44px;
+      border: 1px solid #ccd;
+      border-radius: 6px;
+      background: #fff;
+    }
+
+    #emojiPicker {
+      position: absolute;
+      bottom: 48px;
+      left: 0;
+      display: grid;
+      grid-template-columns: repeat(8, 34px);
+      gap: 4px;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+      z-index: 5;
+    }
+
+    #emojiPicker[hidden] { display: none; }
+
+    .emoji-option { padding: 5px; border: 0; background: transparent; font-size: 19px; }
+    .emoji-option:hover { background: #f0f0f0; }
+
+    .file-link { color: #0757a6; text-decoration: underline; }
+
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (max-width: 560px) {
+      body { margin-top: 20px; }
+      .field > span, .field > label { flex-basis: 100%; }
+      #emojiPicker { grid-template-columns: repeat(6, 34px); }
+    }
+  </style>
+</head>
+<body>
+  <h1>WebRTC DataChannel 聊天（静态版）</h1>
+  <p class="hint">
+    纯 HTML + JS，无需自建后端：SDP / ICE 通过第三方免费 WebSocket 信令服务器（默认
+    <code>wss://y-webrtc.fly.dev</code>）在同一房间内广播，聊天与文件走 P2P 数据通道。
+    双方需填写相同的“房间”名称。
+  </p>
+
+  <div class="panel">
+    <div class="field">
+      <span>我的 ID</span>
+      <strong id="myId">生成中...</strong>
+    </div>
+    <div class="field">
+      <label for="roomInput">房间</label>
+      <input id="roomInput" value="cline-p2p-demo" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label for="serverInput">信令服务器</label>
+      <input id="serverInput" value="wss://y-webrtc.fly.dev" autocomplete="off" spellcheck="false" />
+    </div>
+    <div class="field">
+      <span></span>
+      <button id="applyButton" type="button">应用房间 / 重连信令</button>
+      <button id="diagButton" type="button" title="检测本机 STUN/TURN 可用性">网络检测</button>
+    </div>
+  </div>
+
+  <div id="status">正在连接信令服务器...</div>
+
+  <div class="panel">
+    <h2>同一房间的在线设备</h2>
+    <div id="peers" class="peers">
+      <span class="muted">等待其它设备加入...</span>
+    </div>
+  </div>
+
+  <div id="messages"></div>
+
+  <div id="toolbar" aria-label="聊天工具栏">
+    <button id="emojiButton" class="tool-button" type="button" title="选择表情" disabled>😊</button>
+    <button id="fileButton" class="tool-button" type="button" title="发送文件" disabled>📎</button>
+    <input id="fileInput" type="file" hidden />
+    <div id="emojiPicker" hidden aria-label="表情选择器"></div>
+    <label class="visually-hidden" for="messageInput">聊天消息</label>
+    <input id="messageInput" placeholder="输入消息" disabled />
+    <button id="sendButton" type="button" disabled>发送</button>
+  </div>
+
+  <script>
+    (() => {
+      "use strict";
+
+      // ------------------------------------------------------------- 配置区
+      // 第三方免费公共信令服务器（y-webrtc 信令协议：JSON 文本消息广播）。
+      // 页面会依次尝试这些地址，第一个连上的即被使用。
+      const SIGNALING_SERVERS = [
+        "wss://y-webrtc.fly.dev",
+        "wss://signaling.yjs.dev"
+      ];
+
+      // ICE 服务器：同一局域网内通常靠 host 候选即可直连；
+      // 跨网络（手机流量 ↔ 家庭宽带）几乎必须要有一个可用的 TURN 中继。
+      // 如公共 TURN 在你的网络下不可用，请把自建/商用 TURN 填到下面。
+      const CUSTOM_TURN_SERVERS = [
+        // { urls: "turn:your.turn.server:3478", username: "user", credential: "pass" },
+      ];
+
+      const ICE_SERVERS = [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun.cloudflare.com:3478" },
+        { urls: "stun:stun.miwifi.com:3478" },
+        { urls: "stun:stun.chat.bilibili.com:3478" },
+        {
+          urls: [
+            "turn:openrelay.metered.ca:80",
+            "turn:openrelay.metered.ca:443",
+            "turn:openrelay.metered.ca:443?transport=tcp"
+          ],
+          username: "openrelayproject",
+          credential: "openrelayproject"
+        },
+        ...CUSTOM_TURN_SERVERS
+      ];
+
+      const HEARTBEAT_INTERVAL = 4000;   // 在线心跳间隔
+      const PEER_TIMEOUT = 12000;        // 超过该时间未收到心跳则视为离线
+      const CONNECT_TIMEOUT = 25000;     // 建立 P2P 连接的超时时间
+      const SIGNALING_TIMEOUT = 8000;    // 单个信令服务器连接超时
+      const FILE_CHUNK_SIZE = 16 * 1024; // 每个文件分片大小
+      const BUFFER_HIGH_WATER = 1024 * 1024;
+
+      const EMOJIS = ["😀", "😂", "😍", "😎", "🤔", "😭", "👍", "❤️", "🎉", "🔥", "✅", "🙏"];
+
+      // ---------------------------------------------------------------- 元素
+      const myIdElement = document.getElementById("myId");
+      const roomInput = document.getElementById("roomInput");
+      const serverInput = document.getElementById("serverInput");
+      const applyButton = document.getElementById("applyButton");
+      const diagButton = document.getElementById("diagButton");
+      const statusElement = document.getElementById("status");
+      const peersElement = document.getElementById("peers");
+      const messagesElement = document.getElementById("messages");
+      const messageInput = document.getElementById("messageInput");
+      const sendButton = document.getElementById("sendButton");
+      const fileButton = document.getElementById("fileButton");
+      const fileInput = document.getElementById("fileInput");
+      const emojiButton = document.getElementById("emojiButton");
+      const emojiPicker = document.getElementById("emojiPicker");
+
+      // ---------------------------------------------------------------- 状态
+      const myId = createId();
+      let room = (roomInput.value || "cline-p2p-demo").trim();
+      let signalingSocket = null;
+      let reconnectTimer = null;
+      let heartbeatTimer = null;
+      let joining = false;
+
+      const peers = new Map();        // id -> 最近一次心跳时间
+      let peerConnection = null;
+      let dataChannel = null;
+      let remoteId = "";
+      let pendingCandidates = [];
+      let offerInFlight = false;
+      let connectTimer = null;
+      let connected = false;
+
+      const incomingFiles = new Map();
+
+      // -------------------------------------------------------------- 工具函数
+      function createId() {
+        const bytes = new Uint8Array(4);
+        crypto.getRandomValues(bytes);
+        return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+      }
+
+      function setStatus(text, kind) {
+        statusElement.textContent = text;
+        statusElement.className = kind || "";
+      }
+
+      function log(text, className) {
+        const line = document.createElement("p");
+        line.className = "message " + (className || "system");
+        line.textContent = text;
+        messagesElement.appendChild(line);
+        messagesElement.scrollTop = messagesElement.scrollHeight;
+        return line;
+      }
+
+      function logFileLink(label, url) {
+        const line = document.createElement("p");
+        line.className = "message other";
+        const link = document.createElement("a");
+        link.className = "file-link";
+        link.href = url;
+        link.download = label;
+        link.textContent = "📄 " + label;
+        line.appendChild(link);
+        messagesElement.appendChild(line);
+        messagesElement.scrollTop = messagesElement.scrollHeight;
+      }
+
+      function formatSize(bytes) {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+        return (bytes / 1024 / 1024).toFixed(2) + " MB";
+      }
+
+      function setChatEnabled(enabled) {
+        messageInput.disabled = !enabled;
+        sendButton.disabled = !enabled;
+        fileButton.disabled = !enabled;
+        emojiButton.disabled = !enabled;
+        if (!enabled) {
+          emojiPicker.hidden = true;
+        }
+      }
+
+      function delay(milliseconds) {
+        return new Promise(resolve => setTimeout(resolve, milliseconds));
+      }
+      // -------------------------------------------------------------- 信令逻辑
+      function signalingSend(payload) {
+        if (!signalingSocket || signalingSocket.readyState !== WebSocket.OPEN || !joining) {
+          return false;
+        }
+        signalingSocket.send(JSON.stringify({ type: "publish", topic: room, data: payload }));
+        return true;
+      }
+
+      function signalingUrlList() {
+        const configured = (serverInput.value || "").trim() || SIGNALING_SERVERS[0];
+        const list = [configured];
+        SIGNALING_SERVERS.forEach(url => {
+          if (!list.includes(url)) list.push(url);
+        });
+        return list;
+      }
+
+      function openSocket(url) {
+        return new Promise((resolve, reject) => {
+          let socket = null;
+          const timer = setTimeout(() => {
+            try { socket.close(); } catch (error) { /* ignore */ }
+            reject(new Error("连接超时：" + url));
+          }, SIGNALING_TIMEOUT);
+
+          try {
+            socket = new WebSocket(url);
+          } catch (error) {
+            clearTimeout(timer);
+            reject(error);
+            return;
+          }
+
+          socket.onopen = () => {
+            clearTimeout(timer);
+            resolve(socket);
+          };
+          socket.onerror = () => {
+            clearTimeout(timer);
+            reject(new Error("无法连接：" + url));
+          };
+          socket.onclose = () => {
+            clearTimeout(timer);
+            reject(new Error("连接已关闭：" + url));
+          };
+        });
+      }
+
+      async function connectSignaling() {
+        if (reconnectTimer) {
+          clearTimeout(reconnectTimer);
+          reconnectTimer = null;
+        }
+
+        teardownPeerConnection(false);
+        peers.clear();
+        renderPeers();
+
+        if (signalingSocket) {
+          try { signalingSocket.close(); } catch (error) { /* ignore */ }
+          signalingSocket = null;
+        }
+        joining = false;
+
+        for (const url of signalingUrlList()) {
+          setStatus("正在连接信令服务器 " + url + " ...");
+          try {
+            const socket = await openSocket(url);
+            startSession(socket, url);
+            return;
+          } catch (error) {
+            console.warn("[signaling]", error.message);
+          }
+        }
+
+        setStatus("所有信令服务器均连接失败：请检查网络，或在“信令服务器”里填写可用的 wss:// 地址。", "error");
+        scheduleReconnect();
+      }
+
+      function startSession(socket, url) {
+        signalingSocket = socket;
+
+        socket.onmessage = event => {
+          if (typeof event.data === "string") {
+            handleSignalingMessage(event.data);
+          }
+        };
+        socket.onerror = () => console.warn("[signaling] socket error");
+        socket.onclose = () => {
+          if (signalingSocket !== socket) return;
+          signalingSocket = null;
+          joining = false;
+          stopHeartbeat();
+          setStatus(connected
+            ? "信令连接已断开；P2P 通道仍可用，信令正在重连..."
+            : "信令连接已断开，正在重连...");
+          scheduleReconnect();
+        };
+
+        socket.send(JSON.stringify({ type: "subscribe", topics: [room] }));
+        joining = true;
+        setStatus("信令服务已连接（" + url + "），房间：" + room, "ok");
+        announceHello();
+        startHeartbeat();
+        renderPeers();
+      }
+
+      function scheduleReconnect() {
+        if (reconnectTimer) return;
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = null;
+          connectSignaling();
+        }, 2000);
+      }
+
+      function startHeartbeat() {
+        stopHeartbeat();
+        heartbeatTimer = setInterval(() => {
+          announceHello();
+          prunePeers();
+        }, HEARTBEAT_INTERVAL);
+      }
+
+      function stopHeartbeat() {
+        if (heartbeatTimer) {
+          clearInterval(heartbeatTimer);
+          heartbeatTimer = null;
+        }
+      }
+
+      function announceHello() {
+        signalingSend({ kind: "hello", from: myId, ts: Date.now() });
+      }
+
+      function prunePeers() {
+        const now = Date.now();
+        let changed = false;
+        peers.forEach((lastSeen, id) => {
+          if (now - lastSeen > PEER_TIMEOUT) {
+            peers.delete(id);
+            changed = true;
+          }
+        });
+        if (changed) renderPeers();
+      }
+
+      function renderPeers() {
+        peersElement.innerHTML = "";
+        const ids = Array.from(peers.keys());
+
+        if (ids.length === 0) {
+          const hint = document.createElement("span");
+          hint.className = "muted";
+          hint.textContent = joining ? "等待其它设备加入房间..." : "信令未连接";
+          peersElement.appendChild(hint);
+          return;
+        }
+
+        ids.forEach(id => {
+          const chip = document.createElement("span");
+          chip.className = "peer";
+
+          const label = document.createElement("code");
+          label.textContent = id;
+          chip.appendChild(label);
+
+          const button = document.createElement("button");
+          button.type = "button";
+          const alreadyConnected = id === remoteId && connected;
+          button.textContent = alreadyConnected ? "已连接" : "连接";
+          button.disabled = alreadyConnected || !joining;
+          button.addEventListener("click", () => startConnection(id));
+          chip.appendChild(button);
+
+          peersElement.appendChild(chip);
+        });
+      }
+
+      function handleSignalingMessage(raw) {
+        let message = null;
+        try {
+          message = JSON.parse(raw);
+        } catch (error) {
+          return;
+        }
+        if (!message || message.type !== "publish" || message.topic !== room) return;
+
+        const payload = message.data;
+        if (!payload || typeof payload !== "object") return;
+        if (payload.from === myId) return; // 信令服务器会把消息回显给自己
+
+        switch (payload.kind) {
+          case "hello":
+            peers.set(payload.from, Date.now());
+            renderPeers();
+            break;
+          case "bye":
+            peers.delete(payload.from);
+            renderPeers();
+            break;
+          case "offer":
+            handleOffer(payload);
+            break;
+          case "answer":
+            handleAnswer(payload);
+            break;
+          case "candidate":
+            handleRemoteCandidate(payload);
+            break;
+          case "hangup":
+            if (payload.to === myId && payload.from === remoteId) {
+              log("对方已挂断连接", "system");
+              teardownPeerConnection(true);
+              setStatus("对方已断开连接", "");
+            }
+            break;
+          case "busy":
+            if (payload.to === myId) {
+              log("对方正在与其它设备通信", "system");
+            }
+            break;
+          default:
+            break;
+        }
+      }
+
+      // -------------------------------------------------------------- P2P 连接
+      async function startConnection(targetId) {
+        if (!joining) {
+          log("信令未连接，暂时无法发起连接", "system");
+          return;
+        }
+        if (targetId === myId || (targetId === remoteId && connected)) return;
+
+        teardownPeerConnection(false);
+        remoteId = targetId;
+        log("正在向 " + targetId + " 发起连接...", "system");
+        setStatus("正在建立 WebRTC 连接..." + targetId + " ...");
+        startConnectTimer(targetId);
+
+        try {
+          const pc = createPeerConnection(targetId);
+          setupDataChannel(pc.createDataChannel("chat", { ordered: true }));
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          offerInFlight = true;
+          signalingSend({
+            kind: "offer",
+            from: myId,
+            to: targetId,
+            sdp: pc.localDescription.sdp
+          });
+        } catch (error) {
+          console.error("[rtc]", error);
+          setStatus("创建 Offer 失败：" + error.message, "error");
+          teardownPeerConnection(false);
+        }
+      }
+
+      function createPeerConnection(targetId) {
+        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS, iceCandidatePoolSize: 2 });
+        peerConnection = pc;
+
+        pc.onicecandidate = event => {
+          if (!event.candidate) return;
+          const candidate = typeof event.candidate.toJSON === "function"
+            ? event.candidate.toJSON()
+            : {
+                candidate: event.candidate.candidate,
+                sdpMid: event.candidate.sdpMid,
+                sdpMLineIndex: event.candidate.sdpMLineIndex
+              };
+          signalingSend({ kind: "candidate", from: myId, to: targetId, candidate });
+        };
+
+        pc.onicecandidateerror = event => {
+          console.warn("[ice]", event.errorCode, event.errorText, event.url);
+        };
+
+        pc.oniceconnectionstatechange = () => {
+          const state = pc.iceConnectionState;
+          console.log("[ice] state:", state);
+          if (state === "checking") {
+            setStatus("ICE 打洞中（checking）...");
+          } else if (state === "failed") {
+            setStatus("ICE 连接失败：双方很可能处于对称 NAT / 运营商 CGNAT，必须使用可用的 TURN 中继。可点“网络检测”查看。", "error");
+            log("ICE 连接失败：当前 ICE_SERVERS 中没有可工作的 TURN 中继。", "system");
+          }
+        };
+
+        pc.onconnectionstatechange = () => {
+          const state = pc.connectionState;
+          console.log("[pc] state:", state);
+          if (state === "failed") {
+            setStatus("P2P 连接失败", "error");
+          } else if (state === "disconnected") {
+            setStatus("P2P 连接暂时中断，正在尝试恢复...");
+          }
+        };
+
+        pc.ondatachannel = event => setupDataChannel(event.channel);
+        return pc;
+      }
+
+      function setupDataChannel(channel) {
+        dataChannel = channel;
+        channel.binaryType = "arraybuffer";
+
+        channel.onopen = () => {
+          connected = true;
+          offerInFlight = false;
+          clearConnectTimer();
+          setChatEnabled(true);
+          setStatus("已通过 WebRTC 连接到 " + (remoteId || "对方"), "ok");
+          log("P2P 数据通道已建立（数据不经过服务器）", "system");
+          renderPeers();
+          reportConnectionPath();
+        };
+
+        channel.onclose = () => {
+          connected = false;
+          setChatEnabled(false);
+          log("数据通道已关闭", "system");
+          renderPeers();
+        };
+
+        channel.onerror = event => {
+          console.warn("[dc]", event);
+          log("数据通道发生错误", "system");
+        };
+
+        channel.onmessage = event => handleDataMessage(event.data);
+      }
+
+      function startConnectTimer(targetId) {
+        clearConnectTimer();
+        connectTimer = setTimeout(() => {
+          connectTimer = null;
+          if (connected) return;
+          log("连接超时（" + Math.round(CONNECT_TIMEOUT / 1000) + " 秒）：ICE 未能完成。常见原因：双方不在同一网络且缺少可用 TURN；或信令消息没有互通。", "system");
+          setStatus("连接超时：" + targetId + "。请点“网络检测”排查 ICE 服务器。", "error");
+          teardownPeerConnection(false);
+        }, CONNECT_TIMEOUT);
+      }
+
+      function clearConnectTimer() {
+        if (connectTimer) {
+          clearTimeout(connectTimer);
+          connectTimer = null;
+        }
+      }
+
+      async function handleOffer(payload) {
+        if (payload.to !== myId || !payload.sdp) return;
+
+        if (connected && remoteId && remoteId !== payload.from) {
+          signalingSend({ kind: "busy", from: myId, to: payload.from });
+          return;
+        }
+
+        // 双方同时点击“连接”时的冲突解决：ID 较大的一方让出，转为应答方
+        if (offerInFlight && myId < payload.from) return;
+        if (offerInFlight && myId > payload.from) teardownPeerConnection(false);
+
+        remoteId = payload.from;
+        log("收到来自 " + payload.from + " 的连接请求", "system");
+        setStatus("正在建立 WebRTC 连接..." + payload.from + " ...");
+        startConnectTimer(payload.from);
+
+        try {
+          const pc = createPeerConnection(payload.from);
+          await pc.setRemoteDescription({ type: "offer", sdp: payload.sdp });
+          await flushPendingCandidates();
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          offerInFlight = false;
+          signalingSend({ kind: "answer", from: myId, to: payload.from, sdp: pc.localDescription.sdp });
+        } catch (error) {
+          console.error("[rtc]", error);
+          setStatus("应答失败：" + error.message, "error");
+          teardownPeerConnection(false);
+        }
+      }
+
+      async function handleAnswer(payload) {
+        if (payload.to !== myId || !payload.sdp || !peerConnection) return;
+        try {
+          await peerConnection.setRemoteDescription({ type: "answer", sdp: payload.sdp });
+          offerInFlight = false;
+          await flushPendingCandidates();
+          setStatus("已收到应答，等待 ICE 打洞完成...");
+        } catch (error) {
+          console.error("[rtc]", error);
+          setStatus("应用远端应答失败：" + error.message, "error");
+        }
+      }
+
+      async function handleRemoteCandidate(payload) {
+        if (payload.to !== myId || !payload.candidate) return;
+
+        // 对端可能在 offer/answer 到达前就开始发送候选，先缓存，等远端描述就绪后再补加
+        if (!peerConnection || !peerConnection.remoteDescription) {
+          if (!remoteId || payload.from === remoteId) {
+            pendingCandidates.push(payload.candidate);
+          }
+          return;
+        }
+
+        try {
+          await peerConnection.addIceCandidate(payload.candidate);
+        } catch (error) {
+          console.warn("[ice] addIceCandidate", error);
+        }
+      }
+
+      async function flushPendingCandidates() {
+        if (!peerConnection || !peerConnection.remoteDescription) return;
+        const queued = pendingCandidates;
+        pendingCandidates = [];
+        for (const candidate of queued) {
+          try {
+            await peerConnection.addIceCandidate(candidate);
+          } catch (error) {
+            console.warn("[ice] addIceCandidate", error);
+          }
+        }
+      }
+
+      function teardownPeerConnection(notifyRemote) {
+        clearConnectTimer();
+        offerInFlight = false;
+        connected = false;
+        setChatEnabled(false);
+
+        if (dataChannel) {
+          dataChannel.onopen = null;
+          dataChannel.onclose = null;
+          dataChannel.onerror = null;
+          dataChannel.onmessage = null;
+          try { dataChannel.close(); } catch (error) { /* ignore */ }
+          dataChannel = null;
+        }
+
+        if (peerConnection) {
+          peerConnection.onicecandidate = null;
+          peerConnection.onicecandidateerror = null;
+          peerConnection.oniceconnectionstatechange = null;
+          peerConnection.onconnectionstatechange = null;
+          peerConnection.ondatachannel = null;
+          try { peerConnection.close(); } catch (error) { /* ignore */ }
+          peerConnection = null;
+        }
+
+        if (notifyRemote && remoteId) {
+          signalingSend({ kind: "hangup", from: myId, to: remoteId });
+        }
+
+        remoteId = "";
+        pendingCandidates = [];
+        incomingFiles.clear();
+        renderPeers();
+      }
+
+      async function reportConnectionPath() {
+        if (!peerConnection) return;
+        try {
+          const stats = await peerConnection.getStats();
+          let pair = null;
+
+          stats.forEach(report => {
+            if (report.type === "transport" && report.selectedCandidatePairId) {
+              pair = stats.get(report.selectedCandidatePairId) || pair;
+            }
+          });
+          if (!pair) {
+            stats.forEach(report => {
+              if (report.type === "candidate-pair" && report.state === "succeeded" && (report.selected || report.nominated)) {
+                pair = report;
+              }
+            });
+          }
+          if (!pair) return;
+
+          const local = stats.get(pair.localCandidateId);
+          const remote = stats.get(pair.remoteCandidateId);
+          if (!local || !remote) return;
+
+          const relayed = local.candidateType === "relay" || remote.candidateType === "relay";
+          const pathLabel = relayed ? "TURN 中继" : "P2P 直连";
+          setStatus("已连接：" + remoteId + "（" + pathLabel + " / 本机 " + local.candidateType + "，对端 " + remote.candidateType + "）", "ok");
+          log("连接路径：" + pathLabel + "（本机候选 " + local.candidateType + "，对端候选 " + remote.candidateType + "）", "system");
+        } catch (error) {
+          console.warn("[stats]", error);
+        }
+      }
+
+      // ------------------------------------------------------------ 聊天 / 文件
+      function sendRaw(payload) {
+        if (!dataChannel || dataChannel.readyState !== "open") return false;
+        dataChannel.send(JSON.stringify(payload));
+        return true;
+      }
+
+      function base64ToBytes(base64) {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index += 1) {
+          bytes[index] = binary.charCodeAt(index);
+        }
+        return bytes;
+      }
+
+      function bytesToBase64(bytes) {
+        let binary = "";
+        const step = 0x8000;
+        for (let index = 0; index < bytes.length; index += step) {
+          binary += String.fromCharCode.apply(null, bytes.subarray(index, index + step));
+        }
+        return btoa(binary);
+      }
+
+      function handleDataMessage(raw) {
+        let message = null;
+        try {
+          message = typeof raw === "string" ? JSON.parse(raw) : null;
+        } catch (error) {
+          log(String(raw), "other");
+          return;
+        }
+        if (!message || typeof message !== "object") {
+          log(String(raw), "other");
+          return;
+        }
+
+        switch (message.kind) {
+          case "chat":
+            log((remoteId || "对方") + "：" + message.text, "other");
+            break;
+          case "file-start":
+            incomingFiles.set(message.id, {
+              name: message.name,
+              size: message.size,
+              mime: message.mime || "application/octet-stream",
+              chunks: []
+            });
+            break;
+          case "file-chunk": {
+            const file = incomingFiles.get(message.id);
+            if (file && typeof message.data === "string") {
+              file.chunks.push(base64ToBytes(message.data));
+            }
+            break;
+          }
+          case "file-end": {
+            const file = incomingFiles.get(message.id);
+            if (!file) return;
+            incomingFiles.delete(message.id);
+            const blob = new Blob(file.chunks, { type: file.mime });
+            const url = URL.createObjectURL(blob);
+            logFileLink(file.name + "（" + formatSize(file.size) + "）", url);
+            break;
+          }
+          default:
+            break;
+        }
+      }
+
+      function sendChat() {
+        const text = messageInput.value.trim();
+        if (!text) return;
+        if (!sendRaw({ kind: "chat", text })) {
+          log("当前没有可用的 P2P 连接", "system");
+          return;
+        }
+        log("我：" + text, "mine");
+        messageInput.value = "";
+        messageInput.focus();
+      }
+
+      async function sendFile(file) {
+        if (!file) return;
+        if (!dataChannel || dataChannel.readyState !== "open") {
+          log("当前没有可用的 P2P 连接", "system");
+          return;
+        }
+
+        const id = createId() + Date.now().toString(36);
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        sendRaw({ kind: "file-start", id, name: file.name, size: file.size, mime: file.type });
+
+        for (let offset = 0; offset < bytes.length; offset += FILE_CHUNK_SIZE) {
+          while (dataChannel && dataChannel.readyState === "open" && dataChannel.bufferedAmount > BUFFER_HIGH_WATER) {
+            await delay(50);
+          }
+          if (!dataChannel || dataChannel.readyState !== "open") {
+            log("文件发送中断：连接已断开", "system");
+            return;
+          }
+          const slice = bytes.subarray(offset, offset + FILE_CHUNK_SIZE);
+          sendRaw({ kind: "file-chunk", id, data: bytesToBase64(slice) });
+        }
+
+        sendRaw({ kind: "file-end", id });
+        log("我已发送文件：" + file.name + "（" + formatSize(file.size) + "）", "mine");
+      }
+
+      // -------------------------------------------------------------- 网络检测
+      async function runIceDiagnostics() {
+        diagButton.disabled = true;
+        log("开始网络检测：收集本机 ICE 候选（最长 8 秒）...", "system");
+        setStatus("网络检测中...");
+
+        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+        const found = [];
+        const errors = [];
+
+        pc.onicecandidate = event => {
+          if (!event.candidate) return;
+          const text = event.candidate.candidate;
+          const type = (text.match(/ typ (\w+)/) || [])[1] || "unknown";
+          const protocol = (text.match(/ (udp|tcp) /) || [])[1] || "?";
+          found.push(type + "/" + protocol);
+          log("  候选：" + text, "system");
+        };
+        pc.onicecandidateerror = event => {
+          errors.push((event.errorCode || "") + " " + (event.errorText || "") + " @ " + (event.url || ""));
+        };
+
+        try {
+          pc.createDataChannel("probe");
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+
+          const gatheringDone = new Promise(resolve => {
+            const check = () => {
+              if (pc.iceGatheringState === "complete") resolve();
+              else setTimeout(check, 200);
+            };
+            check();
+          });
+          await Promise.race([gatheringDone, delay(8000)]);
+        } catch (error) {
+          log("检测失败：" + error.message, "system");
+        } finally {
+          try { pc.close(); } catch (error) { /* ignore */ }
+        }
+
+        const counts = { host: 0, srflx: 0, prflx: 0, relay: 0 };
+        found.forEach(item => {
+          const type = item.split("/")[0];
+          if (type in counts) counts[type] += 1;
+        });
+
+        log("候选统计：host=" + counts.host + "，srflx=" + counts.srflx + "，prflx=" + counts.prflx + "，relay=" + counts.relay, "system");
+        if (counts.relay === 0) {
+          log("没有 relay 候选：跨网络（手机流量 ↔ 家庭宽带）大概率连不上，请在 CUSTOM_TURN_SERVERS 填入可用的 TURN 服务器。", "system");
+        }
+        errors.slice(0, 6).forEach(text => log("ICE 服务器错误：" + text, "system"));
+
+        setStatus(
+          "检测完成：host " + counts.host + " / srflx " + counts.srflx + " / relay " + counts.relay +
+            (counts.relay === 0 ? "（缺少 relay，跨网络需要 TURN）" : "（已发现可用 TURN）"),
+          counts.relay === 0 ? "" : "ok"
+        );
+        diagButton.disabled = false;
+      }
+
+      // ------------------------------------------------------------ 界面交互
+      function buildEmojiPicker() {
+        EMOJIS.forEach(emoji => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "emoji-option";
+          button.textContent = emoji;
+          button.addEventListener("click", () => {
+            messageInput.value += emoji;
+            messageInput.focus();
+          });
+          emojiPicker.appendChild(button);
+        });
+      }
+
+      function applyRoomAndReconnect() {
+        const nextRoom = (roomInput.value || "").trim();
+        if (!nextRoom) {
+          setStatus("房间名不能为空", "error");
+          return;
+        }
+        signalingSend({ kind: "bye", from: myId });
+        setTimeout(() => {
+          room = nextRoom;
+          connectSignaling();
+        }, 150);
+      }
+
+      function bindEvents() {
+        applyButton.addEventListener("click", applyRoomAndReconnect);
+        diagButton.addEventListener("click", runIceDiagnostics);
+        sendButton.addEventListener("click", sendChat);
+
+        messageInput.addEventListener("keydown", event => {
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            sendChat();
+          }
+        });
+
+        fileButton.addEventListener("click", () => fileInput.click());
+        fileInput.addEventListener("change", () => {
+          const file = fileInput.files && fileInput.files[0];
+          fileInput.value = "";
+          if (file) sendFile(file);
+        });
+
+        emojiButton.addEventListener("click", () => {
+          emojiPicker.hidden = !emojiPicker.hidden;
+        });
+        document.addEventListener("click", event => {
+          if (!emojiPicker.hidden && !emojiPicker.contains(event.target) && event.target !== emojiButton) {
+            emojiPicker.hidden = true;
+          }
+        });
+
+        window.addEventListener("beforeunload", () => {
+          signalingSend({ kind: "bye", from: myId });
+          signalingSend({ kind: "hangup", from: myId, to: remoteId });
+          try { signalingSocket.close(); } catch (error) { /* ignore */ }
+        });
+      }
+
+      function init() {
+        myIdElement.textContent = myId;
+        document.title = "WebRTC 聊天（静态版）· " + myId;
+        buildEmojiPicker();
+        bindEvents();
+        setChatEnabled(false);
+        connectSignaling();
+      }
+
+      // 调试入口：在浏览器控制台执行 p2pDebug() 可查看当前连接细节
+      window.p2pDebug = () => ({
+        myId,
+        room,
+        joining,
+        connected,
+        remoteId,
+        peers: Array.from(peers.keys()),
+        signalingState: signalingSocket ? signalingSocket.readyState : null,
+        connectionState: peerConnection ? peerConnection.connectionState : null,
+        iceConnectionState: peerConnection ? peerConnection.iceConnectionState : null,
+        iceGatheringState: peerConnection ? peerConnection.iceGatheringState : null,
+        dataChannelState: dataChannel ? dataChannel.readyState : null,
+        pendingCandidates: pendingCandidates.length
+      });
+
+      init();
+
+    })();
+  </script>
+</body>
+</html>
