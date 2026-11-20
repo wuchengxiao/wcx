@@ -148,6 +148,20 @@
             color: #fff;
             border: 1px solid #1677ff;
         }
+        .controls button:disabled {
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        .stitch-status {
+            display: inline-block;
+            margin-left: 4px;
+            color: #666;
+            font-size: 13px;
+            vertical-align: middle;
+        }
+        .stitch-status.error {
+            color: #cf1322;
+        }
         button {
             padding: 8px 12px;
             margin-right: 10px;
@@ -171,8 +185,11 @@
         <button id="drawTool" class="active-tool">涂鸦</button>
         <button id="eraseTool">擦除</button>
         <button id="pasteBtn">粘贴</button>
+        <button id="autoStitchBtn" type="button" title="按当前排列方向自动去重拼接">自动拼接</button>
         <button id="deleteSelectedBtn">删除当前选中图片</button>
         <button id="clearAll">清除所有</button>
+        <div style="height:8px;">&nbsp;</div>
+        <span id="stitchStatus" class="stitch-status" role="status" aria-live="polite"></span>
     </div>
     <div class="container">
         <div class="editor-layout">
@@ -203,8 +220,13 @@
             const drawToolBtn = document.getElementById('drawTool');
             const eraseToolBtn = document.getElementById('eraseTool');
             const pasteBtn = document.getElementById('pasteBtn');
+            const autoStitchBtn = document.getElementById('autoStitchBtn');
+            const stitchStatus = document.getElementById('stitchStatus');
             const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
             const clearAllBtn = document.getElementById('clearAll');
+            const MATCH_THUMBNAIL_SIZE = 360;
+            const MIN_OVERLAP_PIXELS = 24;
+            const OVERLAP_SIMILARITY_THRESHOLD = 0.94;
             let images = [];
             let layoutMode = 'horizontal';
             let zIndexSeed = 1;
@@ -231,7 +253,13 @@
             selectToolBtn.addEventListener('click', () => setTool('select'));
             drawToolBtn.addEventListener('click', () => setTool('draw'));
             eraseToolBtn.addEventListener('click', () => setTool('erase'));
+            autoStitchBtn.addEventListener('click', autoStitchImages);
             setTool('draw');
+
+            function setStitchStatus(message, isError) {
+                stitchStatus.textContent = message;
+                stitchStatus.classList.toggle('error', Boolean(isError));
+            }
 
             function setSelectedItem(item) {
                 selectedItem = item;
@@ -370,6 +398,318 @@
             pasteArea.addEventListener('paste', handlePasteEvent);
             document.addEventListener('paste', handlePasteEvent);
 
+            function waitForImageReady(item) {
+                const img = item.img;
+                if (img.complete && img.naturalWidth > 0) {
+                    return Promise.resolve();
+                }
+                if (img.complete && img.naturalWidth === 0) {
+                    return Promise.reject(new Error(`${item.name} 加载失败`));
+                }
+
+                return new Promise((resolve, reject) => {
+                    const onLoad = function() {
+                        cleanup();
+                        resolve();
+                    };
+                    const onError = function() {
+                        cleanup();
+                        reject(new Error(`${item.name} 加载失败`));
+                    };
+                    const cleanup = function() {
+                        img.removeEventListener('load', onLoad);
+                        img.removeEventListener('error', onError);
+                    };
+                    img.addEventListener('load', onLoad);
+                    img.addEventListener('error', onError);
+                });
+            }
+
+            function createStitchSource(item, axis, commonMatchScale) {
+                const width = item.img.naturalWidth || item.naturalWidth;
+                const height = item.img.naturalHeight || item.naturalHeight;
+                if (!width || !height) {
+                    throw new Error(`${item.name} 尚未加载完成`);
+                }
+
+                const baseCanvas = document.createElement('canvas');
+                baseCanvas.width = width;
+                baseCanvas.height = height;
+                const baseCtx = baseCanvas.getContext('2d');
+                baseCtx.imageSmoothingEnabled = false;
+                baseCtx.drawImage(item.img, 0, 0, width, height);
+
+                const matchDimension = Math.max(width, height);
+                const matchScale = commonMatchScale || Math.min(1, MATCH_THUMBNAIL_SIZE / matchDimension);
+                const matchWidth = Math.max(1, Math.round(width * matchScale));
+                const matchHeight = Math.max(1, Math.round(height * matchScale));
+                const matchCanvas = document.createElement('canvas');
+                matchCanvas.width = matchWidth;
+                matchCanvas.height = matchHeight;
+                const matchCtx = matchCanvas.getContext('2d', { willReadFrequently: true });
+                matchCtx.imageSmoothingEnabled = true;
+                matchCtx.drawImage(baseCanvas, 0, 0, matchWidth, matchHeight);
+
+                return {
+                    item,
+                    width,
+                    height,
+                    baseCanvas,
+                    matchWidth,
+                    matchHeight,
+                    matchScale,
+                    matchPixels: matchCtx.getImageData(0, 0, matchWidth, matchHeight).data,
+                    sourcePixels: null
+                };
+            }
+
+            function getSourcePixels(source) {
+                if (!source.sourcePixels) {
+                    const sourceCtx = source.baseCanvas.getContext('2d', { willReadFrequently: true });
+                    source.sourcePixels = sourceCtx.getImageData(0, 0, source.width, source.height).data;
+                }
+                return source.sourcePixels;
+            }
+
+            function calculateOverlapDifference(first, second, overlap, useSourcePixels, axis) {
+                const firstPixels = useSourcePixels ? getSourcePixels(first) : first.matchPixels;
+                const secondPixels = useSourcePixels ? getSourcePixels(second) : second.matchPixels;
+                const firstWidth = useSourcePixels ? first.width : first.matchWidth;
+                const secondWidth = useSourcePixels ? second.width : second.matchWidth;
+                const firstHeight = useSourcePixels ? first.height : first.matchHeight;
+                const secondHeight = useSourcePixels ? second.height : second.matchHeight;
+                const isHorizontal = axis === 'horizontal';
+                const crossLength = isHorizontal
+                    ? Math.min(firstHeight, secondHeight)
+                    : Math.min(firstWidth, secondWidth);
+                const crossCount = Math.min(96, crossLength);
+                const overlapCount = Math.min(96, overlap);
+                if (crossCount < 1 || overlapCount < 1) return 1;
+
+                let totalDifference = 0;
+                for (let crossIndex = 0; crossIndex < crossCount; crossIndex++) {
+                    const crossOffset = crossCount === 1 ? 0 : Math.round(crossIndex * (crossLength - 1) / (crossCount - 1));
+                    for (let overlapIndex = 0; overlapIndex < overlapCount; overlapIndex++) {
+                        const overlapOffset = overlapCount === 1 ? 0 : Math.round(overlapIndex * (overlap - 1) / (overlapCount - 1));
+                        const firstX = isHorizontal ? firstWidth - overlap + overlapOffset : crossOffset;
+                        const firstY = isHorizontal ? crossOffset : firstHeight - overlap + overlapOffset;
+                        const secondX = isHorizontal ? overlapOffset : crossOffset;
+                        const secondY = isHorizontal ? crossOffset : overlapOffset;
+                        const firstPixel = (firstY * firstWidth + firstX) * 4;
+                        const secondPixel = (secondY * secondWidth + secondX) * 4;
+                        totalDifference += Math.abs(firstPixels[firstPixel] - secondPixels[secondPixel]);
+                        totalDifference += Math.abs(firstPixels[firstPixel + 1] - secondPixels[secondPixel + 1]);
+                        totalDifference += Math.abs(firstPixels[firstPixel + 2] - secondPixels[secondPixel + 2]);
+                    }
+                }
+
+                return totalDifference / (crossCount * overlapCount * 255 * 3);
+            }
+
+            function calculateOverlapActivity(source, overlap, useSourcePixels, axis) {
+                const pixels = useSourcePixels ? getSourcePixels(source) : source.matchPixels;
+                const width = useSourcePixels ? source.width : source.matchWidth;
+                const height = useSourcePixels ? source.height : source.matchHeight;
+                const isHorizontal = axis === 'horizontal';
+                const crossLength = isHorizontal ? height : width;
+                const crossCount = Math.min(96, crossLength);
+                const overlapCount = Math.min(96, overlap);
+                let activeComparisons = 0;
+                let comparisonCount = 0;
+
+                for (let crossIndex = 0; crossIndex < crossCount; crossIndex++) {
+                    const crossOffset = crossCount === 1 ? 0 : Math.round(crossIndex * (crossLength - 1) / (crossCount - 1));
+                    for (let overlapIndex = 0; overlapIndex < overlapCount; overlapIndex++) {
+                        const overlapOffset = overlapCount === 1 ? 0 : Math.round(overlapIndex * (overlap - 1) / (overlapCount - 1));
+                        const x = isHorizontal ? width - overlap + overlapOffset : crossOffset;
+                        const y = isHorizontal ? crossOffset : height - overlap + overlapOffset;
+                        const pixel = (y * width + x) * 4;
+                        const comparePixel = function(otherPixel) {
+                            const change = Math.max(
+                                Math.abs(pixels[pixel] - pixels[otherPixel]),
+                                Math.abs(pixels[pixel + 1] - pixels[otherPixel + 1]),
+                                Math.abs(pixels[pixel + 2] - pixels[otherPixel + 2])
+                            );
+                            activeComparisons += change >= 10 ? 1 : 0;
+                            comparisonCount++;
+                        };
+                        if (x + 1 < width) comparePixel(pixel + 4);
+                        if (y + 1 < height) comparePixel(pixel + width * 4);
+                    }
+                }
+
+                return comparisonCount ? activeComparisons / comparisonCount : 0;
+            }
+
+            function findBestOverlap(first, second, axis) {
+                const isHorizontal = axis === 'horizontal';
+                const firstLength = isHorizontal ? first.matchWidth : first.matchHeight;
+                const secondLength = isHorizontal ? second.matchWidth : second.matchHeight;
+                const maxOverlap = Math.min(firstLength, secondLength);
+                const minOverlap = Math.min(
+                    maxOverlap,
+                    Math.max(2, Math.round(MIN_OVERLAP_PIXELS * first.matchScale))
+                );
+                if (maxOverlap < minOverlap) return 0;
+
+                const candidates = [];
+                for (let overlap = minOverlap; overlap <= maxOverlap; overlap++) {
+                    candidates.push({
+                        overlap,
+                        difference: calculateOverlapDifference(first, second, overlap, false, axis)
+                    });
+                }
+                candidates.sort((a, b) => a.difference - b.difference);
+
+                const best = candidates[0];
+                if (!best || best.difference > (1 - OVERLAP_SIMILARITY_THRESHOLD)) {
+                    return 0;
+                }
+                if (calculateOverlapActivity(first, best.overlap, false, axis) < 0.002) {
+                    return 0;
+                }
+
+                // 如果大量候选位置都同样相似，通常是纯色背景造成的误匹配，此时不裁剪。
+                const separation = Math.max(2, Math.round(best.overlap * 0.02));
+                const nextBest = candidates.find(candidate => Math.abs(candidate.overlap - best.overlap) > separation);
+                if (nextBest && nextBest.difference - best.difference < 0.0005 && best.difference > 0.002) {
+                    return 0;
+                }
+
+                const approximateOverlap = Math.round(best.overlap / first.matchScale);
+                const refineRadius = Math.max(8, Math.ceil(3 / first.matchScale));
+                const firstSourceLength = axis === 'horizontal' ? first.width : first.height;
+                const secondSourceLength = axis === 'horizontal' ? second.width : second.height;
+                const refineStart = Math.max(MIN_OVERLAP_PIXELS, approximateOverlap - refineRadius);
+                const refineEnd = Math.min(firstSourceLength, secondSourceLength, approximateOverlap + refineRadius);
+                let refinedBest = { overlap: approximateOverlap, difference: 1 };
+
+                for (let overlap = refineStart; overlap <= refineEnd; overlap++) {
+                    const difference = calculateOverlapDifference(first, second, overlap, true, axis);
+                    if (difference < refinedBest.difference) {
+                        refinedBest = { overlap, difference };
+                    }
+                }
+
+                return refinedBest.difference <= (1 - OVERLAP_SIMILARITY_THRESHOLD)
+                    && calculateOverlapActivity(first, refinedBest.overlap, true, axis) >= 0.002
+                    ? refinedBest.overlap
+                    : 0;
+            }
+
+            function drawStitchSource(outputCtx, source, x, y) {
+                outputCtx.drawImage(source.baseCanvas, x, y, source.width, source.height);
+                if (source.item.canvas.width > 0 && source.item.canvas.height > 0) {
+                    outputCtx.drawImage(
+                        source.item.canvas,
+                        0,
+                        0,
+                        source.item.canvas.width,
+                        source.item.canvas.height,
+                        x,
+                        y,
+                        source.width,
+                        source.height
+                    );
+                }
+            }
+
+            function canvasToPngDataUrl(canvas) {
+                return canvas.toDataURL('image/png');
+            }
+
+            async function buildStitchedImage(items, axis) {
+                if (!items.length) {
+                    throw new Error('没有可拼接的图片');
+                }
+                await Promise.all(items.map(waitForImageReady));
+                const stitchAxis = axis === 'horizontal' ? 'horizontal' : 'vertical';
+                const isHorizontal = stitchAxis === 'horizontal';
+                const maxMatchDimension = Math.max(...items.map(item => Math.max(
+                    item.img.naturalWidth || item.naturalWidth,
+                    item.img.naturalHeight || item.naturalHeight
+                )));
+                const commonMatchScale = Math.min(1, MATCH_THUMBNAIL_SIZE / maxMatchDimension);
+                const sources = items.map(item => createStitchSource(item, stitchAxis, commonMatchScale));
+                const fixedSize = isHorizontal ? sources[0].height : sources[0].width;
+                //if (sources.some(source => (isHorizontal ? source.height : source.width) !== fixedSize)) {
+                //    throw new Error(isHorizontal
+                //        ? '水平拼接要求所有图片的原始高度一致'
+                //        : '竖直拼接要求所有图片的原始宽度一致');
+                //}
+
+                const overlaps = [];
+                let outputLength = isHorizontal ? sources[0].width : sources[0].height;
+                for (let index = 1; index < sources.length; index++) {
+                    const overlap = findBestOverlap(sources[index - 1], sources[index], stitchAxis);
+                    overlaps.push(overlap);
+                    outputLength += (isHorizontal ? sources[index].width : sources[index].height) - overlap;
+                }
+
+                const outputWidth = isHorizontal ? outputLength : fixedSize;
+                const outputHeight = isHorizontal ? fixedSize : outputLength;
+
+                if (!Number.isSafeInteger(outputWidth) || !Number.isSafeInteger(outputHeight)
+                    || outputWidth <= 0 || outputHeight <= 0) {
+                    throw new Error('拼接后的图片尺寸无效');
+                }
+                if (outputWidth > 32767 || outputHeight > 32767 || outputWidth * outputHeight > 268000000) {
+                    throw new Error('拼接后的图片过大，超出浏览器 Canvas 尺寸限制');
+                }
+
+                const outputCanvas = document.createElement('canvas');
+                outputCanvas.width = outputWidth;
+                outputCanvas.height = outputHeight;
+                const outputCtx = outputCanvas.getContext('2d');
+                outputCtx.imageSmoothingEnabled = false;
+
+                let offset = 0;
+                drawStitchSource(outputCtx, sources[0], isHorizontal ? offset : 0, isHorizontal ? 0 : offset);
+                for (let index = 1; index < sources.length; index++) {
+                    offset += (isHorizontal ? sources[index - 1].width : sources[index - 1].height) - overlaps[index - 1];
+                    drawStitchSource(
+                        outputCtx,
+                        sources[index],
+                        isHorizontal ? offset : 0,
+                        isHorizontal ? 0 : offset
+                    );
+                }
+
+                const dataUrl = canvasToPngDataUrl(outputCanvas);
+                if (!dataUrl || dataUrl === 'data:,') {
+                    throw new Error('浏览器无法导出拼接结果');
+                }
+                return { dataUrl, width: outputWidth, height: outputHeight, overlaps, axis: stitchAxis };
+            }
+
+            async function autoStitchImages() {
+                const stitchItems = images.filter(item => !item.isStitchResult);
+                if (stitchItems.length < 2) {
+                    setStitchStatus('至少需要两张图片', true);
+                    return;
+                }
+
+                autoStitchBtn.disabled = true;
+                setStitchStatus('正在分析相邻截图的重复区域，请稍候…', false);
+                try {
+                    const result = await buildStitchedImage(stitchItems, layoutMode);
+                    const removedPixels = result.overlaps.reduce((total, overlap) => total + overlap, 0);
+                    const detectedCount = result.overlaps.filter(overlap => overlap > 0).length;
+                    const stitchedItem = addImageToContainer(result.dataUrl, '自动拼接结果', { isStitchResult: true });
+                    if (stitchedItem) {
+                        const directionLabel = result.axis === 'horizontal' ? '水平' : '竖直';
+                        setStitchStatus(
+                            `${directionLabel}拼接完成：${result.width} × ${result.height}，检测到 ${detectedCount} 处重叠，共去除约 ${removedPixels} 像素的重复内容`,
+                            false
+                        );
+                    }
+                } catch (error) {
+                    setStitchStatus(error.message || '自动拼接失败', true);
+                } finally {
+                    autoStitchBtn.disabled = false;
+                }
+            }
+
             // 点击按钮粘贴：优先 Clipboard API，失败时回退到 Ctrl+V 引导
             pasteBtn.addEventListener('click', async function() {
                 if (navigator.clipboard && navigator.clipboard.read) {
@@ -395,7 +735,7 @@
             });
 
             // 添加图片到容器
-            function addImageToContainer(imageData) {
+            function addImageToContainer(imageData, customName, options) {
                 const imageWrapper = document.createElement('div');
                 imageWrapper.className = 'image-wrapper';
 
@@ -459,7 +799,8 @@
                 
                 const item = {
                     id: imageIdSeed++,
-                    name: `图片${imageIdSeed - 1}`,
+                    name: customName || `图片${imageIdSeed - 1}`,
+                    isStitchResult: Boolean(options && options.isStitchResult),
                     wrapper: imageWrapper,
                     img,
                     canvas,
@@ -552,6 +893,8 @@
                     bringToFront(item);
                     setSelectedItem(item);
                 });
+
+                return item;
             }
 
             function bringToFront(item) {
@@ -696,6 +1039,7 @@
                 isDrawing = false;
                 currentItem = null;
                 selectedItem = null;
+                setStitchStatus('', false);
             });
 
             deleteSelectedBtn.addEventListener('click', function() {
